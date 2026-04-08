@@ -1,0 +1,73 @@
+name: Version and Tag
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  create-version-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    outputs:
+      version: ${{ steps.gitversion.outputs.nuGetVersionV2 }}
+      semver: ${{ steps.gitversion.outputs.semVer }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0.10.2
+      with:
+        versionSpec: '5.x'
+    
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0.10.2
+      with:
+        useConfigFile: true
+        configFilePath: GitVersion.yml
+    
+    - name: Display GitVersion outputs
+      run: |
+        echo "Major: ${{ steps.gitversion.outputs.major }}"
+        echo "Minor: ${{ steps.gitversion.outputs.minor }}"
+        echo "Patch: ${{ steps.gitversion.outputs.patch }}"
+        echo "MajorMinorPatch: ${{ steps.gitversion.outputs.majorMinorPatch }}"
+        echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
+        echo "NuGetVersionV2: ${{ steps.gitversion.outputs.nuGetVersionV2 }}"
+    
+    - name: Check if tag exists
+      id: check_tag
+      run: |
+        if git rev-parse "v${{ steps.gitversion.outputs.nuGetVersionV2 }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.gitversion.outputs.nuGetVersionV2 }} already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.gitversion.outputs.nuGetVersionV2 }} does not exist"
+        fi
+    
+    - name: Create and Push Git Tag
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "v${{ steps.gitversion.outputs.nuGetVersionV2 }}" -m "Release version ${{ steps.gitversion.outputs.nuGetVersionV2 }}"
+        git push origin "v${{ steps.gitversion.outputs.nuGetVersionV2 }}"
+    
+    - name: Summary
+      run: |
+        echo "## ??? Version Tag Created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- Version: \`${{ steps.gitversion.outputs.nuGetVersionV2 }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- SemVer: \`${{ steps.gitversion.outputs.semVer }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Tag: \`v${{ steps.gitversion.outputs.nuGetVersionV2 }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Commit: \`${{ steps.gitversion.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY

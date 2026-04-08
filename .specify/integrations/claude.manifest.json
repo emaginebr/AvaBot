@@ -1,0 +1,18 @@
+{
+  "integration": "claude",
+  "version": "0.4.5.dev0",
+  "installed_at": "2026-04-08T02:55:48.713595+00:00",
+  "files": {
+    ".claude/commands/speckit.analyze.md": "cc2ccad9ab1b97c44d21139dd976bea7fba7769accf799e429ef93f3869d8fee",
+    ".claude/commands/speckit.checklist.md": "f5b732abcd53392fa37117170455ce13cf4e7cf4b5f30f4b181f9d6df8d492bb",
+    ".claude/commands/speckit.clarify.md": "e0e7575cada8e652773844715496c1b6afacf166bd993c922d7a8ab23e34d02b",
+    ".claude/commands/speckit.constitution.md": "9f312fa49b83ca084eebce115e28fc0e448ed0d9823a98a895e1108202fe0807",
+    ".claude/commands/speckit.implement.md": "7e39766f081995cb1139efd875de3a2a9fffb664790aeb0be4af7bce685ad1b7",
+    ".claude/commands/speckit.plan.md": "ebfaef8c320983d751f95be4d30b6a44134979fb8262c36b5d40ec79796cd64c",
+    ".claude/commands/speckit.specify.md": "1db531498794ea013fb365aebbecd9f92b425046822b9bb03da530ec81e22425",
+    ".claude/commands/speckit.tasks.md": "af4e826b9c0e298923a90a9b95e6d0053ed268a3632a0de6e4264896e7d45ac8",
+    ".claude/commands/speckit.taskstoissues.md": "7b17195dc8caf623963ef804c57b1adaf34326d36eee03b67007c36619822f7c",
+    ".specify/integrations/claude/scripts/update-context.ps1": "8bce5081fe27ebf414d4eaf127d91b5540b00d24dde4fe1e303e8eb26ad5211a",
+    ".specify/integrations/claude/scripts/update-context.sh": "21a5aa3fc644f693a29d35975ce21e5a949cdc1d0258b11c21940754c3644fa6"
+  }
+}

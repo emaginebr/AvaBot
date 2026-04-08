@@ -1,0 +1,6 @@
+@Avachat.API_HostAddress = http://localhost:5030
+
+GET {{Avachat.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

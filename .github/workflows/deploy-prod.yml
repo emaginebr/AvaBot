@@ -1,0 +1,73 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Deploy via SSH
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.PROD_SSH_HOST }}
+        username: ${{ secrets.PROD_SSH_USER }}
+        password: ${{ secrets.PROD_SSH_PASSWORD }}
+        port: ${{ secrets.PROD_SSH_PORT || 22 }}
+        script: |
+          set -e
+
+          DEPLOY_DIR="/opt/nauth"
+          REPO_URL="https://github.com/${{ github.repository }}.git"
+          BRANCH="main"
+
+          # Clone or update repository
+          if [ -d "$DEPLOY_DIR" ]; then
+            echo "Updating existing repository..."
+            cd "$DEPLOY_DIR"
+            git fetch origin
+            git reset --hard "origin/$BRANCH"
+            git clean -fd
+          else
+            echo "Cloning repository..."
+            git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+          fi
+
+          # Inject .env.prod from GitHub Secrets (UPPER_SNAKE_CASE)
+          cat > .env.prod <<'ENVEOF'
+          CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}
+          EMAGINE_CONNECTION_STRING=${{ secrets.EMAGINE_CONNECTION_STRING }}
+          EMAGINE_JWT_SECRET=${{ secrets.EMAGINE_JWT_SECRET }}
+          VIRALT_CONNECTION_STRING=${{ secrets.VIRALT_CONNECTION_STRING }}
+          VIRALT_JWT_SECRET=${{ secrets.VIRALT_JWT_SECRET }}
+          DEVBLOG_CONNECTION_STRING=${{ secrets.DEVBLOG_CONNECTION_STRING }}
+          DEVBLOG_JWT_SECRET=${{ secrets.DEVBLOG_JWT_SECRET }}
+          ENVEOF
+
+          # Remove leading whitespace from .env.prod
+          sed -i 's/^[[:space:]]*//' .env.prod
+
+          # Create external network if it doesn't exist
+          docker network inspect emagine-network >/dev/null 2>&1 || docker network create emagine-network
+
+          # Deploy with docker compose
+          docker compose --env-file .env.prod -f docker-compose-prod.yml down
+          docker compose --env-file .env.prod -f docker-compose-prod.yml up --build -d
+
+          # Wait and verify
+          echo "Waiting for services to start..."
+          sleep 10
+          docker compose --env-file .env.prod -f docker-compose-prod.yml ps
+
+          echo "Deployment completed successfully."
+
+    - name: Summary
+      run: |
+        echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- Server: \`${{ secrets.PROD_SSH_HOST }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Branch: \`main\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Triggered by: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY

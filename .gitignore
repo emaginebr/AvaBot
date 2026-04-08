@@ -1,0 +1,42 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+packages/
+*.nupkg
+project.lock.json
+
+# Node.js / Frontend
+node_modules/
+dist/
+build/
+*.log
+.env*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Docker
+*.log*
+
+# Elasticsearch
+data/
+
+# Secrets
+*.pfx
+*.key
+*.crt
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json.example
