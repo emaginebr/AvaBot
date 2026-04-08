@@ -1,0 +1,57 @@
+flowchart TD
+    subgraph Client["Cliente"]
+        WEB["Frontend / Chat Widget"]
+        CONSOLE["Avachat.Console<br/>(CLI Agent Loader)"]
+        BRUNO["Bruno Collection<br/>(API Testing)"]
+    end
+
+    subgraph API["Avachat.API (.NET 9)"]
+        REST["REST Controllers<br/>AgentController<br/>ChatSessionController<br/>KnowledgeFileController"]
+        WS["WebSocket Handler<br/>/ws/chat/{slug}"]
+        SWAGGER["Swagger UI<br/>/swagger"]
+    end
+
+    subgraph Application["Avachat.Application"]
+        AGENT_SVC["AgentService"]
+        CHAT_SVC["ChatService"]
+        INGESTION_SVC["IngestionService"]
+        SEARCH_SVC["SearchService"]
+        MAPPER["AutoMapper Profiles"]
+    end
+
+    subgraph Infra["Avachat.Infra"]
+        REPOS["Repositories<br/>(EF Core)"]
+        ES_SVC["ElasticsearchService"]
+        OPENAI_SVC["OpenAIService"]
+    end
+
+    subgraph External["Servicos Externos"]
+        PG[("PostgreSQL 17<br/>avachat_agents<br/>avachat_knowledge_files<br/>avachat_chat_sessions<br/>avachat_chat_messages")]
+        ES[("Elasticsearch 8.17<br/>knowledge_chunks index<br/>kNN + BM25 Hybrid Search")]
+        OPENAI["OpenAI API<br/>text-embedding-3-small<br/>gpt-4o"]
+        KIBANA["Kibana 8.17<br/>(Dev Only)"]
+    end
+
+    WEB -->|HTTP/WS| REST & WS
+    CONSOLE -->|HTTP| REST
+    BRUNO -->|HTTP| REST
+
+    REST --> AGENT_SVC & CHAT_SVC & INGESTION_SVC
+    WS -->|Streaming| CHAT_SVC
+
+    AGENT_SVC --> MAPPER --> REPOS
+    CHAT_SVC --> SEARCH_SVC
+    CHAT_SVC --> OPENAI_SVC
+    INGESTION_SVC --> ES_SVC & OPENAI_SVC
+    SEARCH_SVC --> ES_SVC & OPENAI_SVC
+
+    REPOS -->|EF Core| PG
+    ES_SVC --> ES
+    OPENAI_SVC --> OPENAI
+    KIBANA --> ES
+
+    style Client fill:#e1f5fe,stroke:#0288d1
+    style API fill:#fff3e0,stroke:#f57c00
+    style Application fill:#e8f5e9,stroke:#388e3c
+    style Infra fill:#fce4ec,stroke:#c62828
+    style External fill:#f3e5f5,stroke:#7b1fa2
