@@ -1,0 +1,101 @@
+name: Create Release
+
+on:
+  workflow_run:
+    workflows: ["Version and Tag"]
+    types:
+      - completed
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine version change type
+      id: version_check
+      run: |
+        TAGS=$(git tag -l "v*" --sort=-version:refname)
+
+        if [ -z "$TAGS" ]; then
+          echo "No tags found. Skipping release."
+          echo "should_release=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        LATEST_TAG=$(echo "$TAGS" | head -n 1)
+        PREVIOUS_TAG=$(echo "$TAGS" | head -n 2 | tail -n 1)
+
+        echo "Latest tag: $LATEST_TAG"
+        echo "Previous tag: $PREVIOUS_TAG"
+        echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+        # First tag ever
+        if [ "$LATEST_TAG" = "$PREVIOUS_TAG" ]; then
+          echo "First tag ever. Creating release."
+          echo "should_release=true" >> $GITHUB_OUTPUT
+          echo "previous_tag=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        echo "previous_tag=$PREVIOUS_TAG" >> $GITHUB_OUTPUT
+
+        LATEST_VERSION="${LATEST_TAG#v}"
+        PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
+
+        LATEST_MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+        LATEST_MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+        PREVIOUS_MAJOR=$(echo "$PREVIOUS_VERSION" | cut -d. -f1)
+        PREVIOUS_MINOR=$(echo "$PREVIOUS_VERSION" | cut -d. -f2)
+
+        echo "Latest: major=$LATEST_MAJOR minor=$LATEST_MINOR"
+        echo "Previous: major=$PREVIOUS_MAJOR minor=$PREVIOUS_MINOR"
+
+        if [ "$LATEST_MAJOR" != "$PREVIOUS_MAJOR" ] || [ "$LATEST_MINOR" != "$PREVIOUS_MINOR" ]; then
+          echo "Minor or major version change detected. Creating release."
+          echo "should_release=true" >> $GITHUB_OUTPUT
+        else
+          echo "Patch-only change. Skipping release."
+          echo "should_release=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create GitHub Release
+      if: steps.version_check.outputs.should_release == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        LATEST_TAG="${{ steps.version_check.outputs.latest_tag }}"
+        PREVIOUS_TAG="${{ steps.version_check.outputs.previous_tag }}"
+
+        if [ -n "$PREVIOUS_TAG" ]; then
+          gh release create "$LATEST_TAG" \
+            --title "Release $LATEST_TAG" \
+            --generate-notes \
+            --notes-start-tag "$PREVIOUS_TAG"
+        else
+          gh release create "$LATEST_TAG" \
+            --title "Release $LATEST_TAG" \
+            --generate-notes
+        fi
+
+    - name: Summary
+      if: steps.version_check.outputs.should_release == 'true'
+      run: |
+        echo "## Release Created" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- Tag: \`${{ steps.version_check.outputs.latest_tag }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Previous Tag: \`${{ steps.version_check.outputs.previous_tag }}\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Summary (Skipped)
+      if: steps.version_check.outputs.should_release != 'true'
+      run: |
+        echo "## Release Skipped" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Patch-only change. Release creation skipped." >> $GITHUB_STEP_SUMMARY
