@@ -55,7 +55,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - avachat-network
+      - emagine-network
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.17.0

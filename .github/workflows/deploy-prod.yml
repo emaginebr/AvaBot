@@ -37,11 +37,7 @@ jobs:
 
           # Inject .env.prod from GitHub Secrets
           cat > .env.prod <<'ENVEOF'
-          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          CONNECTION_STRING=${{ secrets.CONNECTION_STRING }}
-          ELASTICSEARCH_URL=${{ secrets.ELASTICSEARCH_URL }}
+          AVACHAT_CONNECTION_STRING=${{ secrets.AVACHAT_CONNECTION_STRING }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           ENVEOF
 
@@ -49,7 +45,7 @@ jobs:
           sed -i 's/^[[:space:]]*//' .env.prod
 
           # Create external network if it doesn't exist
-          docker network inspect avachat-external >/dev/null 2>&1 || docker network create avachat-external
+          docker network inspect emagine-network >/dev/null 2>&1 || docker network create emagine-network
 
           # Deploy with docker compose
           docker compose --env-file .env.prod -f docker-compose-prod.yml down
