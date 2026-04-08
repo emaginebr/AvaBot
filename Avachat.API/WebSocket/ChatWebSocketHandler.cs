@@ -2,7 +2,6 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Avachat.Application.Services;
-using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.API.WebSocket;
 
@@ -31,24 +30,37 @@ public static class ChatWebSocketHandler
             var ws = await context.WebSockets.AcceptWebSocketAsync();
             long? sessionId = null;
 
+            // Check if sessionId was provided via query string (created via REST endpoint)
+            if (long.TryParse(context.Request.Query["sessionId"], out var providedSessionId))
+            {
+                sessionId = providedSessionId;
+            }
+
             try
             {
-                // Send collect_data message if needed
-                var fields = new List<string>();
-                if (agent.CollectName) fields.Add("name");
-                if (agent.CollectEmail) fields.Add("email");
-                if (agent.CollectPhone) fields.Add("phone");
-
-                if (fields.Count > 0)
+                if (sessionId.HasValue)
                 {
-                    await SendJsonAsync(ws, new { type = "collect_data", fields });
+                    // Session already created via REST, ready to chat
+                    await SendJsonAsync(ws, new { type = "ready" });
                 }
                 else
                 {
-                    // No data to collect, create session immediately
-                    var session = await chatService.CreateSessionAsync(agent.AgentId, null, null, null);
-                    sessionId = session.ChatSessionId;
-                    await SendJsonAsync(ws, new { type = "ready" });
+                    // Legacy flow: collect data via WebSocket
+                    var fields = new List<string>();
+                    if (agent.CollectName) fields.Add("name");
+                    if (agent.CollectEmail) fields.Add("email");
+                    if (agent.CollectPhone) fields.Add("phone");
+
+                    if (fields.Count > 0)
+                    {
+                        await SendJsonAsync(ws, new { type = "collect_data", fields });
+                    }
+                    else
+                    {
+                        var session = await chatService.CreateSessionAsync(agent.AgentId, null, null, null);
+                        sessionId = session.ChatSessionId;
+                        await SendJsonAsync(ws, new { type = "ready" });
+                    }
                 }
 
                 // Message loop

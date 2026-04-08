@@ -6,6 +6,7 @@ using Avachat.Domain.Models;
 using Avachat.Infra.Interfaces.AppServices;
 using Avachat.Infra.Interfaces.Repository;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Avachat.Tests.Application.Services;
 
@@ -38,7 +39,8 @@ public class ChatServiceTest
             _openAIServiceMock.Object,
             _sessionRepoMock.Object,
             _messageRepoMock.Object,
-            configuration);
+            configuration,
+            NullLogger<ChatService>.Instance);
     }
 
     [Fact]

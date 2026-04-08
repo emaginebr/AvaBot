@@ -62,6 +62,12 @@ public class ChatService
         string userMessage,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // Get session data (user info)
+        var session = await _sessionRepository.GetByIdAsync(sessionId);
+
+        // Get recent history BEFORE saving (to avoid duplicate)
+        var recentMessages = await _messageRepository.GetRecentBySessionIdAsync(sessionId, _maxHistoryMessages);
+
         // Save user message
         await SaveMessageAsync(sessionId, SenderType.User, userMessage);
 
@@ -73,16 +79,21 @@ public class ChatService
             ? "Contexto relevante da base de conhecimento:\n\n" + string.Join("\n\n---\n\n", chunks)
             : "";
 
-        // Get recent history
-        var recentMessages = await _messageRepository.GetRecentBySessionIdAsync(sessionId, _maxHistoryMessages);
+        // Build user info context
+        var userInfo = BuildUserInfoContext(session);
 
-        // Build messages list
+        // Build system prompt with grounding instruction and user info
+        var fullSystemPrompt = systemPrompt
+            + "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao.";
+
+        if (!string.IsNullOrEmpty(userInfo))
+            fullSystemPrompt += $"\n\nINFORMACOES DO USUARIO NA SESSAO:\n{userInfo}";
+
+        // Build messages list from history
         var messages = new List<ChatCompletionMessage>();
 
         foreach (var msg in recentMessages)
         {
-            // Skip the message we just saved (last user message)
-            if (msg.ChatMessageId == 0) continue;
             messages.Add(new ChatCompletionMessage
             {
                 Role = msg.SenderType == SenderType.User ? "user" : "assistant",
@@ -90,25 +101,50 @@ public class ChatService
             });
         }
 
-        // Add current user message with context
-        var augmentedMessage = string.IsNullOrEmpty(context)
-            ? userMessage
-            : $"{userMessage}\n\n{context}";
-
-        messages.Add(new ChatCompletionMessage { Role = "user", Content = augmentedMessage });
-
-        // Build system prompt with grounding instruction
-        var fullSystemPrompt = systemPrompt + "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao.";
-
-        // Log full prompt
-        _logger.LogInformation("========== OPENAI PROMPT ==========");
-        _logger.LogInformation("[SYSTEM PROMPT]\n{SystemPrompt}", fullSystemPrompt);
-        _logger.LogInformation("[CHUNKS FOUND] {ChunkCount}", chunks.Count);
-        for (int i = 0; i < messages.Count; i++)
+        // Add RAG context as assistant knowledge (separate from user message)
+        if (!string.IsNullOrEmpty(context))
         {
-            _logger.LogInformation("[MESSAGE {Index}] Role={Role}\n{Content}", i, messages[i].Role, messages[i].Content);
+            messages.Add(new ChatCompletionMessage { Role = "assistant", Content = context });
         }
-        _logger.LogInformation("========== END PROMPT ==========");
+
+        // Add current user message (clean, without context mixed in)
+        messages.Add(new ChatCompletionMessage { Role = "user", Content = userMessage });
+
+        // Log
+        _logger.LogInformation(
+            "\n\n" +
+            "╔══════════════════════════════════════════════════════════╗\n" +
+            "║                    OPENAI REQUEST                       ║\n" +
+            "╚══════════════════════════════════════════════════════════╝\n\n" +
+            "┌─── SYSTEM PROMPT ───────────────────────────────────────┐\n" +
+            "{SystemPrompt}\n" +
+            "└─────────────────────────────────────────────────────────┘",
+            fullSystemPrompt);
+
+        _logger.LogInformation(
+            "\n┌─── RAG CONTEXT ({ChunkCount} chunks) ─────────────────────────────┐\n" +
+            "{Context}\n" +
+            "└─────────────────────────────────────────────────────────┘",
+            chunks.Count,
+            chunks.Count > 0 ? string.Join("\n---\n", chunks.Select((c, i) => $"[Chunk {i + 1}] {(c.Length > 200 ? c[..200] + "..." : c)}")) : "(nenhum)");
+
+        var historyMessages = messages.Take(messages.Count - 1).ToList();
+        _logger.LogInformation(
+            "\n┌─── HISTORICO ({MessageCount} mensagens) ──────────────────────────┐",
+            historyMessages.Count);
+        for (int i = 0; i < historyMessages.Count; i++)
+        {
+            var role = historyMessages[i].Role == "user" ? "USUARIO" : "ASSISTENTE";
+            var preview = historyMessages[i].Content.Length > 300 ? historyMessages[i].Content[..300] + "..." : historyMessages[i].Content;
+            _logger.LogInformation("  [{Index}] [{Role}] {Content}", i, role, preview);
+        }
+        _logger.LogInformation("└─────────────────────────────────────────────────────────┘");
+
+        _logger.LogInformation(
+            "\n┌─── ULTIMA MENSAGEM DO USUARIO ─────────────────────────────┐\n" +
+            "{UserMessage}\n" +
+            "└─────────────────────────────────────────────────────────┘\n",
+            userMessage);
 
         // Stream response
         var fullResponse = string.Empty;
@@ -117,6 +153,13 @@ public class ChatService
             fullResponse += token;
             yield return token;
         }
+
+        // Log response
+        _logger.LogInformation(
+            "\n┌─── OPENAI RESPONSE ──────────────────────────────────────┐\n" +
+            "{Response}\n" +
+            "└─────────────────────────────────────────────────────────┘\n",
+            fullResponse);
 
         // Save assistant response
         await SaveMessageAsync(sessionId, SenderType.Assistant, fullResponse);
@@ -130,5 +173,20 @@ public class ChatService
             session.EndedAt = DateTime.UtcNow;
             await _sessionRepository.UpdateAsync(session);
         }
+    }
+
+    private static string BuildUserInfoContext(ChatSession? session)
+    {
+        if (session == null) return "";
+
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(session.UserName))
+            parts.Add($"- Nome: {session.UserName}");
+        if (!string.IsNullOrWhiteSpace(session.UserEmail))
+            parts.Add($"- Email: {session.UserEmail}");
+        if (!string.IsNullOrWhiteSpace(session.UserPhone))
+            parts.Add($"- Telefone: {session.UserPhone}");
+
+        return parts.Count > 0 ? string.Join("\n", parts) : "";
     }
 }

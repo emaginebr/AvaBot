@@ -23,6 +23,13 @@ public class ChatMessageInfo
     [JsonPropertyName("createdAt")] public DateTime CreatedAt { get; set; }
 }
 
+public class ChatSessionStartInfo
+{
+    [JsonPropertyName("userName")] public string? UserName { get; set; }
+    [JsonPropertyName("userEmail")] public string? UserEmail { get; set; }
+    [JsonPropertyName("userPhone")] public string? UserPhone { get; set; }
+}
+
 public class PaginatedResult<T>
 {
     [JsonPropertyName("items")] public List<T> Items { get; set; } = new();

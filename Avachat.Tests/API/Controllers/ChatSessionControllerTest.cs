@@ -2,11 +2,15 @@ using Xunit;
 using Moq;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Avachat.API.Controllers;
 using Avachat.Application.Profiles;
+using Avachat.Application.Services;
 using Avachat.Domain.Enums;
 using Avachat.Domain.Models;
 using Avachat.DTO;
+using Avachat.Infra.Interfaces.AppServices;
 using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Tests.API.Controllers;
@@ -15,6 +19,7 @@ public class ChatSessionControllerTest
 {
     private readonly Mock<IChatSessionRepository<ChatSession>> _sessionRepoMock;
     private readonly Mock<IChatMessageRepository<ChatMessage>> _messageRepoMock;
+    private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
     private readonly IMapper _mapper;
     private readonly ChatSessionController _sut;
 
@@ -22,11 +27,23 @@ public class ChatSessionControllerTest
     {
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
+        _agentRepoMock = new Mock<IAgentRepository<Agent>>();
+
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<ChatSessionProfile>();
         expr.AddProfile<ChatMessageProfile>();
-        _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
-        _sut = new ChatSessionController(_sessionRepoMock.Object, _messageRepoMock.Object, _mapper);
+        expr.AddProfile<AgentProfile>();
+        _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
+
+        var agentService = new AgentService(_agentRepoMock.Object, _mapper);
+
+        var esServiceMock = new Mock<IElasticsearchService>();
+        var openAIMock = new Mock<IOpenAIService>();
+        var searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
+        var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, config, NullLogger<ChatService>.Instance);
+
+        _sut = new ChatSessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper);
     }
 
     [Fact]

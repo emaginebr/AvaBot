@@ -1,0 +1,27 @@
+meta {
+  name: Start Session
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{baseUrl}}/api/agents/:slug/sessions
+  body: json
+  auth: none
+}
+
+params:path {
+  slug: bia
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "userName": "Rodrigo",
+    "userEmail": "rodrigo@test.com",
+    "userPhone": "+5511999999999"
+  }
+}
