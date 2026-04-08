@@ -14,12 +14,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.7" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.2" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Avachat.Application\Avachat.Application.csproj" />
     <ProjectReference Include="..\Avachat.Domain\Avachat.Domain.csproj" />
+    <ProjectReference Include="..\Avachat.DTO\Avachat.DTO.csproj" />
     <ProjectReference Include="..\Avachat.Infra\Avachat.Infra.csproj" />
   </ItemGroup>
 

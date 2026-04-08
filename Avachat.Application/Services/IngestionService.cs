@@ -7,12 +7,12 @@ namespace Avachat.Application.Services;
 
 public class IngestionService
 {
-    private readonly IKnowledgeFileRepository _fileRepository;
+    private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
     private readonly IElasticsearchService _esService;
     private readonly IOpenAIService _openAIService;
 
     public IngestionService(
-        IKnowledgeFileRepository fileRepository,
+        IKnowledgeFileRepository<KnowledgeFile> fileRepository,
         IElasticsearchService esService,
         IOpenAIService openAIService)
     {

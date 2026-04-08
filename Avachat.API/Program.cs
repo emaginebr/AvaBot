@@ -1,6 +1,8 @@
 using Avachat.Application;
 using Avachat.API.WebSocket;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // DI
@@ -18,7 +20,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        if (builder.Environment.IsDevelopment())
+        if (builder.Environment.IsDevelopment() || builder.Environment.EnvironmentName == "Docker")
         {
             policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
         }
@@ -28,7 +30,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Swagger
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docker")
 {
     app.UseSwagger();
     app.UseSwaggerUI();

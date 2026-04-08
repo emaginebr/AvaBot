@@ -10,15 +10,15 @@ public class ChatService
 {
     private readonly SearchService _searchService;
     private readonly IOpenAIService _openAIService;
-    private readonly IChatSessionRepository _sessionRepository;
-    private readonly IChatMessageRepository _messageRepository;
+    private readonly IChatSessionRepository<ChatSession> _sessionRepository;
+    private readonly IChatMessageRepository<ChatMessage> _messageRepository;
     private readonly int _maxHistoryMessages;
 
     public ChatService(
         SearchService searchService,
         IOpenAIService openAIService,
-        IChatSessionRepository sessionRepository,
-        IChatMessageRepository messageRepository,
+        IChatSessionRepository<ChatSession> sessionRepository,
+        IChatMessageRepository<ChatMessage> messageRepository,
         IConfiguration configuration)
     {
         _searchService = searchService;

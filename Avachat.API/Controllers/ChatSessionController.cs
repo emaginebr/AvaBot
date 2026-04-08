@@ -1,5 +1,6 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Avachat.Domain.DTOs;
+using Avachat.DTO;
 using Avachat.Domain.Models;
 using Avachat.Infra.Interfaces.Repository;
 
@@ -8,13 +9,18 @@ namespace Avachat.API.Controllers;
 [ApiController]
 public class ChatSessionController : ControllerBase
 {
-    private readonly IChatSessionRepository _sessionRepo;
-    private readonly IChatMessageRepository _messageRepo;
+    private readonly IChatSessionRepository<ChatSession> _sessionRepo;
+    private readonly IChatMessageRepository<ChatMessage> _messageRepo;
+    private readonly IMapper _mapper;
 
-    public ChatSessionController(IChatSessionRepository sessionRepo, IChatMessageRepository messageRepo)
+    public ChatSessionController(
+        IChatSessionRepository<ChatSession> sessionRepo,
+        IChatMessageRepository<ChatMessage> messageRepo,
+        IMapper mapper)
     {
         _sessionRepo = sessionRepo;
         _messageRepo = messageRepo;
+        _mapper = mapper;
     }
 
     [HttpGet("api/agents/{agentId:long}/sessions")]
@@ -29,18 +35,9 @@ public class ChatSessionController : ControllerBase
             var items = new List<ChatSessionInfo>();
             foreach (var s in sessions)
             {
-                var msgCount = await _messageRepo.CountBySessionIdAsync(s.ChatSessionId);
-                items.Add(new ChatSessionInfo
-                {
-                    ChatSessionId = s.ChatSessionId,
-                    AgentId = s.AgentId,
-                    UserName = s.UserName,
-                    UserEmail = s.UserEmail,
-                    UserPhone = s.UserPhone,
-                    StartedAt = s.StartedAt,
-                    EndedAt = s.EndedAt,
-                    MessageCount = msgCount
-                });
+                var info = _mapper.Map<ChatSessionInfo>(s);
+                info.MessageCount = await _messageRepo.CountBySessionIdAsync(s.ChatSessionId);
+                items.Add(info);
             }
 
             var paginated = new PaginatedResult<ChatSessionInfo>
@@ -68,14 +65,7 @@ public class ChatSessionController : ControllerBase
             var messages = await _messageRepo.GetBySessionIdAsync(sessionId, pagina, tamanhoPagina);
             var total = await _messageRepo.CountBySessionIdAsync(sessionId);
 
-            var items = messages.Select(m => new ChatMessageInfo
-            {
-                ChatMessageId = m.ChatMessageId,
-                ChatSessionId = m.ChatSessionId,
-                SenderType = (int)m.SenderType,
-                Content = m.Content,
-                CreatedAt = m.CreatedAt
-            }).ToList();
+            var items = _mapper.Map<List<ChatMessageInfo>>(messages);
 
             var paginated = new PaginatedResult<ChatMessageInfo>
             {

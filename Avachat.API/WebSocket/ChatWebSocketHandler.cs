@@ -107,7 +107,7 @@ public static class ChatWebSocketHandler
                     await chatService.EndSessionAsync(sessionId.Value);
                 }
 
-                if (ws.State == WebSocketState.Open)
+                if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
                 {
                     await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                 }

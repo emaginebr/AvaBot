@@ -18,7 +18,7 @@ jobs:
         script: |
           set -e
 
-          DEPLOY_DIR="/opt/nauth"
+          DEPLOY_DIR="/opt/avachat"
           REPO_URL="https://github.com/${{ github.repository }}.git"
           BRANCH="main"
 
@@ -35,22 +35,21 @@ jobs:
             cd "$DEPLOY_DIR"
           fi
 
-          # Inject .env.prod from GitHub Secrets (UPPER_SNAKE_CASE)
+          # Inject .env.prod from GitHub Secrets
           cat > .env.prod <<'ENVEOF'
-          CERTIFICATE_PASSWORD=${{ secrets.CERTIFICATE_PASSWORD }}
-          EMAGINE_CONNECTION_STRING=${{ secrets.EMAGINE_CONNECTION_STRING }}
-          EMAGINE_JWT_SECRET=${{ secrets.EMAGINE_JWT_SECRET }}
-          VIRALT_CONNECTION_STRING=${{ secrets.VIRALT_CONNECTION_STRING }}
-          VIRALT_JWT_SECRET=${{ secrets.VIRALT_JWT_SECRET }}
-          DEVBLOG_CONNECTION_STRING=${{ secrets.DEVBLOG_CONNECTION_STRING }}
-          DEVBLOG_JWT_SECRET=${{ secrets.DEVBLOG_JWT_SECRET }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          CONNECTION_STRING=${{ secrets.CONNECTION_STRING }}
+          ELASTICSEARCH_URL=${{ secrets.ELASTICSEARCH_URL }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           ENVEOF
 
           # Remove leading whitespace from .env.prod
           sed -i 's/^[[:space:]]*//' .env.prod
 
           # Create external network if it doesn't exist
-          docker network inspect emagine-network >/dev/null 2>&1 || docker network create emagine-network
+          docker network inspect avachat-external >/dev/null 2>&1 || docker network create avachat-external
 
           # Deploy with docker compose
           docker compose --env-file .env.prod -f docker-compose-prod.yml down

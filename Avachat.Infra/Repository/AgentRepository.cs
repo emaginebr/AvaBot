@@ -5,7 +5,7 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Infra.Repository;
 
-public class AgentRepository : IAgentRepository
+public class AgentRepository : IAgentRepository<Agent>
 {
     private readonly AvachatContext _context;
 

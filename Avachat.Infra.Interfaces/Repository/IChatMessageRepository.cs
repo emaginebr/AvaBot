@@ -1,11 +1,9 @@
-using Avachat.Domain.Models;
-
 namespace Avachat.Infra.Interfaces.Repository;
 
-public interface IChatMessageRepository
+public interface IChatMessageRepository<T> where T : class
 {
-    Task<List<ChatMessage>> GetBySessionIdAsync(long sessionId, int page, int pageSize);
+    Task<List<T>> GetBySessionIdAsync(long sessionId, int page, int pageSize);
     Task<int> CountBySessionIdAsync(long sessionId);
-    Task<List<ChatMessage>> GetRecentBySessionIdAsync(long sessionId, int count);
-    Task<ChatMessage> CreateAsync(ChatMessage message);
+    Task<List<T>> GetRecentBySessionIdAsync(long sessionId, int count);
+    Task<T> CreateAsync(T message);
 }

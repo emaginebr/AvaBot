@@ -1,5 +1,6 @@
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using Avachat.Domain.DTOs;
+using Avachat.DTO;
 using Avachat.Domain.Models;
 using Avachat.Application.Services;
 
@@ -10,10 +11,12 @@ namespace Avachat.API.Controllers;
 public class AgentController : ControllerBase
 {
     private readonly AgentService _agentService;
+    private readonly IMapper _mapper;
 
-    public AgentController(AgentService agentService)
+    public AgentController(AgentService agentService, IMapper mapper)
     {
         _agentService = agentService;
+        _mapper = mapper;
     }
 
     [HttpGet]
@@ -22,7 +25,7 @@ public class AgentController : ControllerBase
         try
         {
             var agents = await _agentService.GetAllAsync();
-            var result = agents.Select(MapToInfo).ToList();
+            var result = _mapper.Map<List<AgentInfo>>(agents);
             return Ok(Result<List<AgentInfo>>.Success(result, "Agentes listados com sucesso"));
         }
         catch (Exception ex)
@@ -40,7 +43,7 @@ public class AgentController : ControllerBase
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
-            return Ok(Result<AgentInfo>.Success(MapToInfo(agent)));
+            return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent)));
         }
         catch (Exception ex)
         {
@@ -60,15 +63,7 @@ public class AgentController : ControllerBase
             if (agent.Status == 0)
                 return Ok(Result<object>.Failure("Agente temporariamente indisponivel"));
 
-            var config = new AgentChatConfigInfo
-            {
-                Name = agent.Name,
-                Description = agent.Description,
-                CollectName = agent.CollectName,
-                CollectEmail = agent.CollectEmail,
-                CollectPhone = agent.CollectPhone
-            };
-
+            var config = _mapper.Map<AgentChatConfigInfo>(agent);
             return Ok(Result<AgentChatConfigInfo>.Success(config));
         }
         catch (Exception ex)
@@ -82,11 +77,8 @@ public class AgentController : ControllerBase
     {
         try
         {
-            if (await _agentService.SlugExistsAsync(info.Slug))
-                return BadRequest(Result<object>.Failure("Slug ja esta em uso", new[] { "slug" }));
-
             var agent = await _agentService.CreateAsync(info);
-            return Created($"/api/agents/{agent.Slug}", Result<AgentInfo>.Success(MapToInfo(agent), "Agente criado com sucesso"));
+            return Created($"/api/agents/{agent.Slug}", Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente criado com sucesso"));
         }
         catch (Exception ex)
         {
@@ -99,14 +91,11 @@ public class AgentController : ControllerBase
     {
         try
         {
-            if (await _agentService.SlugExistsAsync(info.Slug, id))
-                return BadRequest(Result<object>.Failure("Slug ja esta em uso", new[] { "slug" }));
-
             var agent = await _agentService.UpdateAsync(id, info);
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
-            return Ok(Result<AgentInfo>.Success(MapToInfo(agent), "Agente atualizado com sucesso"));
+            return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente atualizado com sucesso"));
         }
         catch (Exception ex)
         {
@@ -140,26 +129,11 @@ public class AgentController : ControllerBase
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
-            return Ok(Result<AgentInfo>.Success(MapToInfo(agent), "Status atualizado com sucesso"));
+            return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Status atualizado com sucesso"));
         }
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
         }
     }
-
-    private static AgentInfo MapToInfo(Agent agent) => new()
-    {
-        AgentId = agent.AgentId,
-        Name = agent.Name,
-        Slug = agent.Slug,
-        Description = agent.Description,
-        SystemPrompt = agent.SystemPrompt,
-        Status = agent.Status,
-        CollectName = agent.CollectName,
-        CollectEmail = agent.CollectEmail,
-        CollectPhone = agent.CollectPhone,
-        CreatedAt = agent.CreatedAt,
-        UpdatedAt = agent.UpdatedAt
-    };
 }

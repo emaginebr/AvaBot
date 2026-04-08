@@ -1,14 +1,12 @@
-using Avachat.Domain.Models;
-
 namespace Avachat.Infra.Interfaces.Repository;
 
-public interface IAgentRepository
+public interface IAgentRepository<T> where T : class
 {
-    Task<List<Agent>> GetAllAsync();
-    Task<Agent?> GetByIdAsync(long id);
-    Task<Agent?> GetBySlugAsync(string slug);
-    Task<Agent> CreateAsync(Agent agent);
-    Task<Agent> UpdateAsync(Agent agent);
+    Task<List<T>> GetAllAsync();
+    Task<T?> GetByIdAsync(long id);
+    Task<T?> GetBySlugAsync(string slug);
+    Task<T> CreateAsync(T agent);
+    Task<T> UpdateAsync(T agent);
     Task DeleteAsync(long id);
     Task<bool> SlugExistsAsync(string slug, long? excludeId = null);
 }

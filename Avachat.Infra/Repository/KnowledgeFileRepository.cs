@@ -5,7 +5,7 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Infra.Repository;
 
-public class KnowledgeFileRepository : IKnowledgeFileRepository
+public class KnowledgeFileRepository : IKnowledgeFileRepository<KnowledgeFile>
 {
     private readonly AvachatContext _context;
 

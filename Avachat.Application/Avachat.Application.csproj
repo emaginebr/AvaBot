@@ -2,8 +2,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Avachat.Domain\Avachat.Domain.csproj" />
+    <ProjectReference Include="..\Avachat.DTO\Avachat.DTO.csproj" />
     <ProjectReference Include="..\Avachat.Infra\Avachat.Infra.csproj" />
     <ProjectReference Include="..\Avachat.Infra.Interfaces\Avachat.Infra.Interfaces.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="16.1.1" />
   </ItemGroup>
 
   <PropertyGroup>

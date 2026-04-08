@@ -5,7 +5,7 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Infra.Repository;
 
-public class ChatMessageRepository : IChatMessageRepository
+public class ChatMessageRepository : IChatMessageRepository<ChatMessage>
 {
     private readonly AvachatContext _context;
 

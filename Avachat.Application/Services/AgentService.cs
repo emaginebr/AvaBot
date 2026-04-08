@@ -1,4 +1,8 @@
-using Avachat.Domain.DTOs;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+using AutoMapper;
+using Avachat.DTO;
 using Avachat.Domain.Models;
 using Avachat.Infra.Interfaces.Repository;
 
@@ -6,11 +10,13 @@ namespace Avachat.Application.Services;
 
 public class AgentService
 {
-    private readonly IAgentRepository _repository;
+    private readonly IAgentRepository<Agent> _repository;
+    private readonly IMapper _mapper;
 
-    public AgentService(IAgentRepository repository)
+    public AgentService(IAgentRepository<Agent> repository, IMapper mapper)
     {
         _repository = repository;
+        _mapper = mapper;
     }
 
     public async Task<List<Agent>> GetAllAsync()
@@ -30,18 +36,9 @@ public class AgentService
 
     public async Task<Agent> CreateAsync(AgentInsertInfo info)
     {
-        var agent = new Agent
-        {
-            Name = info.Name,
-            Slug = info.Slug,
-            Description = info.Description,
-            SystemPrompt = info.SystemPrompt,
-            CollectName = info.CollectName,
-            CollectEmail = info.CollectEmail,
-            CollectPhone = info.CollectPhone,
-            Status = 1
-        };
-
+        var agent = _mapper.Map<Agent>(info);
+        agent.Status = 1;
+        agent.Slug = await GenerateUniqueSlugAsync(info.Name);
         return await _repository.CreateAsync(agent);
     }
 
@@ -50,13 +47,11 @@ public class AgentService
         var agent = await _repository.GetByIdAsync(id);
         if (agent == null) return null;
 
-        agent.Name = info.Name;
-        agent.Slug = info.Slug;
-        agent.Description = info.Description;
-        agent.SystemPrompt = info.SystemPrompt;
-        agent.CollectName = info.CollectName;
-        agent.CollectEmail = info.CollectEmail;
-        agent.CollectPhone = info.CollectPhone;
+        var oldName = agent.Name;
+        _mapper.Map(info, agent);
+
+        if (!string.Equals(oldName, info.Name, StringComparison.Ordinal))
+            agent.Slug = await GenerateUniqueSlugAsync(info.Name, id);
 
         return await _repository.UpdateAsync(agent);
     }
@@ -81,5 +76,40 @@ public class AgentService
     public async Task<bool> SlugExistsAsync(string slug, long? excludeId = null)
     {
         return await _repository.SlugExistsAsync(slug, excludeId);
+    }
+
+    private async Task<string> GenerateUniqueSlugAsync(string name, long? excludeId = null)
+    {
+        var slug = Slugify(name);
+
+        if (!await _repository.SlugExistsAsync(slug, excludeId))
+            return slug;
+
+        for (int i = 2; ; i++)
+        {
+            var candidate = $"{slug}-{i}";
+            if (!await _repository.SlugExistsAsync(candidate, excludeId))
+                return candidate;
+        }
+    }
+
+    public static string Slugify(string text)
+    {
+        var normalized = text.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder();
+
+        foreach (var c in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+
+        var result = sb.ToString().Normalize(NormalizationForm.FormC).ToLowerInvariant();
+        result = Regex.Replace(result, @"[^a-z0-9\s-]", "");
+        result = Regex.Replace(result, @"[\s-]+", "-");
+        result = result.Trim('-');
+
+        return string.IsNullOrEmpty(result) ? "agent" : result;
     }
 }

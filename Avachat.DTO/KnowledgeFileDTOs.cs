@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Avachat.Domain.DTOs;
+namespace Avachat.DTO;
 
 public class KnowledgeFileInfo
 {

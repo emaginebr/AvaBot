@@ -7,6 +7,7 @@ WORKDIR /src
 COPY ["Avachat.API/Avachat.API.csproj", "Avachat.API/"]
 COPY ["Avachat.Application/Avachat.Application.csproj", "Avachat.Application/"]
 COPY ["Avachat.Domain/Avachat.Domain.csproj", "Avachat.Domain/"]
+COPY ["Avachat.DTO/Avachat.DTO.csproj", "Avachat.DTO/"]
 COPY ["Avachat.Infra/Avachat.Infra.csproj", "Avachat.Infra/"]
 COPY ["Avachat.Infra.Interfaces/Avachat.Infra.Interfaces.csproj", "Avachat.Infra.Interfaces/"]
 RUN dotnet restore "Avachat.API/Avachat.API.csproj"

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Avachat.Domain.DTOs;
+namespace Avachat.DTO;
 
 public class AgentInfo
 {
@@ -42,9 +42,6 @@ public class AgentInsertInfo
 {
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
-
-    [JsonPropertyName("slug")]
-    public string Slug { get; set; } = string.Empty;
 
     [JsonPropertyName("description")]
     public string? Description { get; set; }

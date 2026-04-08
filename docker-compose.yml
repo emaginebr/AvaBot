@@ -1,50 +1,46 @@
-version: "3.8"
-
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: avachat-api
     ports:
-      - "5000:8080"
+      - "${APP_PORT:-5000}:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Docker
-      - ConnectionStrings__AvachatContext=Host=postgres;Database=avachat;Username=postgres;Password=postgres
-      - Elasticsearch__Url=http://elasticsearch:9200
-      - OpenAI__ApiKey=${OPENAI_API_KEY}
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__AvachatContext: ${CONNECTION_STRING}
+      Elasticsearch__Url: ${ELASTICSEARCH_URL}
+      OpenAI__ApiKey: ${OPENAI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: ./Frontend/chatbot-app
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - api
+    networks:
+      - avachat-network
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
+    container_name: avachat-db
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: avachat
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - avachat-network
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    container_name: avachat-elasticsearch
     ports:
       - "9200:9200"
     environment:
@@ -58,9 +54,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      - avachat-network
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.17.0
+    container_name: avachat-kibana
     ports:
       - "5601:5601"
     environment:
@@ -68,7 +67,13 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+      - avachat-network
 
 volumes:
   postgres_data:
   es_data:
+
+networks:
+  avachat-network:
+    driver: bridge

@@ -13,8 +13,6 @@ node_modules/
 dist/
 build/
 *.log
-.env*
-!.env.example
 
 # IDE
 .vscode/
@@ -33,10 +31,18 @@ Thumbs.db
 # Elasticsearch
 data/
 
-# Secrets
-*.pfx
+# Environment files with secrets
+.env
+.env.prod
+.env.local
+
+# Keep examples
+!.env.example
+!.env.prod.example
+
+# SSL certificates
+nginx/certs/
+*.pem
 *.key
+*.pfx
 *.crt
-appsettings.*.json
-!appsettings.json
-!appsettings.Development.json.example
