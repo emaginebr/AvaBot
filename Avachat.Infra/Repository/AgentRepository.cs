@@ -51,6 +51,27 @@ public class AgentRepository : IAgentRepository<Agent>
         var agent = await GetByIdAsync(id);
         if (agent != null)
         {
+            // Delete children first to avoid FK violations
+            var sessions = await _context.ChatSessions
+                .Where(s => s.AgentId == id)
+                .ToListAsync();
+
+            var sessionIds = sessions.Select(s => s.ChatSessionId).ToList();
+            if (sessionIds.Count > 0)
+            {
+                var messages = await _context.ChatMessages
+                    .Where(m => sessionIds.Contains(m.ChatSessionId!.Value))
+                    .ToListAsync();
+                _context.ChatMessages.RemoveRange(messages);
+            }
+
+            _context.ChatSessions.RemoveRange(sessions);
+
+            var files = await _context.KnowledgeFiles
+                .Where(f => f.AgentId == id)
+                .ToListAsync();
+            _context.KnowledgeFiles.RemoveRange(files);
+
             _context.Agents.Remove(agent);
             await _context.SaveChangesAsync();
         }

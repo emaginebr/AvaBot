@@ -40,6 +40,9 @@ data/
 !.env.example
 !.env.prod.example
 
+# Integration test settings (contains credentials)
+Avachat.Tests.API/appsettings.json
+
 # SSL certificates
 nginx/certs/
 *.pem

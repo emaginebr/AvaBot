@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Flurl;
 using Flurl.Http;
 using Microsoft.Extensions.Configuration;
@@ -24,7 +25,14 @@ public abstract class TestBase : IAsyncLifetime
 
     protected IFlurlRequest Api(string path) => Client.Request(path);
 
-    public virtual Task InitializeAsync() => Task.CompletedTask;
+    public virtual async Task InitializeAsync()
+    {
+        var loginResponse = await Client.Request("auth/login")
+            .PostJsonAsync(new { username = Settings.Username, password = Settings.Password });
+        var loginJson = await loginResponse.GetJsonAsync<JsonElement>();
+        var token = loginJson.GetProperty("token").GetString();
+        Client.WithHeader("Authorization", $"Bearer {token}");
+    }
 
     public virtual Task DisposeAsync()
     {

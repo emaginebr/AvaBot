@@ -29,6 +29,30 @@ public class OpenAIService : IOpenAIService
         return result.Value.ToFloats().ToArray();
     }
 
+    public async Task<string> ChatCompletionAsync(
+        string systemPrompt,
+        List<ChatCompletionMessage> messages,
+        CancellationToken cancellationToken = default)
+    {
+        var chatClient = _client.GetChatClient(_chatModel);
+
+        var chatMessages = new List<OpenAI.Chat.ChatMessage>
+        {
+            new SystemChatMessage(systemPrompt)
+        };
+
+        foreach (var msg in messages)
+        {
+            if (msg.Role == "user")
+                chatMessages.Add(new UserChatMessage(msg.Content));
+            else if (msg.Role == "assistant")
+                chatMessages.Add(new AssistantChatMessage(msg.Content));
+        }
+
+        var result = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
+        return result.Value.Content[0].Text;
+    }
+
     public async IAsyncEnumerable<string> StreamChatCompletionAsync(
         string systemPrompt,
         List<ChatCompletionMessage> messages,

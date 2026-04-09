@@ -1,5 +1,6 @@
 using Avachat.Domain.Enums;
 using Avachat.Domain.Models;
+using Avachat.DTO;
 using Avachat.Infra.Interfaces.AppServices;
 using Avachat.Infra.Interfaces.Repository;
 using Microsoft.Extensions.Configuration;
@@ -55,6 +56,24 @@ public class ChatService
         return await _messageRepository.CreateAsync(message);
     }
 
+    public async Task<AgentTestResultInfo> TestMessageAsync(long agentId, string systemPrompt, string userMessage)
+    {
+        var chunks = await _searchService.SearchAsync(agentId, userMessage);
+        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, null);
+        var messages = BuildMessages(new List<ChatMessage>(), chunks, userMessage);
+
+        var response = await _openAIService.ChatCompletionAsync(fullSystemPrompt, messages);
+
+        return new AgentTestResultInfo
+        {
+            SearchQuery = userMessage,
+            SearchResults = chunks,
+            SystemPrompt = fullSystemPrompt,
+            Messages = messages.Select(m => new AgentTestMessageInfo { Role = m.Role, Content = m.Content }).ToList(),
+            AssistantResponse = response
+        };
+    }
+
     public async IAsyncEnumerable<string> ProcessMessageAsync(
         long agentId,
         long sessionId,
@@ -62,37 +81,50 @@ public class ChatService
         string userMessage,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Get session data (user info)
         var session = await _sessionRepository.GetByIdAsync(sessionId);
-
-        // Get recent history BEFORE saving (to avoid duplicate)
         var recentMessages = await _messageRepository.GetRecentBySessionIdAsync(sessionId, _maxHistoryMessages);
 
-        // Save user message
         await SaveMessageAsync(sessionId, SenderType.User, userMessage);
 
-        // Search for relevant chunks
         var chunks = await _searchService.SearchAsync(agentId, userMessage);
+        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, session);
+        var messages = BuildMessages(recentMessages, chunks, userMessage);
 
-        // Build context
-        var context = chunks.Count > 0
-            ? "Contexto relevante da base de conhecimento:\n\n" + string.Join("\n\n---\n\n", chunks)
-            : "";
+        LogRequest(fullSystemPrompt, chunks, messages, userMessage);
 
-        // Build user info context
-        var userInfo = BuildUserInfoContext(session);
+        var fullResponse = string.Empty;
+        await foreach (var token in _openAIService.StreamChatCompletionAsync(fullSystemPrompt, messages, cancellationToken))
+        {
+            fullResponse += token;
+            yield return token;
+        }
 
-        // Build system prompt with grounding instruction and user info
+        _logger.LogInformation(
+            "\n┌─── OPENAI RESPONSE ──────────────────────────────────────┐\n" +
+            "{Response}\n" +
+            "└─────────────────────────────────────────────────────────┘\n",
+            fullResponse);
+
+        await SaveMessageAsync(sessionId, SenderType.Assistant, fullResponse);
+    }
+
+    private string BuildFullSystemPrompt(string systemPrompt, ChatSession? session)
+    {
         var fullSystemPrompt = systemPrompt
             + "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao.";
 
+        var userInfo = BuildUserInfoContext(session);
         if (!string.IsNullOrEmpty(userInfo))
             fullSystemPrompt += $"\n\nINFORMACOES DO USUARIO NA SESSAO:\n{userInfo}";
 
-        // Build messages list from history
+        return fullSystemPrompt;
+    }
+
+    private static List<ChatCompletionMessage> BuildMessages(List<ChatMessage> history, List<string> chunks, string userMessage)
+    {
         var messages = new List<ChatCompletionMessage>();
 
-        foreach (var msg in recentMessages)
+        foreach (var msg in history)
         {
             messages.Add(new ChatCompletionMessage
             {
@@ -101,16 +133,19 @@ public class ChatService
             });
         }
 
-        // Add RAG context as assistant knowledge (separate from user message)
-        if (!string.IsNullOrEmpty(context))
+        if (chunks.Count > 0)
         {
+            var context = "Contexto relevante da base de conhecimento:\n\n" + string.Join("\n\n---\n\n", chunks);
             messages.Add(new ChatCompletionMessage { Role = "assistant", Content = context });
         }
 
-        // Add current user message (clean, without context mixed in)
         messages.Add(new ChatCompletionMessage { Role = "user", Content = userMessage });
 
-        // Log
+        return messages;
+    }
+
+    private void LogRequest(string fullSystemPrompt, List<string> chunks, List<ChatCompletionMessage> messages, string userMessage)
+    {
         _logger.LogInformation(
             "\n\n" +
             "╔══════════════════════════════════════════════════════════╗\n" +
@@ -145,24 +180,6 @@ public class ChatService
             "{UserMessage}\n" +
             "└─────────────────────────────────────────────────────────┘\n",
             userMessage);
-
-        // Stream response
-        var fullResponse = string.Empty;
-        await foreach (var token in _openAIService.StreamChatCompletionAsync(fullSystemPrompt, messages, cancellationToken))
-        {
-            fullResponse += token;
-            yield return token;
-        }
-
-        // Log response
-        _logger.LogInformation(
-            "\n┌─── OPENAI RESPONSE ──────────────────────────────────────┐\n" +
-            "{Response}\n" +
-            "└─────────────────────────────────────────────────────────┘\n",
-            fullResponse);
-
-        // Save assistant response
-        await SaveMessageAsync(sessionId, SenderType.Assistant, fullResponse);
     }
 
     public async Task EndSessionAsync(long sessionId)

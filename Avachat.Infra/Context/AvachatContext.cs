@@ -55,7 +55,7 @@ public class AvachatContext : DbContext
                 .WithMany(a => a.KnowledgeFiles)
                 .HasForeignKey(e => e.AgentId)
                 .HasConstraintName("avachat_fk_agents_knowledge_files")
-                .OnDelete(DeleteBehavior.ClientSetNull);
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ChatSession
@@ -75,7 +75,7 @@ public class AvachatContext : DbContext
                 .WithMany(a => a.ChatSessions)
                 .HasForeignKey(e => e.AgentId)
                 .HasConstraintName("avachat_fk_agents_chat_sessions")
-                .OnDelete(DeleteBehavior.ClientSetNull);
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ChatMessage
@@ -93,7 +93,7 @@ public class AvachatContext : DbContext
                 .WithMany(s => s.ChatMessages)
                 .HasForeignKey(e => e.ChatSessionId)
                 .HasConstraintName("avachat_fk_chat_sessions_chat_messages")
-                .OnDelete(DeleteBehavior.ClientSetNull);
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

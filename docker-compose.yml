@@ -11,16 +11,16 @@ services:
       ConnectionStrings__AvachatContext: ${CONNECTION_STRING}
       Elasticsearch__Url: ${ELASTICSEARCH_URL}
       OpenAI__ApiKey: ${OPENAI_API_KEY}
-      Auth__Username: ${AUTH_USERNAME}
-      Auth__Password: ${AUTH_PASSWORD}
-      Auth__JwtSecret: ${AUTH_JWT_SECRET}
+      Auth__Username: ${AVACHAT_USERNAME}
+      Auth__Password: ${AVACHAT_PASSWORD}
+      Auth__JwtSecret: ${AVACHAT_JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
     networks:
-      - avachat-network
+      - emagine-network
 
   postgres:
     image: postgres:17-alpine
@@ -39,7 +39,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - avachat-network
+      - emagine-network
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
@@ -71,12 +71,12 @@ services:
       elasticsearch:
         condition: service_healthy
     networks:
-      - avachat-network
+      - emagine-network
 
 volumes:
   postgres_data:
   es_data:
 
 networks:
-  avachat-network:
+  emagine-network:
     driver: bridge

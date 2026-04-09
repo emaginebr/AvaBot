@@ -12,9 +12,9 @@ services:
       ASPNETCORE_URLS: http://+:80
       ConnectionStrings__AvachatContext: ${AVACHAT_CONNECTION_STRING}
       OpenAI__ApiKey: ${OPENAI_API_KEY}
-      Auth__Username: ${AUTH_USERNAME}
-      Auth__Password: ${AUTH_PASSWORD}
-      Auth__JwtSecret: ${AUTH_JWT_SECRET}
+      Auth__Username: ${AVACHAT_USERNAME}
+      Auth__Password: ${AVACHAT_PASSWORD}
+      Auth__JwtSecret: ${AVACHAT_JWT_SECRET}
     networks:
       - emagine-network
 

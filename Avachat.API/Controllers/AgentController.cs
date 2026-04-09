@@ -14,12 +14,14 @@ public class AgentController : ControllerBase
 {
     private readonly AgentService _agentService;
     private readonly SearchService _searchService;
+    private readonly ChatService _chatService;
     private readonly IMapper _mapper;
 
-    public AgentController(AgentService agentService, SearchService searchService, IMapper mapper)
+    public AgentController(AgentService agentService, SearchService searchService, ChatService chatService, IMapper mapper)
     {
         _agentService = agentService;
         _searchService = searchService;
+        _chatService = chatService;
         _mapper = mapper;
     }
 
@@ -153,6 +155,27 @@ public class AgentController : ControllerBase
 
             var chunks = await _searchService.SearchAsync(id, query, topK);
             return Ok(Result<List<string>>.Success(chunks, $"{chunks.Count} resultado(s) encontrado(s)"));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure(ex.Message));
+        }
+    }
+
+    [HttpPost("{id:long}/test")]
+    public async Task<IActionResult> TestQuestion(long id, [FromBody] AgentTestQuestionInfo info)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(info.Query))
+                return BadRequest(Result<object>.Failure("O parametro 'query' e obrigatorio"));
+
+            var agent = await _agentService.GetByIdAsync(id);
+            if (agent == null)
+                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+
+            var result = await _chatService.TestMessageAsync(id, agent.SystemPrompt, info.Query);
+            return Ok(Result<AgentTestResultInfo>.Success(result));
         }
         catch (Exception ex)
         {

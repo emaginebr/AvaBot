@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using AutoMapper;
 using Avachat.DTO;
 using Avachat.Domain.Models;
+using Avachat.Infra.Interfaces.AppServices;
 using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Application.Services;
@@ -11,11 +12,13 @@ namespace Avachat.Application.Services;
 public class AgentService
 {
     private readonly IAgentRepository<Agent> _repository;
+    private readonly IElasticsearchService _esService;
     private readonly IMapper _mapper;
 
-    public AgentService(IAgentRepository<Agent> repository, IMapper mapper)
+    public AgentService(IAgentRepository<Agent> repository, IElasticsearchService esService, IMapper mapper)
     {
         _repository = repository;
+        _esService = esService;
         _mapper = mapper;
     }
 
@@ -60,6 +63,7 @@ public class AgentService
     {
         var agent = await _repository.GetByIdAsync(id);
         if (agent == null) return false;
+        await _esService.DeleteChunksByAgentIdAsync(id);
         await _repository.DeleteAsync(id);
         return true;
     }

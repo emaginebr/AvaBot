@@ -35,7 +35,7 @@ public class SessionControllerTest
         expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
-        var agentService = new AgentService(_agentRepoMock.Object, _mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, new Mock<IElasticsearchService>().Object, _mapper);
 
         var esServiceMock = new Mock<IElasticsearchService>();
         var openAIMock = new Mock<IOpenAIService>();

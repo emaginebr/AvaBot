@@ -39,6 +39,9 @@ jobs:
           cat > .env.prod <<'ENVEOF'
           AVACHAT_CONNECTION_STRING=${{ secrets.AVACHAT_CONNECTION_STRING }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          AVACHAT_USERNAME=${{ secrets.AVACHAT_USERNAME }}
+          AVACHAT_PASSWORD=${{ secrets.AVACHAT_PASSWORD }}
+          AVACHAT_JWT_SECRET=${{ secrets.AVACHAT_JWT_SECRET }}
           ENVEOF
 
           # Remove leading whitespace from .env.prod

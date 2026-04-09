@@ -2,6 +2,8 @@ using Xunit;
 using Moq;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Avachat.API.Controllers;
 using Avachat.Application.Profiles;
 using Avachat.Application.Services;
@@ -18,6 +20,7 @@ public class AgentControllerTest
     private readonly IMapper _mapper;
     private readonly AgentService _agentService;
     private readonly SearchService _searchService;
+    private readonly ChatService _chatService;
     private readonly AgentController _sut;
 
     public AgentControllerTest()
@@ -25,10 +28,18 @@ public class AgentControllerTest
         _repositoryMock = new Mock<IAgentRepository<Agent>>();
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<AgentProfile>();
-        _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
-        _agentService = new AgentService(_repositoryMock.Object, _mapper);
-        _searchService = new SearchService(new Mock<IElasticsearchService>().Object, new Mock<IOpenAIService>().Object);
-        _sut = new AgentController(_agentService, _searchService, _mapper);
+        _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
+        var esServiceMock = new Mock<IElasticsearchService>();
+        var openAIMock = new Mock<IOpenAIService>();
+        _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, _mapper);
+        _searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
+        _chatService = new ChatService(
+            _searchService, openAIMock.Object,
+            new Mock<IChatSessionRepository<ChatSession>>().Object,
+            new Mock<IChatMessageRepository<ChatMessage>>().Object,
+            config, NullLogger<ChatService>.Instance);
+        _sut = new AgentController(_agentService, _searchService, _chatService, _mapper);
     }
 
     [Fact]

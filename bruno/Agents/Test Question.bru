@@ -1,0 +1,29 @@
+meta {
+  name: Test Question
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/agents/:id/test
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+params:path {
+  id: 1
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "query": "Qual o horario de funcionamento?"
+  }
+}
