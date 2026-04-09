@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Avachat.DTO;
 using Avachat.Domain.Models;
@@ -6,16 +7,19 @@ using Avachat.Application.Services;
 
 namespace Avachat.API.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("api/agents")]
+[Route("agents")]
 public class AgentController : ControllerBase
 {
     private readonly AgentService _agentService;
+    private readonly SearchService _searchService;
     private readonly IMapper _mapper;
 
-    public AgentController(AgentService agentService, IMapper mapper)
+    public AgentController(AgentService agentService, SearchService searchService, IMapper mapper)
     {
         _agentService = agentService;
+        _searchService = searchService;
         _mapper = mapper;
     }
 
@@ -34,6 +38,7 @@ public class AgentController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [HttpGet("{slug}")]
     public async Task<IActionResult> GetBySlug(string slug)
     {
@@ -51,6 +56,7 @@ public class AgentController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [HttpGet("{slug}/chat-config")]
     public async Task<IActionResult> GetChatConfig(string slug)
     {
@@ -78,7 +84,7 @@ public class AgentController : ControllerBase
         try
         {
             var agent = await _agentService.CreateAsync(info);
-            return Created($"/api/agents/{agent.Slug}", Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente criado com sucesso"));
+            return Created($"/agents/{agent.Slug}", Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente criado com sucesso"));
         }
         catch (Exception ex)
         {
@@ -130,6 +136,23 @@ public class AgentController : ControllerBase
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
             return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Status atualizado com sucesso"));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure(ex.Message));
+        }
+    }
+
+    [HttpGet("{id:long}/search")]
+    public async Task<IActionResult> Search(long id, [FromQuery] string query, [FromQuery] int topK = 5)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return BadRequest(Result<object>.Failure("O parametro 'query' e obrigatorio"));
+
+            var chunks = await _searchService.SearchAsync(id, query, topK);
+            return Ok(Result<List<string>>.Success(chunks, $"{chunks.Count} resultado(s) encontrado(s)"));
         }
         catch (Exception ex)
         {

@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Avachat.DTO;
 using Avachat.Domain.Models;
@@ -7,8 +8,9 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.API.Controllers;
 
+[Authorize]
 [ApiController]
-public class ChatSessionController : ControllerBase
+public class SessionController : ControllerBase
 {
     private readonly IChatSessionRepository<ChatSession> _sessionRepo;
     private readonly IChatMessageRepository<ChatMessage> _messageRepo;
@@ -16,7 +18,7 @@ public class ChatSessionController : ControllerBase
     private readonly ChatService _chatService;
     private readonly IMapper _mapper;
 
-    public ChatSessionController(
+    public SessionController(
         IChatSessionRepository<ChatSession> sessionRepo,
         IChatMessageRepository<ChatMessage> messageRepo,
         AgentService agentService,
@@ -30,7 +32,8 @@ public class ChatSessionController : ControllerBase
         _mapper = mapper;
     }
 
-    [HttpPost("api/agents/{slug}/sessions")]
+    [AllowAnonymous]
+    [HttpPost("sessions/agents/{slug}")]
     public async Task<IActionResult> StartSession(string slug, [FromBody] ChatSessionStartInfo info)
     {
         try
@@ -58,7 +61,7 @@ public class ChatSessionController : ControllerBase
                 agent.AgentId, info.UserName, info.UserEmail, info.UserPhone);
 
             var result = _mapper.Map<ChatSessionInfo>(session);
-            return Created($"/api/sessions/{session.ChatSessionId}/messages",
+            return Created($"/sessions/{session.ChatSessionId}/messages",
                 Result<ChatSessionInfo>.Success(result, "Sessao iniciada com sucesso"));
         }
         catch (Exception ex)
@@ -67,13 +70,13 @@ public class ChatSessionController : ControllerBase
         }
     }
 
-    [HttpGet("api/agents/{agentId:long}/sessions")]
-    public async Task<IActionResult> GetSessions(long agentId, [FromQuery] int pagina = 1, [FromQuery] int tamanhoPagina = 20)
+    [HttpGet("sessions/agents/{agentId:long}")]
+    public async Task<IActionResult> GetSessions(long agentId, [FromQuery] int page = 1, [FromQuery] int maxPage = 20)
     {
         try
         {
-            tamanhoPagina = Math.Min(tamanhoPagina, 100);
-            var sessions = await _sessionRepo.GetByAgentIdAsync(agentId, pagina, tamanhoPagina);
+            maxPage = Math.Min(maxPage, 100);
+            var sessions = await _sessionRepo.GetByAgentIdAsync(agentId, page, maxPage);
             var total = await _sessionRepo.CountByAgentIdAsync(agentId);
 
             var items = new List<ChatSessionInfo>();
@@ -88,8 +91,8 @@ public class ChatSessionController : ControllerBase
             {
                 Items = items,
                 Total = total,
-                Pagina = pagina,
-                TamanhoPagina = tamanhoPagina
+                Page = page,
+                MaxPage = maxPage
             };
 
             return Ok(Result<PaginatedResult<ChatSessionInfo>>.Success(paginated, "Sessoes listadas com sucesso"));
@@ -100,13 +103,13 @@ public class ChatSessionController : ControllerBase
         }
     }
 
-    [HttpGet("api/sessions/{sessionId:long}/messages")]
-    public async Task<IActionResult> GetMessages(long sessionId, [FromQuery] int pagina = 1, [FromQuery] int tamanhoPagina = 50)
+    [HttpGet("sessions/{sessionId:long}/messages")]
+    public async Task<IActionResult> GetMessages(long sessionId, [FromQuery] int page = 1, [FromQuery] int maxPage = 50)
     {
         try
         {
-            tamanhoPagina = Math.Min(tamanhoPagina, 200);
-            var messages = await _messageRepo.GetBySessionIdAsync(sessionId, pagina, tamanhoPagina);
+            maxPage = Math.Min(maxPage, 200);
+            var messages = await _messageRepo.GetBySessionIdAsync(sessionId, page, maxPage);
             var total = await _messageRepo.CountBySessionIdAsync(sessionId);
 
             var items = _mapper.Map<List<ChatMessageInfo>>(messages);
@@ -115,8 +118,8 @@ public class ChatSessionController : ControllerBase
             {
                 Items = items,
                 Total = total,
-                Pagina = pagina,
-                TamanhoPagina = tamanhoPagina
+                Page = page,
+                MaxPage = maxPage
             };
 
             return Ok(Result<PaginatedResult<ChatMessageInfo>>.Success(paginated, "Mensagens listadas com sucesso"));

@@ -5,9 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/agents/:agentId/files
+  url: {{baseUrl}}/files/:agentId
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

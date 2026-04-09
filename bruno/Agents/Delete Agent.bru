@@ -5,9 +5,13 @@ meta {
 }
 
 delete {
-  url: {{baseUrl}}/api/agents/:id
+  url: {{baseUrl}}/agents/:id
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

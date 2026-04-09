@@ -7,6 +7,7 @@ using Avachat.Application.Profiles;
 using Avachat.Application.Services;
 using Avachat.Domain.Models;
 using Avachat.DTO;
+using Avachat.Infra.Interfaces.AppServices;
 using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Tests.API.Controllers;
@@ -16,6 +17,7 @@ public class AgentControllerTest
     private readonly Mock<IAgentRepository<Agent>> _repositoryMock;
     private readonly IMapper _mapper;
     private readonly AgentService _agentService;
+    private readonly SearchService _searchService;
     private readonly AgentController _sut;
 
     public AgentControllerTest()
@@ -25,7 +27,8 @@ public class AgentControllerTest
         expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
         _agentService = new AgentService(_repositoryMock.Object, _mapper);
-        _sut = new AgentController(_agentService, _mapper);
+        _searchService = new SearchService(new Mock<IElasticsearchService>().Object, new Mock<IOpenAIService>().Object);
+        _sut = new AgentController(_agentService, _searchService, _mapper);
     }
 
     [Fact]

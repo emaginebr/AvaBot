@@ -5,9 +5,13 @@ meta {
 }
 
 put {
-  url: {{baseUrl}}/api/agents/:id
+  url: {{baseUrl}}/agents/:id
   body: json
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

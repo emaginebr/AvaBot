@@ -5,9 +5,13 @@ meta {
 }
 
 patch {
-  url: {{baseUrl}}/api/agents/:id/status
+  url: {{baseUrl}}/agents/:id/status
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

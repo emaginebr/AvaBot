@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Avachat.DTO;
 using Avachat.Domain.Models;
@@ -8,16 +9,17 @@ using Avachat.Infra.Interfaces.AppServices;
 
 namespace Avachat.API.Controllers;
 
+[Authorize]
 [ApiController]
-[Route("api/agents/{agentId:long}/files")]
-public class KnowledgeFileController : ControllerBase
+[Route("files/{agentId:long}")]
+public class FileController : ControllerBase
 {
     private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
     private readonly IElasticsearchService _esService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMapper _mapper;
 
-    public KnowledgeFileController(
+    public FileController(
         IKnowledgeFileRepository<KnowledgeFile> fileRepository,
         IElasticsearchService esService,
         IServiceScopeFactory scopeFactory,
@@ -82,7 +84,7 @@ public class KnowledgeFileController : ControllerBase
                 await ingestionService.ProcessFileAsync(fileId);
             });
 
-            return Created($"/api/agents/{agentId}/files/{knowledgeFile.KnowledgeFileId}",
+            return Created($"/files/{agentId}/{knowledgeFile.KnowledgeFileId}",
                 Result<KnowledgeFileInfo>.Success(_mapper.Map<KnowledgeFileInfo>(knowledgeFile), "Arquivo enviado e em processamento"));
         }
         catch (Exception ex)

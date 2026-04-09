@@ -8,7 +8,7 @@ public class ChatSessionControllerTest : TestBase
 {
     private async Task<AgentResponse> CreateTestAgentAsync(bool collectName = false)
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new
             {
                 name = $"Chat Agent {Guid.NewGuid():N}"[..20],
@@ -26,13 +26,13 @@ public class ChatSessionControllerTest : TestBase
     {
         var agent = await CreateTestAgentAsync();
 
-        var response = await Api($"api/agents/{agent.AgentId}/sessions").GetAsync();
+        var response = await Api($"sessions/agents/{agent.AgentId}").GetAsync();
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<PaginatedResponse<ChatSessionResponse>>>();
         body.Sucesso.Should().BeTrue();
         body.Dados!.Items.Should().NotBeNull();
-        body.Dados.Pagina.Should().Be(1);
+        body.Dados.Page.Should().Be(1);
     }
 
     [Fact]
@@ -40,21 +40,21 @@ public class ChatSessionControllerTest : TestBase
     {
         var agent = await CreateTestAgentAsync();
 
-        var response = await Api($"api/agents/{agent.AgentId}/sessions")
-            .SetQueryParams(new { pagina = 2, tamanhoPagina = 5 })
+        var response = await Api($"sessions/agents/{agent.AgentId}")
+            .SetQueryParams(new { page = 2, maxPage = 5 })
             .GetAsync();
 
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<PaginatedResponse<ChatSessionResponse>>>();
-        body.Dados!.Pagina.Should().Be(2);
-        body.Dados.TamanhoPagina.Should().Be(5);
+        body.Dados!.Page.Should().Be(2);
+        body.Dados.MaxPage.Should().Be(5);
     }
 
     [Fact]
     public async Task GetMessages_ShouldReturnOk_WithEmptyList_WhenNoSession()
     {
-        var response = await Api("api/sessions/999999/messages").GetAsync();
+        var response = await Api("sessions/999999/messages").GetAsync();
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<PaginatedResponse<ChatMessageResponse>>>();
@@ -67,8 +67,8 @@ public class PaginatedResponse<T>
 {
     public List<T> Items { get; set; } = new();
     public int Total { get; set; }
-    public int Pagina { get; set; }
-    public int TamanhoPagina { get; set; }
+    public int Page { get; set; }
+    public int MaxPage { get; set; }
 }
 
 public class ChatSessionResponse

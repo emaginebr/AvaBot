@@ -5,7 +5,11 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/agents
+  url: {{baseUrl}}/agents
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }

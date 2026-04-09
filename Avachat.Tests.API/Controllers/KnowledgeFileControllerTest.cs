@@ -9,7 +9,7 @@ public class KnowledgeFileControllerTest : TestBase
 {
     private async Task<long> CreateTestAgentAsync()
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new { name = $"KF Agent {Guid.NewGuid():N}"[..20], systemPrompt = "P" });
         var body = await response.GetJsonAsync<ApiResult<AgentResponse>>();
         return body.Dados!.AgentId;
@@ -20,7 +20,7 @@ public class KnowledgeFileControllerTest : TestBase
     {
         var agentId = await CreateTestAgentAsync();
 
-        var response = await Api($"api/agents/{agentId}/files").GetAsync();
+        var response = await Api($"files/{agentId}").GetAsync();
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<List<KnowledgeFileResponse>>>();
@@ -35,7 +35,7 @@ public class KnowledgeFileControllerTest : TestBase
         var content = "# Test Knowledge\n\nThis is test content for integration testing.";
         var fileBytes = Encoding.UTF8.GetBytes(content);
 
-        var response = await Api($"api/agents/{agentId}/files")
+        var response = await Api($"files/{agentId}")
             .PostMultipartAsync(mp =>
             {
                 mp.AddFile("file", new MemoryStream(fileBytes), "test-knowledge.md", "text/markdown");
@@ -55,7 +55,7 @@ public class KnowledgeFileControllerTest : TestBase
         var agentId = await CreateTestAgentAsync();
         var fileBytes = Encoding.UTF8.GetBytes("not markdown");
 
-        var action = () => Api($"api/agents/{agentId}/files")
+        var action = () => Api($"files/{agentId}")
             .PostMultipartAsync(mp =>
             {
                 mp.AddFile("file", new MemoryStream(fileBytes), "test.txt", "text/plain");
@@ -71,7 +71,7 @@ public class KnowledgeFileControllerTest : TestBase
         var agentId = await CreateTestAgentAsync();
         var fileBytes = Encoding.UTF8.GetBytes("# To delete\n\nContent.");
 
-        var uploadResponse = await Api($"api/agents/{agentId}/files")
+        var uploadResponse = await Api($"files/{agentId}")
             .PostMultipartAsync(mp =>
             {
                 mp.AddFile("file", new MemoryStream(fileBytes), "to-delete.md", "text/markdown");
@@ -79,7 +79,7 @@ public class KnowledgeFileControllerTest : TestBase
         var uploaded = await uploadResponse.GetJsonAsync<ApiResult<KnowledgeFileResponse>>();
         var fileId = uploaded.Dados!.KnowledgeFileId;
 
-        var response = await Api($"api/agents/{agentId}/files/{fileId}").DeleteAsync();
+        var response = await Api($"files/{agentId}/{fileId}").DeleteAsync();
         response.StatusCode.Should().Be(200);
     }
 
@@ -88,7 +88,7 @@ public class KnowledgeFileControllerTest : TestBase
     {
         var agentId = await CreateTestAgentAsync();
 
-        var action = () => Api($"api/agents/{agentId}/files/999999").DeleteAsync();
+        var action = () => Api($"files/{agentId}/999999").DeleteAsync();
         var ex = await action.Should().ThrowAsync<FlurlHttpException>();
         ex.Which.StatusCode.Should().Be(404);
     }
@@ -99,7 +99,7 @@ public class KnowledgeFileControllerTest : TestBase
         var agentId = await CreateTestAgentAsync();
         var fileBytes = Encoding.UTF8.GetBytes("# Reprocess\n\nContent.");
 
-        var uploadResponse = await Api($"api/agents/{agentId}/files")
+        var uploadResponse = await Api($"files/{agentId}")
             .PostMultipartAsync(mp =>
             {
                 mp.AddFile("file", new MemoryStream(fileBytes), "reprocess.md", "text/markdown");
@@ -107,7 +107,7 @@ public class KnowledgeFileControllerTest : TestBase
         var uploaded = await uploadResponse.GetJsonAsync<ApiResult<KnowledgeFileResponse>>();
         var fileId = uploaded.Dados!.KnowledgeFileId;
 
-        var response = await Api($"api/agents/{agentId}/files/{fileId}/reprocess").PostAsync();
+        var response = await Api($"files/{agentId}/{fileId}/reprocess").PostAsync();
         response.StatusCode.Should().Be(200);
     }
 }

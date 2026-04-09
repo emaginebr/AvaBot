@@ -34,6 +34,6 @@ public class PaginatedResult<T>
 {
     [JsonPropertyName("items")] public List<T> Items { get; set; } = new();
     [JsonPropertyName("total")] public int Total { get; set; }
-    [JsonPropertyName("pagina")] public int Pagina { get; set; }
-    [JsonPropertyName("tamanhoPagina")] public int TamanhoPagina { get; set; }
+    [JsonPropertyName("page")] public int Page { get; set; }
+    [JsonPropertyName("maxPage")] public int MaxPage { get; set; }
 }

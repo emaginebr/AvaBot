@@ -5,9 +5,13 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/agents/:agentId/files
+  url: {{baseUrl}}/files/:agentId
   body: multipartForm
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

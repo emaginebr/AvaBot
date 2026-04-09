@@ -60,10 +60,22 @@ Console.WriteLine();
 
 using var client = new FlurlClient(baseUrl);
 
+// --- Authenticate ---
+var username = configuration["ApiSettings:Username"] ?? "admin";
+var password = configuration["ApiSettings:Password"] ?? "admin@123";
+
+Console.WriteLine("Autenticando...");
+var loginResponse = await client.Request("auth/login").PostJsonAsync(new { username, password });
+var loginJson = await loginResponse.GetJsonAsync<JsonElement>();
+var token = loginJson.GetProperty("token").GetString();
+client.WithHeader("Authorization", $"Bearer {token}");
+Console.WriteLine("Autenticado com sucesso!");
+Console.WriteLine();
+
 // --- Find or Create Agent ---
 
 // Try to find existing agent by listing all and matching name
-var allAgentsResponse = await client.Request("api/agents").GetAsync();
+var allAgentsResponse = await client.Request("agents").GetAsync();
 var allAgents = await allAgentsResponse.GetJsonAsync<ApiResult<List<AgentData>>>();
 
 var existingAgent = allAgents.Dados?.FirstOrDefault(a =>
@@ -76,7 +88,7 @@ if (existingAgent != null)
     Console.WriteLine($"Agente encontrado: ID={existingAgent.AgentId}, Slug={existingAgent.Slug}");
     Console.WriteLine("Atualizando...");
 
-    var updateResponse = await client.Request($"api/agents/{existingAgent.AgentId}")
+    var updateResponse = await client.Request($"agents/{existingAgent.AgentId}")
         .PutJsonAsync(new
         {
             name = agentName,
@@ -95,7 +107,7 @@ else
 {
     Console.WriteLine("Agente nao encontrado. Criando...");
 
-    var createResponse = await client.Request("api/agents")
+    var createResponse = await client.Request("agents")
         .PostJsonAsync(new
         {
             name = agentName,
@@ -118,7 +130,7 @@ Console.WriteLine();
 if (docFiles.Length > 0)
 {
     // Get existing files
-    var filesResponse = await client.Request($"api/agents/{agent.AgentId}/files").GetAsync();
+    var filesResponse = await client.Request($"files/{agent.AgentId}").GetAsync();
     var existingFiles = await filesResponse.GetJsonAsync<ApiResult<List<FileData>>>();
     var existingFileNames = existingFiles.Dados?.Select(f => f.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase)
         ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -134,13 +146,13 @@ if (docFiles.Length > 0)
                 string.Equals(f.FileName, fileName, StringComparison.OrdinalIgnoreCase));
 
             Console.WriteLine($"  Removendo arquivo existente: {fileName} (ID={toDelete.KnowledgeFileId})");
-            await client.Request($"api/agents/{agent.AgentId}/files/{toDelete.KnowledgeFileId}").DeleteAsync();
+            await client.Request($"files/{agent.AgentId}/{toDelete.KnowledgeFileId}").DeleteAsync();
         }
 
         Console.WriteLine($"  Enviando: {fileName}");
 
         var fileBytes = await File.ReadAllBytesAsync(docFile);
-        var uploadResponse = await client.Request($"api/agents/{agent.AgentId}/files")
+        var uploadResponse = await client.Request($"files/{agent.AgentId}")
             .PostMultipartAsync(mp =>
             {
                 mp.AddFile("file", new MemoryStream(fileBytes), fileName, "text/markdown");
@@ -157,7 +169,7 @@ if (docFiles.Length > 0)
     foreach (var orphan in orphanFiles)
     {
         Console.WriteLine($"  Removendo arquivo orfao: {orphan.FileName} (ID={orphan.KnowledgeFileId})");
-        await client.Request($"api/agents/{agent.AgentId}/files/{orphan.KnowledgeFileId}").DeleteAsync();
+        await client.Request($"files/{agent.AgentId}/{orphan.KnowledgeFileId}").DeleteAsync();
     }
 }
 

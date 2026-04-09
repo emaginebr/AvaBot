@@ -1,0 +1,24 @@
+meta {
+  name: Search Knowledge
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/agents/:id/search?query=teste&topK=5
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+params:query {
+  query: teste
+  topK: 5
+}
+
+params:path {
+  id: 1
+}

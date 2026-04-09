@@ -5,14 +5,18 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/agents/:agentId/sessions?pagina=1&tamanhoPagina=20
+  url: {{baseUrl}}/sessions/agents/:agentId?page=1&maxPage=20
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:query {
-  pagina: 1
-  tamanhoPagina: 20
+  page: 1
+  maxPage: 20
 }
 
 params:path {

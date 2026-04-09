@@ -5,14 +5,18 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/sessions/:sessionId/messages?pagina=1&tamanhoPagina=50
+  url: {{baseUrl}}/sessions/:sessionId/messages?page=1&maxPage=50
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:query {
-  pagina: 1
-  tamanhoPagina: 50
+  page: 1
+  maxPage: 50
 }
 
 params:path {

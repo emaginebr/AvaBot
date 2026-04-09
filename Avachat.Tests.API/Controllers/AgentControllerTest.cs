@@ -8,7 +8,7 @@ public class AgentControllerTest : TestBase
 {
     private async Task<AgentResponse> CreateAgentAsync(string name = "Test Agent", string systemPrompt = "P")
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new { name, systemPrompt });
         var body = await response.GetJsonAsync<ApiResult<AgentResponse>>();
         return body.Dados!;
@@ -17,7 +17,7 @@ public class AgentControllerTest : TestBase
     [Fact]
     public async Task Create_ShouldReturnCreated_WithAutoSlug()
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new
             {
                 name = "Integration Test Agent",
@@ -52,7 +52,7 @@ public class AgentControllerTest : TestBase
     {
         await CreateAgentAsync();
 
-        var response = await Api("api/agents").GetAsync();
+        var response = await Api("agents").GetAsync();
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<List<AgentResponse>>>();
@@ -65,7 +65,7 @@ public class AgentControllerTest : TestBase
     {
         var created = await CreateAgentAsync("Get By Slug Test");
 
-        var response = await Api($"api/agents/{created.Slug}").GetAsync();
+        var response = await Api($"agents/{created.Slug}").GetAsync();
         response.StatusCode.Should().Be(200);
 
         var body = await response.GetJsonAsync<ApiResult<AgentResponse>>();
@@ -76,7 +76,7 @@ public class AgentControllerTest : TestBase
     [Fact]
     public async Task GetBySlug_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        var action = () => Api("api/agents/nonexistent-slug-xyz-99").GetAsync();
+        var action = () => Api("agents/nonexistent-slug-xyz-99").GetAsync();
         var ex = await action.Should().ThrowAsync<FlurlHttpException>();
         ex.Which.StatusCode.Should().Be(404);
     }
@@ -84,7 +84,7 @@ public class AgentControllerTest : TestBase
     [Fact]
     public async Task GetChatConfig_ShouldReturnConfig_WhenAgentActive()
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new
             {
                 name = "Config Agent Test",
@@ -95,7 +95,7 @@ public class AgentControllerTest : TestBase
             });
         var created = (await response.GetJsonAsync<ApiResult<AgentResponse>>()).Dados!;
 
-        var configResponse = await Api($"api/agents/{created.Slug}/chat-config").GetAsync();
+        var configResponse = await Api($"agents/{created.Slug}/chat-config").GetAsync();
         configResponse.StatusCode.Should().Be(200);
 
         var body = await configResponse.GetJsonAsync<ApiResult<ChatConfigResponse>>();
@@ -110,7 +110,7 @@ public class AgentControllerTest : TestBase
     {
         var created = await CreateAgentAsync("Before Update");
 
-        var response = await Api($"api/agents/{created.AgentId}")
+        var response = await Api($"agents/{created.AgentId}")
             .PutJsonAsync(new { name = "After Update", systemPrompt = "Updated" });
 
         response.StatusCode.Should().Be(200);
@@ -124,7 +124,7 @@ public class AgentControllerTest : TestBase
     [Fact]
     public async Task Update_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        var action = () => Api("api/agents/999999")
+        var action = () => Api("agents/999999")
             .PutJsonAsync(new { name = "X", systemPrompt = "P" });
         var ex = await action.Should().ThrowAsync<FlurlHttpException>();
         ex.Which.StatusCode.Should().Be(404);
@@ -135,12 +135,12 @@ public class AgentControllerTest : TestBase
     {
         var created = await CreateAgentAsync("Toggle Test");
 
-        var response = await Api($"api/agents/{created.AgentId}/status").PatchAsync();
+        var response = await Api($"agents/{created.AgentId}/status").PatchAsync();
         response.StatusCode.Should().Be(200);
         var body = await response.GetJsonAsync<ApiResult<AgentResponse>>();
         body.Dados!.Status.Should().Be(0);
 
-        var response2 = await Api($"api/agents/{created.AgentId}/status").PatchAsync();
+        var response2 = await Api($"agents/{created.AgentId}/status").PatchAsync();
         var body2 = await response2.GetJsonAsync<ApiResult<AgentResponse>>();
         body2.Dados!.Status.Should().Be(1);
     }
@@ -150,14 +150,14 @@ public class AgentControllerTest : TestBase
     {
         var created = await CreateAgentAsync("To Delete");
 
-        var response = await Api($"api/agents/{created.AgentId}").DeleteAsync();
+        var response = await Api($"agents/{created.AgentId}").DeleteAsync();
         response.StatusCode.Should().Be(200);
     }
 
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        var action = () => Api("api/agents/999999").DeleteAsync();
+        var action = () => Api("agents/999999").DeleteAsync();
         var ex = await action.Should().ThrowAsync<FlurlHttpException>();
         ex.Which.StatusCode.Should().Be(404);
     }

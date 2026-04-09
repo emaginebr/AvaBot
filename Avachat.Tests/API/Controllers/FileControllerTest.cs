@@ -15,14 +15,14 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Tests.API.Controllers;
 
-public class KnowledgeFileControllerTest
+public class FileControllerTest
 {
     private readonly Mock<IKnowledgeFileRepository<KnowledgeFile>> _fileRepoMock;
     private readonly Mock<IElasticsearchService> _esServiceMock;
     private readonly IMapper _mapper;
-    private readonly KnowledgeFileController _sut;
+    private readonly FileController _sut;
 
-    public KnowledgeFileControllerTest()
+    public FileControllerTest()
     {
         _fileRepoMock = new Mock<IKnowledgeFileRepository<KnowledgeFile>>();
         _esServiceMock = new Mock<IElasticsearchService>();
@@ -32,7 +32,7 @@ public class KnowledgeFileControllerTest
 
         var scopeFactoryMock = new Mock<IServiceScopeFactory>();
 
-        _sut = new KnowledgeFileController(
+        _sut = new FileController(
             _fileRepoMock.Object,
             _esServiceMock.Object,
             scopeFactoryMock.Object,

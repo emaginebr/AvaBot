@@ -5,9 +5,13 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/agents/:agentId/files/:fileId/reprocess
+  url: {{baseUrl}}/files/:agentId/:fileId/reprocess
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
 }
 
 params:path {

@@ -17,7 +17,7 @@ public class ChatWebSocketTest : TestBase
 
     private async Task<AgentResponse> CreateAgentAsync(bool collectName = false, bool collectEmail = false)
     {
-        var response = await Api("api/agents")
+        var response = await Api("agents")
             .PostJsonAsync(new
             {
                 name = $"WS Agent {Guid.NewGuid():N}"[..20],
@@ -88,7 +88,7 @@ public class ChatWebSocketTest : TestBase
         await Task.Delay(500);
 
         // Verify session was created via REST API
-        var response = await Api($"api/agents/{agent.AgentId}/sessions").GetAsync();
+        var response = await Api($"sessions/agents/{agent.AgentId}").GetAsync();
         var body = await response.GetJsonAsync<ApiResult<PaginatedResponse<ChatSessionResponse>>>();
         body.Dados!.Items.Should().NotBeEmpty();
         body.Dados.Items[0].AgentId.Should().Be(agent.AgentId);
@@ -121,7 +121,7 @@ public class ChatWebSocketTest : TestBase
         await Task.Delay(500);
 
         // Verify session was created with user data
-        var response = await Api($"api/agents/{agent.AgentId}/sessions").GetAsync();
+        var response = await Api($"sessions/agents/{agent.AgentId}").GetAsync();
         var body = await response.GetJsonAsync<ApiResult<PaginatedResponse<ChatSessionResponse>>>();
         body.Dados!.Items.Should().NotBeEmpty();
         var session = body.Dados.Items[0];
@@ -173,7 +173,7 @@ public class ChatWebSocketTest : TestBase
         await Task.Delay(500);
 
         // Verify session exists with messages
-        var sessionsResponse = await Api($"api/agents/{agent.AgentId}/sessions").GetAsync();
+        var sessionsResponse = await Api($"sessions/agents/{agent.AgentId}").GetAsync();
         var sessions = await sessionsResponse.GetJsonAsync<ApiResult<PaginatedResponse<ChatSessionResponse>>>();
         sessions.Dados!.Items.Should().NotBeEmpty();
 
@@ -181,7 +181,7 @@ public class ChatWebSocketTest : TestBase
         session.ChatSessionId.Should().BeGreaterThan(0);
 
         // Check messages were persisted
-        var messagesResponse = await Api($"api/sessions/{session.ChatSessionId}/messages").GetAsync();
+        var messagesResponse = await Api($"sessions/{session.ChatSessionId}/messages").GetAsync();
         var messages = await messagesResponse.GetJsonAsync<ApiResult<PaginatedResponse<ChatMessageResponse>>>();
 
         // At minimum the user message should be there (assistant may fail if OpenAI key is invalid)

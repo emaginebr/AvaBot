@@ -15,15 +15,15 @@ using Avachat.Infra.Interfaces.Repository;
 
 namespace Avachat.Tests.API.Controllers;
 
-public class ChatSessionControllerTest
+public class SessionControllerTest
 {
     private readonly Mock<IChatSessionRepository<ChatSession>> _sessionRepoMock;
     private readonly Mock<IChatMessageRepository<ChatMessage>> _messageRepoMock;
     private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
     private readonly IMapper _mapper;
-    private readonly ChatSessionController _sut;
+    private readonly SessionController _sut;
 
-    public ChatSessionControllerTest()
+    public SessionControllerTest()
     {
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
@@ -43,7 +43,7 @@ public class ChatSessionControllerTest
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, config, NullLogger<ChatService>.Instance);
 
-        _sut = new ChatSessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper);
+        _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class ChatSessionControllerTest
         _sessionRepoMock.Setup(r => r.CountByAgentIdAsync(1)).ReturnsAsync(0);
 
         // Act
-        var result = await _sut.GetSessions(1, tamanhoPagina: 500);
+        var result = await _sut.GetSessions(1, maxPage: 500);
 
         // Assert
         _sessionRepoMock.Verify(r => r.GetByAgentIdAsync(1, 1, 100), Times.Once);
@@ -113,7 +113,7 @@ public class ChatSessionControllerTest
         _messageRepoMock.Setup(r => r.CountBySessionIdAsync(1)).ReturnsAsync(0);
 
         // Act
-        var result = await _sut.GetMessages(1, tamanhoPagina: 999);
+        var result = await _sut.GetMessages(1, maxPage: 999);
 
         // Assert
         _messageRepoMock.Verify(r => r.GetBySessionIdAsync(1, 1, 200), Times.Once);
