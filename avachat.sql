@@ -44,6 +44,7 @@ CREATE TABLE avachat_chat_sessions (
     user_name       VARCHAR(260),
     user_email      VARCHAR(260),
     user_phone      VARCHAR(50),
+    resume_token    VARCHAR(32)                 NOT NULL,
     started_at      TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     ended_at        TIMESTAMP WITHOUT TIME ZONE,
 
@@ -63,7 +64,23 @@ CREATE TABLE avachat_chat_messages (
     CONSTRAINT avachat_fk_chat_sessions_chat_messages FOREIGN KEY (chat_session_id) REFERENCES avachat_chat_sessions (chat_session_id)
 );
 
+-- telegram_chats
+CREATE TABLE avachat_telegram_chats (
+    telegram_chat_id    BIGINT                      NOT NULL,
+    agent_id            BIGINT                      NOT NULL,
+    chat_session_id     BIGINT                      NOT NULL,
+    telegram_username   VARCHAR(260),
+    telegram_first_name VARCHAR(260),
+    created_at          TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    updated_at          TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+
+    CONSTRAINT avachat_telegram_chats_pkey PRIMARY KEY (telegram_chat_id),
+    CONSTRAINT avachat_fk_telegram_chat_agent FOREIGN KEY (agent_id) REFERENCES avachat_agents (agent_id),
+    CONSTRAINT avachat_fk_telegram_chat_session FOREIGN KEY (chat_session_id) REFERENCES avachat_chat_sessions (chat_session_id)
+);
+
 -- Indexes
 CREATE INDEX avachat_idx_knowledge_files_agent_id   ON avachat_knowledge_files (agent_id);
 CREATE INDEX avachat_idx_chat_sessions_agent_id     ON avachat_chat_sessions (agent_id);
+CREATE UNIQUE INDEX ix_avachat_chat_sessions_resume_token ON avachat_chat_sessions (resume_token);
 CREATE INDEX avachat_idx_chat_messages_session_id   ON avachat_chat_messages (chat_session_id);

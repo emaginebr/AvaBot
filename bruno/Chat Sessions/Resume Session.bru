@@ -1,0 +1,19 @@
+meta {
+  name: Resume Session
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/sessions/resume/:slug
+  body: none
+  auth: none
+}
+
+params:path {
+  slug: bia
+}
+
+headers {
+  X-Resume-Token: {{resumeToken}}
+}

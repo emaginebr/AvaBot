@@ -38,10 +38,15 @@ public static class ChatWebSocketHandler
 
             try
             {
-                if (sessionId.HasValue)
+                string? resumeToken = null;
+
+            if (sessionId.HasValue)
                 {
                     // Session already created via REST, ready to chat
-                    await SendJsonAsync(ws, new { type = "ready" });
+                    // Fetch resume token from session
+                    var existingSession = await chatService.GetSessionByIdAsync(sessionId.Value);
+                    resumeToken = existingSession?.ResumeToken;
+                    await SendJsonAsync(ws, new { type = "ready", sessionId = sessionId.Value, resumeToken });
                 }
                 else
                 {
@@ -59,7 +64,8 @@ public static class ChatWebSocketHandler
                     {
                         var session = await chatService.CreateSessionAsync(agent.AgentId, null, null, null);
                         sessionId = session.ChatSessionId;
-                        await SendJsonAsync(ws, new { type = "ready" });
+                        resumeToken = session.ResumeToken;
+                        await SendJsonAsync(ws, new { type = "ready", sessionId = sessionId.Value, resumeToken });
                     }
                 }
 
@@ -86,7 +92,8 @@ public static class ChatWebSocketHandler
 
                         var session = await chatService.CreateSessionAsync(agent.AgentId, name, email, phone);
                         sessionId = session.ChatSessionId;
-                        await SendJsonAsync(ws, new { type = "ready" });
+                        resumeToken = session.ResumeToken;
+                        await SendJsonAsync(ws, new { type = "ready", sessionId = sessionId.Value, resumeToken });
                     }
                     else if (msgType == "message" && sessionId.HasValue)
                     {

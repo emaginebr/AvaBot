@@ -11,7 +11,22 @@ public class ChatSessionInfo
     [JsonPropertyName("userPhone")] public string? UserPhone { get; set; }
     [JsonPropertyName("startedAt")] public DateTime StartedAt { get; set; }
     [JsonPropertyName("endedAt")] public DateTime? EndedAt { get; set; }
+    [JsonPropertyName("resumeToken")] public string ResumeToken { get; set; } = string.Empty;
     [JsonPropertyName("messageCount")] public int MessageCount { get; set; }
+}
+
+public class ChatSessionResumeInfo
+{
+    [JsonPropertyName("chatSessionId")] public long ChatSessionId { get; set; }
+    [JsonPropertyName("agentId")] public long? AgentId { get; set; }
+    [JsonPropertyName("userName")] public string? UserName { get; set; }
+    [JsonPropertyName("userEmail")] public string? UserEmail { get; set; }
+    [JsonPropertyName("userPhone")] public string? UserPhone { get; set; }
+    [JsonPropertyName("resumeToken")] public string ResumeToken { get; set; } = string.Empty;
+    [JsonPropertyName("startedAt")] public DateTime StartedAt { get; set; }
+    [JsonPropertyName("endedAt")] public DateTime? EndedAt { get; set; }
+    [JsonPropertyName("messageCount")] public int MessageCount { get; set; }
+    [JsonPropertyName("messages")] public List<ChatMessageInfo> Messages { get; set; } = new();
 }
 
 public class ChatMessageInfo

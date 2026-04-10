@@ -153,6 +153,12 @@ namespace Avachat.Infra.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("ended_at");
 
+                    b.Property<string>("ResumeToken")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("resume_token");
+
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("started_at");
@@ -176,6 +182,10 @@ namespace Avachat.Infra.Migrations
                         .HasName("avachat_chat_sessions_pkey");
 
                     b.HasIndex("AgentId");
+
+                    b.HasIndex("ResumeToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_avachat_chat_sessions_resume_token");
 
                     b.ToTable("avachat_chat_sessions", (string)null);
                 });
@@ -234,6 +244,48 @@ namespace Avachat.Infra.Migrations
                     b.ToTable("avachat_knowledge_files", (string)null);
                 });
 
+            modelBuilder.Entity("Avachat.Domain.Models.TelegramChat", b =>
+                {
+                    b.Property<long>("TelegramChatId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("telegram_chat_id");
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<long>("ChatSessionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("chat_session_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("TelegramFirstName")
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("telegram_first_name");
+
+                    b.Property<string>("TelegramUsername")
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("telegram_username");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("TelegramChatId")
+                        .HasName("avachat_telegram_chats_pkey");
+
+                    b.HasIndex("AgentId");
+
+                    b.HasIndex("ChatSessionId");
+
+                    b.ToTable("avachat_telegram_chats", (string)null);
+                });
+
             modelBuilder.Entity("Avachat.Domain.Models.ChatMessage", b =>
                 {
                     b.HasOne("Avachat.Domain.Models.ChatSession", "ChatSession")
@@ -265,6 +317,27 @@ namespace Avachat.Infra.Migrations
                         .HasConstraintName("avachat_fk_agents_knowledge_files");
 
                     b.Navigation("Agent");
+                });
+
+            modelBuilder.Entity("Avachat.Domain.Models.TelegramChat", b =>
+                {
+                    b.HasOne("Avachat.Domain.Models.Agent", "Agent")
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("avachat_fk_telegram_chat_agent");
+
+                    b.HasOne("Avachat.Domain.Models.ChatSession", "ChatSession")
+                        .WithMany()
+                        .HasForeignKey("ChatSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("avachat_fk_telegram_chat_session");
+
+                    b.Navigation("Agent");
+
+                    b.Navigation("ChatSession");
                 });
 
             modelBuilder.Entity("Avachat.Domain.Models.Agent", b =>

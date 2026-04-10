@@ -12,6 +12,7 @@ public class AvachatContext : DbContext
     public DbSet<KnowledgeFile> KnowledgeFiles { get; set; }
     public DbSet<ChatSession> ChatSessions { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<TelegramChat> TelegramChats { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,12 +71,40 @@ public class AvachatContext : DbContext
             entity.Property(e => e.UserEmail).HasColumnName("user_email").HasMaxLength(260);
             entity.Property(e => e.UserPhone).HasColumnName("user_phone").HasMaxLength(50);
             entity.Property(e => e.StartedAt).HasColumnName("started_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.ResumeToken).HasColumnName("resume_token").HasMaxLength(32).IsRequired();
+            entity.HasIndex(e => e.ResumeToken).IsUnique().HasDatabaseName("ix_avachat_chat_sessions_resume_token");
             entity.Property(e => e.EndedAt).HasColumnName("ended_at").HasColumnType("timestamp without time zone");
 
             entity.HasOne(e => e.Agent)
                 .WithMany(a => a.ChatSessions)
                 .HasForeignKey(e => e.AgentId)
                 .HasConstraintName("avachat_fk_agents_chat_sessions")
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TelegramChat
+        modelBuilder.Entity<TelegramChat>(entity =>
+        {
+            entity.ToTable("avachat_telegram_chats");
+            entity.HasKey(e => e.TelegramChatId).HasName("avachat_telegram_chats_pkey");
+            entity.Property(e => e.TelegramChatId).HasColumnName("telegram_chat_id").ValueGeneratedNever();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.ChatSessionId).HasColumnName("chat_session_id").IsRequired();
+            entity.Property(e => e.TelegramUsername).HasColumnName("telegram_username").HasMaxLength(260);
+            entity.Property(e => e.TelegramFirstName).HasColumnName("telegram_first_name").HasMaxLength(260);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+
+            entity.HasOne(e => e.Agent)
+                .WithMany()
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avachat_fk_telegram_chat_agent")
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ChatSession)
+                .WithMany()
+                .HasForeignKey(e => e.ChatSessionId)
+                .HasConstraintName("avachat_fk_telegram_chat_session")
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

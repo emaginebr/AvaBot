@@ -1,0 +1,39 @@
+meta {
+  name: Webhook (Simulate)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/telegram/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Telegram-Bot-Api-Secret-Token: {{telegramWebhookSecret}}
+}
+
+body:json {
+  {
+    "update_id": 123456789,
+    "message": {
+      "message_id": 100,
+      "from": {
+        "id": 987654321,
+        "is_bot": false,
+        "first_name": "Rodrigo",
+        "username": "rodrigo_test"
+      },
+      "chat": {
+        "id": 987654321,
+        "first_name": "Rodrigo",
+        "username": "rodrigo_test",
+        "type": "private"
+      },
+      "date": 1712745600,
+      "text": "/start"
+    }
+  }
+}

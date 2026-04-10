@@ -1,0 +1,15 @@
+meta {
+  name: Setup Webhook
+  type: http
+  seq: 0
+}
+
+post {
+  url: {{baseUrl}}/telegram/setup-webhook
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -9,6 +9,7 @@
     <PackageReference Include="Elastic.Clients.Elasticsearch" Version="8.17.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.*" />
     <PackageReference Include="OpenAI" Version="2.10.0" />
+    <PackageReference Include="Telegram.Bot" Version="22.*" />
   </ItemGroup>
 
   <PropertyGroup>

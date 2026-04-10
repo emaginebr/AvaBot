@@ -10,5 +10,9 @@ public class ChatSessionProfile : Profile
     {
         CreateMap<ChatSession, ChatSessionInfo>()
             .ForMember(d => d.MessageCount, opt => opt.Ignore());
+
+        CreateMap<ChatSession, ChatSessionResumeInfo>()
+            .ForMember(d => d.MessageCount, opt => opt.Ignore())
+            .ForMember(d => d.Messages, opt => opt.Ignore());
     }
 }

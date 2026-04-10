@@ -10,6 +10,7 @@ using Avachat.Infra.AppServices;
 using Avachat.Infra.Repository;
 using Avachat.Application.Profiles;
 using Avachat.Application.Services;
+using Telegram.Bot;
 
 namespace Avachat.Application;
 
@@ -26,12 +27,21 @@ public static class DependencyInjection
         services.AddScoped<IKnowledgeFileRepository<KnowledgeFile>, KnowledgeFileRepository>();
         services.AddScoped<IChatSessionRepository<ChatSession>, ChatSessionRepository>();
         services.AddScoped<IChatMessageRepository<ChatMessage>, ChatMessageRepository>();
+        services.AddScoped<ITelegramChatRepository<TelegramChat>, TelegramChatRepository>();
 
         // Domain Services
         services.AddScoped<AgentService>();
         services.AddScoped<IngestionService>();
         services.AddScoped<SearchService>();
         services.AddScoped<ChatService>();
+        services.AddScoped<TelegramService>();
+
+        // Telegram Bot Client
+        var telegramToken = configuration["Telegram:BotToken"];
+        if (!string.IsNullOrEmpty(telegramToken))
+        {
+            services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(telegramToken));
+        }
 
         // AutoMapper
         services.AddSingleton<AutoMapper.IMapper>(sp =>

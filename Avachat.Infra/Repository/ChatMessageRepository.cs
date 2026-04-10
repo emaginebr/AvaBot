@@ -46,4 +46,14 @@ public class ChatMessageRepository : IChatMessageRepository<ChatMessage>
         await _context.SaveChangesAsync();
         return message;
     }
+
+    public async Task<List<ChatMessage>> GetLastBySessionIdAsync(long sessionId, int count = 10)
+    {
+        return await _context.ChatMessages
+            .Where(m => m.ChatSessionId == sessionId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(count)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
+    }
 }

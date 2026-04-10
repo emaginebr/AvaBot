@@ -103,6 +103,40 @@ public class SessionController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
+    [HttpGet("sessions/resume/{slug}")]
+    public async Task<IActionResult> ResumeSession(string slug, [FromHeader(Name = "X-Resume-Token")] string? resumeToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(resumeToken))
+                return NotFound(Result<object>.Failure("Sessao nao encontrada"));
+
+            var agent = await _agentService.GetBySlugAsync(slug);
+            if (agent == null)
+                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+
+            if (agent.Status == 0)
+                return BadRequest(Result<object>.Failure("Agente temporariamente indisponivel"));
+
+            var session = await _sessionRepo.GetByResumeTokenAsync(resumeToken);
+            if (session == null || session.AgentId != agent.AgentId)
+                return NotFound(Result<object>.Failure("Sessao nao encontrada"));
+
+            var result = _mapper.Map<ChatSessionResumeInfo>(session);
+            result.MessageCount = await _messageRepo.CountBySessionIdAsync(session.ChatSessionId);
+
+            var lastMessages = await _messageRepo.GetLastBySessionIdAsync(session.ChatSessionId, 10);
+            result.Messages = _mapper.Map<List<ChatMessageInfo>>(lastMessages);
+
+            return Ok(Result<ChatSessionResumeInfo>.Success(result, "Sessao retomada com sucesso"));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure(ex.Message));
+        }
+    }
+
     [HttpGet("sessions/{sessionId:long}/messages")]
     public async Task<IActionResult> GetMessages(long sessionId, [FromQuery] int page = 1, [FromQuery] int maxPage = 50)
     {

@@ -48,4 +48,11 @@ public class ChatSessionRepository : IChatSessionRepository<ChatSession>
         await _context.SaveChangesAsync();
         return session;
     }
+
+    public async Task<ChatSession?> GetByResumeTokenAsync(string resumeToken)
+    {
+        return await _context.ChatSessions
+            .Include(s => s.Agent)
+            .FirstOrDefaultAsync(s => s.ResumeToken == resumeToken);
+    }
 }

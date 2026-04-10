@@ -40,9 +40,15 @@ public class ChatService
             AgentId = agentId,
             UserName = userName,
             UserEmail = userEmail,
-            UserPhone = userPhone
+            UserPhone = userPhone,
+            ResumeToken = Guid.NewGuid().ToString("N")
         };
         return await _sessionRepository.CreateAsync(session);
+    }
+
+    public async Task<ChatSession?> GetSessionByIdAsync(long sessionId)
+    {
+        return await _sessionRepository.GetByIdAsync(sessionId);
     }
 
     public async Task<ChatMessage> SaveMessageAsync(long sessionId, SenderType senderType, string content)

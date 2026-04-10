@@ -7,4 +7,5 @@ public interface IChatSessionRepository<T> where T : class
     Task<T?> GetByIdAsync(long id);
     Task<T> CreateAsync(T session);
     Task<T> UpdateAsync(T session);
+    Task<T?> GetByResumeTokenAsync(string resumeToken);
 }

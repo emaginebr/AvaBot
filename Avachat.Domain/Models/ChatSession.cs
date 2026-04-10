@@ -7,6 +7,7 @@ public class ChatSession
     public string? UserName { get; set; }
     public string? UserEmail { get; set; }
     public string? UserPhone { get; set; }
+    public string ResumeToken { get; set; } = string.Empty;
     public DateTime StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
 

@@ -6,4 +6,5 @@ public interface IChatMessageRepository<T> where T : class
     Task<int> CountBySessionIdAsync(long sessionId);
     Task<List<T>> GetRecentBySessionIdAsync(long sessionId, int count);
     Task<T> CreateAsync(T message);
+    Task<List<T>> GetLastBySessionIdAsync(long sessionId, int count = 10);
 }
