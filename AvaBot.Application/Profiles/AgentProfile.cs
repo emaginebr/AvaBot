@@ -17,6 +17,7 @@ public class AgentProfile : Profile
             .ForMember(d => d.Slug, opt => opt.Ignore())
             .ForMember(d => d.Status, opt => opt.Ignore())
             .ForMember(d => d.TelegramWebhookSecret, opt => opt.Ignore())
+            .ForMember(d => d.WhatsappToken, opt => opt.Ignore())
             .ForMember(d => d.CreatedAt, opt => opt.Ignore())
             .ForMember(d => d.UpdatedAt, opt => opt.Ignore())
             .ForMember(d => d.KnowledgeFiles, opt => opt.Ignore())

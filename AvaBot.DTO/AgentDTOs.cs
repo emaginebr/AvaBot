@@ -81,9 +81,6 @@ public class AgentInsertInfo
 
     [JsonPropertyName("telegramBotToken")]
     public string? TelegramBotToken { get; set; }
-
-    [JsonPropertyName("whatsappToken")]
-    public string? WhatsappToken { get; set; }
 }
 
 public class TelegramWebhookInfo

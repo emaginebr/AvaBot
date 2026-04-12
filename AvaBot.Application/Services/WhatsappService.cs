@@ -33,10 +33,22 @@ public class WhatsappService
 
     public async Task<WhatsappStatusInfo> StartSessionAsync(string slug)
     {
-        var agent = await ResolveAgentAsync(slug);
+        var agent = await _agentService.GetBySlugAsync(slug)
+            ?? throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
+
+        var sessionName = slug;
         var webhookUrl = $"{WEBHOOK_BASE_URL}/{slug}/webhook";
 
-        await _wppConnect.StartSessionAsync(agent.WhatsappToken!, webhookUrl);
+        // Gerar token no WPP Connect e salvar no agente
+        var token = await _wppConnect.GenerateTokenAsync(sessionName);
+
+        agent.WhatsappToken = token;
+        await _agentRepo.UpdateAsync(agent);
+
+        // Iniciar sessao com webhook
+        await _wppConnect.StartSessionAsync(sessionName, webhookUrl);
+
+        _logger.LogInformation("Sessao WhatsApp iniciada para agente {Slug}", slug);
 
         return new WhatsappStatusInfo
         {
@@ -49,7 +61,7 @@ public class WhatsappService
     public async Task<WhatsappQrCodeInfo> GetQrCodeAsync(string slug)
     {
         var agent = await ResolveAgentAsync(slug);
-        var qrCode = await _wppConnect.GetQrCodeAsync(agent.WhatsappToken!);
+        var qrCode = await _wppConnect.GetQrCodeAsync(slug);
 
         return new WhatsappQrCodeInfo
         {
@@ -61,7 +73,7 @@ public class WhatsappService
     public async Task<WhatsappStatusInfo> GetStatusAsync(string slug)
     {
         var agent = await ResolveAgentAsync(slug);
-        var status = await _wppConnect.GetStatusAsync(agent.WhatsappToken!);
+        var status = await _wppConnect.GetStatusAsync(slug);
 
         return new WhatsappStatusInfo
         {
@@ -74,7 +86,7 @@ public class WhatsappService
     public async Task<WhatsappStatusInfo> DisconnectAsync(string slug)
     {
         var agent = await ResolveAgentAsync(slug);
-        await _wppConnect.CloseSessionAsync(agent.WhatsappToken!);
+        await _wppConnect.CloseSessionAsync(slug);
 
         return new WhatsappStatusInfo
         {
@@ -99,12 +111,9 @@ public class WhatsappService
         {
             if (data.TryGetProperty("from", out var fromReject))
             {
-                var agent = await _agentService.GetBySlugAsync(slug);
-                if (agent != null && !string.IsNullOrEmpty(agent.WhatsappToken))
-                {
-                    var rejectPhone = fromReject.GetString()?.Replace("@c.us", "") ?? "";
-                    await _wppConnect.SendMessageAsync(agent.WhatsappToken, rejectPhone, "Desculpe, eu so consigo processar mensagens de texto.");
-                }
+                var rejectPhone = fromReject.GetString()?.Replace("@c.us", "") ?? "";
+                try { await _wppConnect.SendMessageAsync(slug, rejectPhone, "Desculpe, eu so consigo processar mensagens de texto."); }
+                catch { /* ignore send errors for rejection message */ }
             }
             return;
         }
@@ -144,7 +153,7 @@ public class WhatsappService
             }
 
             if (!string.IsNullOrEmpty(fullResponse))
-                await _wppConnect.SendMessageAsync(resolvedAgent.WhatsappToken, phone, fullResponse);
+                await _wppConnect.SendMessageAsync(slug, phone, fullResponse);
         }
         catch (Exception ex)
         {
@@ -158,7 +167,7 @@ public class WhatsappService
             ?? throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
 
         if (string.IsNullOrEmpty(agent.WhatsappToken))
-            throw new InvalidOperationException("Agente nao possui WhatsappToken configurado");
+            throw new InvalidOperationException("Agente nao possui sessao WhatsApp ativa. Chame /start-session primeiro.");
 
         return agent;
     }
