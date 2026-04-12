@@ -3,25 +3,26 @@ using AvaBot.Domain.Models;
 using AvaBot.DTO;
 using AvaBot.Infra.Interfaces.AppServices;
 using AvaBot.Infra.Interfaces.Repository;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace AvaBot.Application.Services;
 
 public class WhatsappService
 {
-    private const string WEBHOOK_BASE_URL = "https://avabot.net/whatsapp";
-
     private readonly IWppConnectService _wppConnect;
     private readonly IAgentRepository<Agent> _agentRepo;
     private readonly AgentService _agentService;
     private readonly ChatService _chatService;
     private readonly ILogger<WhatsappService> _logger;
+    private readonly string _webhookBaseUrl;
 
     public WhatsappService(
         IWppConnectService wppConnect,
         IAgentRepository<Agent> agentRepo,
         AgentService agentService,
         ChatService chatService,
+        IConfiguration configuration,
         ILogger<WhatsappService> logger)
     {
         _wppConnect = wppConnect;
@@ -29,6 +30,7 @@ public class WhatsappService
         _agentService = agentService;
         _chatService = chatService;
         _logger = logger;
+        _webhookBaseUrl = configuration["WppConnect:WebhookBaseUrl"] ?? "http://localhost:5000";
     }
 
     public async Task<WhatsappStatusInfo> StartSessionAsync(string slug)
@@ -37,7 +39,7 @@ public class WhatsappService
             ?? throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
 
         var sessionName = slug;
-        var webhookUrl = $"{WEBHOOK_BASE_URL}/{slug}/webhook";
+        var webhookUrl = $"{_webhookBaseUrl}/whatsapp/{slug}/webhook";
 
         // Gerar token no WPP Connect e salvar no agente
         var token = await _wppConnect.GenerateTokenAsync(sessionName);
