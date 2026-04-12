@@ -48,6 +48,7 @@ public class WhatsappService
         await _agentRepo.UpdateAsync(agent);
 
         // Iniciar sessao com webhook
+        _logger.LogInformation("Iniciando sessao WPP Connect: session={Session}, webhookUrl={WebhookUrl}", sessionName, webhookUrl);
         await _wppConnect.StartSessionAsync(sessionName, webhookUrl);
 
         _logger.LogInformation("Sessao WhatsApp iniciada para agente {Slug}", slug);
