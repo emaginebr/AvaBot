@@ -81,4 +81,10 @@ public class AgentRepository : IAgentRepository<Agent>
     {
         return await _context.Agents.AnyAsync(a => a.Slug == slug && (excludeId == null || a.AgentId != excludeId));
     }
+
+    public async Task<Agent?> GetByTelegramBotTokenAsync(string token, long? excludeId = null)
+    {
+        return await _context.Agents.FirstOrDefaultAsync(a =>
+            a.TelegramBotToken == token && (excludeId == null || a.AgentId != excludeId));
+    }
 }

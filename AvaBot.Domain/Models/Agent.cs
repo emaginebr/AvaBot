@@ -12,6 +12,9 @@ public class Agent
     public bool CollectName { get; set; }
     public bool CollectEmail { get; set; }
     public bool CollectPhone { get; set; }
+    public string? TelegramBotName { get; set; }
+    public string? TelegramBotToken { get; set; }
+    public string? TelegramWebhookSecret { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

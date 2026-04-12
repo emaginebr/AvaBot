@@ -10,7 +10,6 @@ using AvaBot.Infra.AppServices;
 using AvaBot.Infra.Repository;
 using AvaBot.Application.Profiles;
 using AvaBot.Application.Services;
-using Telegram.Bot;
 
 namespace AvaBot.Application;
 
@@ -35,13 +34,6 @@ public static class DependencyInjection
         services.AddScoped<SearchService>();
         services.AddScoped<ChatService>();
         services.AddScoped<TelegramService>();
-
-        // Telegram Bot Client
-        var telegramToken = configuration["Telegram:BotToken"];
-        if (!string.IsNullOrEmpty(telegramToken))
-        {
-            services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(telegramToken));
-        }
 
         // AutoMapper
         services.AddSingleton<AutoMapper.IMapper>(sp =>

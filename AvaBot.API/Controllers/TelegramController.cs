@@ -10,53 +10,103 @@ namespace AvaBot.API.Controllers;
 public class TelegramController : ControllerBase
 {
     private readonly TelegramService _telegramService;
-    private readonly IConfiguration _configuration;
+    private readonly AgentService _agentService;
 
-    public TelegramController(TelegramService telegramService, IConfiguration configuration)
+    public TelegramController(TelegramService telegramService, AgentService agentService)
     {
         _telegramService = telegramService;
-        _configuration = configuration;
+        _agentService = agentService;
     }
 
     [AllowAnonymous]
-    [HttpPost("telegram/webhook")]
-    public async Task<IActionResult> Webhook([FromBody] Update update)
+    [HttpPost("telegram/{slug}/webhook")]
+    public async Task<IActionResult> Webhook(string slug, [FromBody] Update update)
     {
-        var expectedSecret = _configuration["Telegram:WebhookSecret"];
-        var receivedSecret = Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
+        var agent = await _agentService.GetBySlugAsync(slug);
+        if (agent == null || agent.Status == 0 || string.IsNullOrEmpty(agent.TelegramBotToken))
+            return Unauthorized();
 
-        if (string.IsNullOrEmpty(expectedSecret) || receivedSecret != expectedSecret)
+        var receivedSecret = Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
+        if (string.IsNullOrEmpty(agent.TelegramWebhookSecret) || receivedSecret != agent.TelegramWebhookSecret)
             return Unauthorized();
 
         try
         {
-            await _telegramService.ProcessUpdateAsync(update);
+            await _telegramService.ProcessUpdateAsync(agent, update);
             return Ok();
         }
         catch (Exception)
         {
-            // Always return 200 to Telegram to avoid retries
             return Ok();
         }
     }
 
     [Authorize]
-    [HttpPost("telegram/setup-webhook")]
-    public async Task<IActionResult> SetupWebhook()
+    [HttpPost("telegram/{id:long}/setup-webhook")]
+    public async Task<IActionResult> SetupWebhook(long id)
     {
         try
         {
-            await _telegramService.SetupWebhookAsync();
-
-            return Ok(Result<object>.Success(new
-            {
-                url = _configuration["Telegram:WebhookUrl"],
-                status = "registered"
-            }, "Webhook registrado com sucesso"));
+            var result = await _telegramService.SetupWebhookAsync(id);
+            return Ok(Result<TelegramWebhookInfo>.Success(result, "Webhook registrado com sucesso"));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
         }
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure($"Erro ao registrar webhook: {ex.Message}"));
+        }
+    }
+
+    [Authorize]
+    [HttpGet("telegram/{id:long}/webhook-info")]
+    public async Task<IActionResult> GetWebhookInfo(long id)
+    {
+        try
+        {
+            var result = await _telegramService.GetWebhookInfoAsync(id);
+            return Ok(Result<TelegramWebhookInfo>.Success(result, "Informacao do webhook obtida com sucesso"));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure($"Erro ao consultar webhook: {ex.Message}"));
+        }
+    }
+
+    [Authorize]
+    [HttpPost("telegram/{id:long}/regenerate-secret")]
+    public async Task<IActionResult> RegenerateSecret(long id)
+    {
+        try
+        {
+            var result = await _telegramService.RegenerateWebhookSecretAsync(id);
+            return Ok(Result<TelegramWebhookInfo>.Success(result, "Secret regenerado e webhook atualizado com sucesso"));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure($"Erro ao regenerar secret: {ex.Message}"));
         }
     }
 }

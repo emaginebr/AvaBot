@@ -39,9 +39,15 @@ public class AgentService
 
     public async Task<Agent> CreateAsync(AgentInsertInfo info)
     {
+        await ValidateTelegramBotTokenAsync(info.TelegramBotToken);
+
         var agent = _mapper.Map<Agent>(info);
         agent.Status = 1;
         agent.Slug = await GenerateUniqueSlugAsync(info.Name);
+
+        if (!string.IsNullOrEmpty(info.TelegramBotToken))
+            agent.TelegramWebhookSecret = TelegramService.GenerateWebhookSecret();
+
         return await _repository.CreateAsync(agent);
     }
 
@@ -50,13 +56,28 @@ public class AgentService
         var agent = await _repository.GetByIdAsync(id);
         if (agent == null) return null;
 
+        await ValidateTelegramBotTokenAsync(info.TelegramBotToken, id);
+
         var oldName = agent.Name;
+        var hadToken = !string.IsNullOrEmpty(agent.TelegramBotToken);
         _mapper.Map(info, agent);
 
         if (!string.Equals(oldName, info.Name, StringComparison.Ordinal))
             agent.Slug = await GenerateUniqueSlugAsync(info.Name, id);
 
+        if (!string.IsNullOrEmpty(info.TelegramBotToken) && !hadToken)
+            agent.TelegramWebhookSecret = TelegramService.GenerateWebhookSecret();
+
         return await _repository.UpdateAsync(agent);
+    }
+
+    private async Task ValidateTelegramBotTokenAsync(string? token, long? excludeId = null)
+    {
+        if (string.IsNullOrEmpty(token)) return;
+
+        var existing = await _repository.GetByTelegramBotTokenAsync(token, excludeId);
+        if (existing != null)
+            throw new InvalidOperationException("Este TelegramBotToken ja esta em uso por outro agente");
     }
 
     public async Task<bool> DeleteAsync(long id)

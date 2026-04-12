@@ -1,11 +1,11 @@
 meta {
-  name: Setup Webhook
+  name: Webhook Info
   type: http
-  seq: 0
+  seq: 2
 }
 
-post {
-  url: {{baseUrl}}/api/telegram/1/setup-webhook
+get {
+  url: {{baseUrl}}/api/telegram/1/webhook-info
   body: none
   auth: bearer
 }
