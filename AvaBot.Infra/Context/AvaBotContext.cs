@@ -36,6 +36,13 @@ public class AvaBotContext : DbContext
             entity.Property(e => e.CollectPhone).HasColumnName("collect_phone").HasDefaultValue(false).IsRequired();
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.TelegramBotName).HasColumnName("telegram_bot_name").HasMaxLength(260);
+            entity.Property(e => e.TelegramBotToken).HasColumnName("telegram_bot_token").HasMaxLength(260);
+            entity.Property(e => e.TelegramWebhookSecret).HasColumnName("telegram_webhook_secret").HasMaxLength(260);
+            entity.HasIndex(e => e.TelegramBotToken)
+                .IsUnique()
+                .HasDatabaseName("ix_avabot_agents_telegram_bot_token")
+                .HasFilter("telegram_bot_token IS NOT NULL");
         });
 
         // KnowledgeFile

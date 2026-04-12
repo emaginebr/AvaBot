@@ -9,4 +9,5 @@ public interface IAgentRepository<T> where T : class
     Task<T> UpdateAsync(T agent);
     Task DeleteAsync(long id);
     Task<bool> SlugExistsAsync(string slug, long? excludeId = null);
+    Task<T?> GetByTelegramBotTokenAsync(string token, long? excludeId = null);
 }

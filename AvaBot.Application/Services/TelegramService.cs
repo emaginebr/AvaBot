@@ -1,7 +1,7 @@
-using AvaBot.Domain.Enums;
+using System.Security.Cryptography;
 using AvaBot.Domain.Models;
+using AvaBot.DTO;
 using AvaBot.Infra.Interfaces.Repository;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -11,67 +11,57 @@ namespace AvaBot.Application.Services;
 
 public class TelegramService
 {
-    private readonly ITelegramBotClient _botClient;
+    private const string WEBHOOK_BASE_URL = "https://avabot.net/api/telegram";
+
     private readonly ITelegramChatRepository<TelegramChat> _telegramChatRepo;
     private readonly IChatSessionRepository<ChatSession> _sessionRepo;
+    private readonly IAgentRepository<Agent> _agentRepo;
     private readonly ChatService _chatService;
     private readonly AgentService _agentService;
     private readonly ILogger<TelegramService> _logger;
-    private readonly string _agentSlug;
-    private readonly string _webhookUrl;
-    private readonly string _webhookSecret;
 
     public TelegramService(
-        ITelegramBotClient botClient,
         ITelegramChatRepository<TelegramChat> telegramChatRepo,
         IChatSessionRepository<ChatSession> sessionRepo,
+        IAgentRepository<Agent> agentRepo,
         ChatService chatService,
         AgentService agentService,
-        IConfiguration configuration,
         ILogger<TelegramService> logger)
     {
-        _botClient = botClient;
         _telegramChatRepo = telegramChatRepo;
         _sessionRepo = sessionRepo;
+        _agentRepo = agentRepo;
         _chatService = chatService;
         _agentService = agentService;
         _logger = logger;
-        _agentSlug = configuration["Telegram:AgentSlug"] ?? "";
-        _webhookUrl = configuration["Telegram:WebhookUrl"] ?? "";
-        _webhookSecret = configuration["Telegram:WebhookSecret"] ?? "";
     }
 
-    public async Task ProcessUpdateAsync(Update update)
+    public async Task ProcessUpdateAsync(Agent agent, Update update)
     {
+        var botClient = CreateBotClient(agent.TelegramBotToken!);
+
         if (update.Message is not { } message)
             return;
 
         if (message.Text is not null && message.Text.StartsWith("/start"))
         {
-            await HandleStartCommandAsync(message);
+            await HandleStartCommandAsync(agent, botClient, message);
             return;
         }
 
         if (message.Text is null)
         {
-            await SendMessageAsync(message.Chat.Id, "Desculpe, eu so consigo processar mensagens de texto.");
+            await SendMessageAsync(botClient, message.Chat.Id, "Desculpe, eu so consigo processar mensagens de texto.");
             return;
         }
 
-        await HandleTextMessageAsync(message);
+        await HandleTextMessageAsync(agent, botClient, message);
     }
 
-    public async Task HandleStartCommandAsync(Message message)
+    private async Task HandleStartCommandAsync(Agent agent, ITelegramBotClient botClient, Message message)
     {
         try
         {
-            var agent = await _agentService.GetBySlugAsync(_agentSlug);
-            if (agent == null)
-            {
-                await SendMessageAsync(message.Chat.Id, "Bot nao configurado corretamente. Entre em contato com o suporte.");
-                return;
-            }
-
             var session = await _chatService.CreateSessionAsync(
                 agent.AgentId,
                 message.From?.FirstName,
@@ -101,30 +91,29 @@ public class TelegramService
 
             var welcomeMessage = $"Ola{(message.From?.FirstName != null ? $", {message.From.FirstName}" : "")}! "
                 + $"Eu sou o assistente {agent.Name}. Como posso ajudar voce hoje?";
-            await SendMessageAsync(message.Chat.Id, welcomeMessage);
+            await SendMessageAsync(botClient, message.Chat.Id, welcomeMessage);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao processar /start para chat {ChatId}", message.Chat.Id);
-            await SendMessageAsync(message.Chat.Id, "Ocorreu um erro. Por favor, tente novamente com /start.");
+            await SendMessageAsync(botClient, message.Chat.Id, "Ocorreu um erro. Por favor, tente novamente com /start.");
         }
     }
 
-    public async Task HandleTextMessageAsync(Message message)
+    private async Task HandleTextMessageAsync(Agent agent, ITelegramBotClient botClient, Message message)
     {
         try
         {
             var telegramChat = await _telegramChatRepo.GetByChatIdAsync(message.Chat.Id);
             if (telegramChat == null)
             {
-                await SendMessageAsync(message.Chat.Id, "Por favor, envie /start para iniciar uma conversa.");
+                await SendMessageAsync(botClient, message.Chat.Id, "Por favor, envie /start para iniciar uma conversa.");
                 return;
             }
 
-            var agent = await _agentService.GetBySlugAsync(_agentSlug);
-            if (agent == null || agent.Status == 0)
+            if (agent.Status == 0)
             {
-                await SendMessageAsync(message.Chat.Id, "O agente esta temporariamente indisponivel. Tente novamente mais tarde.");
+                await SendMessageAsync(botClient, message.Chat.Id, "O agente esta temporariamente indisponivel. Tente novamente mais tarde.");
                 return;
             }
 
@@ -139,36 +128,95 @@ public class TelegramService
                 fullResponse += token;
             }
 
-            await SendMessageAsync(message.Chat.Id, fullResponse);
+            await SendMessageAsync(botClient, message.Chat.Id, fullResponse);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao processar mensagem do Telegram para chat {ChatId}", message.Chat.Id);
-            await SendMessageAsync(message.Chat.Id, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.");
+            await SendMessageAsync(botClient, message.Chat.Id, "Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.");
         }
     }
 
-    public async Task SendMessageAsync(long chatId, string text)
+    private static async Task SendMessageAsync(ITelegramBotClient botClient, long chatId, string text)
     {
         try
         {
-            await _botClient.SendMessage(chatId, text, parseMode: ParseMode.Markdown);
+            await botClient.SendMessage(chatId, text, parseMode: ParseMode.Markdown);
         }
         catch (Exception)
         {
-            // Fallback without Markdown if parsing fails
-            await _botClient.SendMessage(chatId, text);
+            await botClient.SendMessage(chatId, text);
         }
     }
 
-    public async Task<bool> SetupWebhookAsync()
+    public async Task<TelegramWebhookInfo> SetupWebhookAsync(long agentId)
     {
-        await _botClient.SetWebhook(
-            url: _webhookUrl,
-            secretToken: _webhookSecret,
+        var agent = await _agentRepo.GetByIdAsync(agentId)
+            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+
+        if (string.IsNullOrEmpty(agent.TelegramBotToken))
+            throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
+
+        var botClient = CreateBotClient(agent.TelegramBotToken);
+        var webhookUrl = $"{WEBHOOK_BASE_URL}/{agent.Slug}/webhook";
+
+        await botClient.SetWebhook(
+            url: webhookUrl,
+            secretToken: agent.TelegramWebhookSecret,
             allowedUpdates: [UpdateType.Message]);
 
-        _logger.LogInformation("Webhook registrado com sucesso em {Url}", _webhookUrl);
-        return true;
+        _logger.LogInformation("Webhook registrado para agente {AgentId} em {Url}", agentId, webhookUrl);
+
+        return new TelegramWebhookInfo
+        {
+            AgentId = agent.AgentId,
+            AgentSlug = agent.Slug,
+            WebhookUrl = webhookUrl,
+            IsConfigured = true
+        };
+    }
+
+    public async Task<TelegramWebhookInfo> GetWebhookInfoAsync(long agentId)
+    {
+        var agent = await _agentRepo.GetByIdAsync(agentId)
+            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+
+        if (string.IsNullOrEmpty(agent.TelegramBotToken))
+            throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
+
+        var botClient = CreateBotClient(agent.TelegramBotToken);
+        var webhookInfo = await botClient.GetWebhookInfo();
+
+        return new TelegramWebhookInfo
+        {
+            AgentId = agent.AgentId,
+            AgentSlug = agent.Slug,
+            WebhookUrl = webhookInfo.Url,
+            IsConfigured = !string.IsNullOrEmpty(webhookInfo.Url)
+        };
+    }
+
+    public async Task<TelegramWebhookInfo> RegenerateWebhookSecretAsync(long agentId)
+    {
+        var agent = await _agentRepo.GetByIdAsync(agentId)
+            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+
+        if (string.IsNullOrEmpty(agent.TelegramBotToken))
+            throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
+
+        agent.TelegramWebhookSecret = GenerateWebhookSecret();
+        await _agentRepo.UpdateAsync(agent);
+
+        return await SetupWebhookAsync(agentId);
+    }
+
+    public static string GenerateWebhookSecret()
+    {
+        return RandomNumberGenerator.GetHexString(32);
+    }
+
+    private static ITelegramBotClient CreateBotClient(string botToken)
+    {
+        return new TelegramBotClient(botToken);
     }
 }

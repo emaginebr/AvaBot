@@ -34,6 +34,15 @@ public class AgentInfo
     [JsonPropertyName("collectPhone")]
     public bool CollectPhone { get; set; }
 
+    [JsonPropertyName("telegramBotName")]
+    public string? TelegramBotName { get; set; }
+
+    [JsonPropertyName("telegramBotToken")]
+    public string? TelegramBotToken { get; set; }
+
+    [JsonPropertyName("telegramWebhookSecret")]
+    public string? TelegramWebhookSecret { get; set; }
+
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; }
 
@@ -63,6 +72,27 @@ public class AgentInsertInfo
 
     [JsonPropertyName("collectPhone")]
     public bool CollectPhone { get; set; }
+
+    [JsonPropertyName("telegramBotName")]
+    public string? TelegramBotName { get; set; }
+
+    [JsonPropertyName("telegramBotToken")]
+    public string? TelegramBotToken { get; set; }
+}
+
+public class TelegramWebhookInfo
+{
+    [JsonPropertyName("agentId")]
+    public long AgentId { get; set; }
+
+    [JsonPropertyName("agentSlug")]
+    public string AgentSlug { get; set; } = string.Empty;
+
+    [JsonPropertyName("webhookUrl")]
+    public string? WebhookUrl { get; set; }
+
+    [JsonPropertyName("isConfigured")]
+    public bool IsConfigured { get; set; }
 }
 
 public class AgentChatConfigInfo

@@ -26,7 +26,7 @@ flowchart TD
     end
 
     subgraph External["Servicos Externos"]
-        PG[("PostgreSQL 17<br/>avachat_agents<br/>avachat_knowledge_files<br/>avachat_chat_sessions<br/>avachat_chat_messages")]
+        PG[("PostgreSQL 17<br/>avabot_agents<br/>avabot_knowledge_files<br/>avabot_chat_sessions<br/>avabot_chat_messages<br/>avabot_telegram_chats")]
         ES[("Elasticsearch 8.17<br/>knowledge_chunks index<br/>kNN + BM25 Hybrid Search")]
         OPENAI["OpenAI API<br/>text-embedding-3-small<br/>gpt-4o"]
         KIBANA["Kibana 8.17<br/>(Dev Only)"]
