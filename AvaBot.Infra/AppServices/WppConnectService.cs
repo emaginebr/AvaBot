@@ -89,10 +89,21 @@ public class WppConnectService : IWppConnectService
     {
         var client = await CreateAuthenticatedClientAsync(session);
 
-        var body = new { phone, message };
+        var formattedPhone = phone.Contains("@c.us") ? phone : $"{phone}@c.us";
+        var body = new { phone = formattedPhone, isGroup = false, message };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        var response = await client.PostAsync($"/api/{session}/send-message", content);
+        var url = $"/api/{session}/send-message";
+        _logger.LogDebug("Enviando mensagem WPP Connect: session={Session}, phone={Phone}, url={Url}", session, formattedPhone, url);
+
+        var response = await client.PostAsync(url, content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync();
+            _logger.LogError("Erro ao enviar mensagem WPP Connect: status={Status}, body={Body}", response.StatusCode, responseBody);
+        }
+
         response.EnsureSuccessStatusCode();
     }
 
