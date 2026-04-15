@@ -156,7 +156,7 @@ public class WhatsappService
             _logger.LogInformation("[WhatsApp Webhook] Tipo nao suportado={Type}, enviando rejeicao. agente={Slug} from={From}", msgType, slug, fromNumber);
             if (!string.IsNullOrEmpty(fromNumber))
             {
-                var rejectPhone = fromNumber.Replace("@c.us", "");
+                var rejectPhone = isGroupMsg ? fromNumber : fromNumber.Replace("@c.us", "");
                 try { await _wppConnect.SendMessageAsync(slug, rejectPhone, "Desculpe, eu so consigo processar mensagens de texto."); }
                 catch { /* ignore send errors for rejection message */ }
             }
@@ -169,7 +169,7 @@ public class WhatsappService
             return;
         }
 
-        var phone = fromNumber.Replace("@c.us", "");
+        var phone = isGroupMsg ? fromNumber : fromNumber.Replace("@c.us", "");
 
         var resolvedAgent = await _agentService.GetBySlugAsync(slug);
         if (resolvedAgent == null || resolvedAgent.Status == 0 || string.IsNullOrEmpty(resolvedAgent.WhatsappToken))

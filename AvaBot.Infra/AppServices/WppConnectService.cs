@@ -98,8 +98,9 @@ public class WppConnectService : IWppConnectService
     {
         var client = await CreateAuthenticatedClientAsync(session);
 
-        var formattedPhone = phone.Contains("@c.us") ? phone : $"{phone}@c.us";
-        var body = new { phone = formattedPhone, isGroup = false, message };
+        var isGroup = phone.Contains("@g.us");
+        var formattedPhone = phone.Contains("@") ? phone : $"{phone}@c.us";
+        var body = new { phone = formattedPhone, isGroup, message };
         var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
         var url = $"/api/{session}/send-message";
