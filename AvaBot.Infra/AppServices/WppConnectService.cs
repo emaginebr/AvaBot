@@ -166,10 +166,10 @@ public class WppConnectService : IWppConnectService
             var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogDebug("{Path} retornou {Status}. session={Session} body={Body}", path, response.StatusCode, session, body);
+                _logger.LogInformation("{Path} retornou {Status}. session={Session} body={Body}", path, response.StatusCode, session, body);
                 return null;
             }
-            _logger.LogDebug("{Path} response. session={Session} body={Body}", path, session, body);
+            _logger.LogInformation("[LID-debug] {Path} response. session={Session} body={Body}", path, session, body);
             return JsonDocument.Parse(body);
         }
         catch (Exception ex)
