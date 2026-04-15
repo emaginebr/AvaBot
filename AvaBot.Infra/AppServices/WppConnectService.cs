@@ -120,25 +120,90 @@ public class WppConnectService : IWppConnectService
     public async Task<string?> GetBotLidAsync(string session)
     {
         var client = await CreateAuthenticatedClientAsync(session);
-        var response = await client.GetAsync($"/api/{session}/host-device");
-        if (!response.IsSuccessStatusCode)
+
+        string? phoneNumber = null;
+        using (var hostJson = await TryGetJsonAsync(client, $"/api/{session}/host-device", session))
         {
-            var err = await response.Content.ReadAsStringAsync();
-            _logger.LogWarning("Falha ao obter host-device. session={Session} status={Status} body={Body}", session, response.StatusCode, err);
-            return null;
+            if (hostJson != null)
+            {
+                var lid = FindLidRecursive(hostJson.RootElement);
+                if (!string.IsNullOrEmpty(lid)) return lid;
+
+                phoneNumber = FindStringProperty(hostJson.RootElement, "phoneNumber")
+                    ?? FindStringProperty(hostJson.RootElement, "wid");
+            }
         }
 
-        var json = await response.Content.ReadAsStringAsync();
-        _logger.LogDebug("host-device response session={Session} body={Body}", session, json);
+        if (!string.IsNullOrEmpty(phoneNumber))
+        {
+            foreach (var path in new[]
+            {
+                $"/api/{session}/contact/{phoneNumber}",
+                $"/api/{session}/profile/{phoneNumber}",
+                $"/api/{session}/check-number-status/{phoneNumber}"
+            })
+            {
+                using var json = await TryGetJsonAsync(client, path, session);
+                if (json == null) continue;
+                var lid = FindLidRecursive(json.RootElement);
+                if (!string.IsNullOrEmpty(lid))
+                {
+                    _logger.LogInformation("LID obtido via {Path}. session={Session} lid={Lid}", path, session, lid);
+                    return lid;
+                }
+            }
+        }
 
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        _logger.LogWarning("LID nao encontrado em nenhum endpoint. session={Session} phoneNumber={Phone}", session, phoneNumber);
+        return null;
+    }
 
-        var lid = FindLidRecursive(root);
-        if (string.IsNullOrEmpty(lid))
-            _logger.LogWarning("LID nao encontrado em host-device. session={Session} body={Body}", session, json);
+    private async Task<JsonDocument?> TryGetJsonAsync(System.Net.Http.HttpClient client, string path, string session)
+    {
+        try
+        {
+            var response = await client.GetAsync(path);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("{Path} retornou {Status}. session={Session} body={Body}", path, response.StatusCode, session, body);
+                return null;
+            }
+            _logger.LogDebug("{Path} response. session={Session} body={Body}", path, session, body);
+            return JsonDocument.Parse(body);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Erro ao consultar {Path}. session={Session}", path, session);
+            return null;
+        }
+    }
 
-        return lid;
+    private static string? FindStringProperty(JsonElement element, string propertyName)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var prop in element.EnumerateObject())
+                {
+                    if (prop.NameEquals(propertyName) && prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var val = prop.Value.GetString();
+                        if (!string.IsNullOrEmpty(val)) return val;
+                    }
+                    var nested = FindStringProperty(prop.Value, propertyName);
+                    if (!string.IsNullOrEmpty(nested)) return nested;
+                }
+                break;
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                {
+                    var nested = FindStringProperty(item, propertyName);
+                    if (!string.IsNullOrEmpty(nested)) return nested;
+                }
+                break;
+        }
+        return null;
     }
 
     private static string? FindLidRecursive(JsonElement element)
