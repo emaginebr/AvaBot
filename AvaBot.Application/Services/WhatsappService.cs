@@ -43,6 +43,21 @@ public class WhatsappService
         var sessionName = slug;
         var webhookUrl = $"{_webhookBaseUrl}/whatsapp/{slug}/webhook";
 
+        // O WPP Connect gera o QR Code uma unica vez por sessao (nao rotaciona sozinho).
+        // Chamar start-session numa sessao que ja esta no meio do pareamento (nao conectada)
+        // apenas reaproveita o client existente, preso no QR antigo -- que ja pode ter
+        // expirado de verdade do lado do WhatsApp. Fechamos antes para forcar um QR novo.
+        try
+        {
+            var currentStatus = await _wppConnect.GetStatusAsync(sessionName);
+            if (!currentStatus.Equals("CONNECTED", StringComparison.OrdinalIgnoreCase))
+                await _wppConnect.CloseSessionAsync(sessionName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Sem sessao previa para fechar antes de iniciar. session={Session}", sessionName);
+        }
+
         // Gerar token no WPP Connect e salvar no agente
         var token = await _wppConnect.GenerateTokenAsync(sessionName);
 
