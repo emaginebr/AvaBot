@@ -52,6 +52,9 @@ public class WppConnectService : IWppConnectService
         const int maxAttempts = 15;
         var delay = TimeSpan.FromSeconds(1);
 
+        _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] GetQrCodeAsync iniciado. session={Session}",
+            DateTimeOffset.Now, session);
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             var client = await CreateAuthenticatedClientAsync(session);
@@ -60,17 +63,28 @@ public class WppConnectService : IWppConnectService
 
             var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
 
+            _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] GetQrCodeAsync tentativa {Attempt}/{MaxAttempts}. session={Session} contentType={ContentType}",
+                DateTimeOffset.Now, attempt, maxAttempts, session, contentType);
+
             if (contentType.StartsWith("image/"))
             {
                 var bytes = await response.Content.ReadAsByteArrayAsync();
                 var base64Img = Convert.ToBase64String(bytes);
+
+                _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] QR code obtido. session={Session} tentativa={Attempt} tamanhoBytes={Bytes} hashBase64={Hash}",
+                    DateTimeOffset.Now, session, attempt, bytes.Length, base64Img.GetHashCode());
+
                 return $"data:{contentType};base64,{base64Img}";
             }
 
+            var json = await response.Content.ReadAsStringAsync();
+            _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] QR code ainda nao disponivel. session={Session} tentativa={Attempt} resposta={Json}",
+                DateTimeOffset.Now, session, attempt, json);
+
             if (attempt == maxAttempts)
             {
-                var json = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("QR code nao ficou pronto a tempo. session={Session} ultimaResposta={Json}", session, json);
+                _logger.LogWarning("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] QR code nao ficou pronto a tempo. session={Session} ultimaResposta={Json}",
+                    DateTimeOffset.Now, session, json);
                 throw new InvalidOperationException("QR code ainda nao esta disponivel, tente novamente em instantes.");
             }
 

@@ -10,6 +10,15 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Logging — troca o provider de console padrao (sem timestamp) por um com data/hora em cada linha
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff ";
+    options.SingleLine = true;
+});
+builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
+
 // DI
 builder.Services.AddAvaBotServices(builder.Configuration);
 
