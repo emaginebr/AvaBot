@@ -19,6 +19,7 @@ const WhatsappPage = () => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrCodeRef = useRef<string | null>(null)
+  const onQrExpireRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     qrCodeRef.current = qrCode
@@ -52,13 +53,40 @@ const WhatsappPage = () => {
     qrTimerRef.current = setInterval(() => {
       setQrSecondsLeft((prev) => {
         if (prev <= 1) {
-          expireQrCode()
+          onQrExpireRef.current()
           return 0
         }
         return prev - 1
       })
     }, 1000)
-  }, [stopQrTimer, expireQrCode])
+  }, [stopQrTimer])
+
+  // O WPP Connect rotaciona o QR Code internamente (~20s) enquanto a sessao
+  // segue aberta. Ao zerar o cronometro local buscamos um QR novo em vez de
+  // apenas descartar o antigo — senao o admin fica exibindo um QR desatualizado
+  // que nao bate mais com o exibido no log do wppconnect.
+  const refreshQrCode = useCallback(async () => {
+    if (!selectedAgent) {
+      expireQrCode()
+      return
+    }
+    try {
+      const qrResult = await AgentService.getWhatsappQrCode(selectedAgent.slug)
+      if (qrResult.sucesso && qrResult.dados) {
+        setQrCode(qrResult.dados.qrCode)
+        setQrSecondsLeft(QR_TTL_SECONDS)
+      } else {
+        expireQrCode()
+      }
+    } catch (err) {
+      console.error('[WhatsappPage] refreshQrCode — exceção:', err)
+      expireQrCode()
+    }
+  }, [selectedAgent, expireQrCode])
+
+  useEffect(() => {
+    onQrExpireRef.current = refreshQrCode
+  }, [refreshQrCode])
 
   // checkStatus nao pode depender de "qrCode" (estado reativo): isso mudaria sua
   // identidade a cada QR gerado, forcando o efeito de montagem abaixo a re-rodar
