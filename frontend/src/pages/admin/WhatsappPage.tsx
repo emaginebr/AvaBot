@@ -3,9 +3,7 @@ import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
 
-// O WhatsApp Web expira/rotaciona o QR Code a cada ~20s. Mantinhamos uma imagem
-// estatica em tela por ate 60s sem nunca buscar um QR novo do backend, entao
-// escaneios feitos depois dos primeiros segundos falhavam silenciosamente.
+// O WhatsApp Web expira/rotaciona o QR Code a cada ~20s.
 const QR_TTL_SECONDS = 20
 
 const WhatsappPage = () => {
@@ -17,10 +15,14 @@ const WhatsappPage = () => {
   const [starting, setStarting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
-  const [qrExpired, setQrExpired] = useState(false)
   const [qrSecondsLeft, setQrSecondsLeft] = useState(QR_TTL_SECONDS)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const qrCodeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    qrCodeRef.current = qrCode
+  }, [qrCode])
 
   const stopQrTimer = useCallback(() => {
     if (qrTimerRef.current) {
@@ -29,46 +31,6 @@ const WhatsappPage = () => {
     }
   }, [])
 
-  const refreshQr = useCallback(async (slug: string, silent: boolean) => {
-    try {
-      const qrResult = await AgentService.getWhatsappQrCode(slug)
-      if (qrResult.sucesso && qrResult.dados) {
-        setQrCode(qrResult.dados.qrCode)
-        setQrExpired(false)
-        setQrSecondsLeft(QR_TTL_SECONDS)
-        if (!silent) toast.success('QR Code atualizado!')
-        return true
-      }
-      if (!silent) toast.error(qrResult.mensagem || 'Erro ao obter QR Code')
-      return false
-    } catch (err) {
-      console.error('[WhatsappPage] refreshQr — exceção:', err)
-      if (!silent) toast.error('Erro de rede ao gerar QR Code')
-      return false
-    }
-  }, [])
-
-  const startQrTimer = useCallback((slug: string) => {
-    stopQrTimer()
-    setQrExpired(false)
-    setQrSecondsLeft(QR_TTL_SECONDS)
-    qrTimerRef.current = setInterval(() => {
-      setQrSecondsLeft((prev) => {
-        if (prev <= 1) {
-          // Renova automaticamente em vez de deixar a imagem parada (e invalida) na tela.
-          refreshQr(slug, true).then((ok) => {
-            if (!ok) {
-              stopQrTimer()
-              setQrExpired(true)
-            }
-          })
-          return QR_TTL_SECONDS
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }, [stopQrTimer, refreshQr])
-
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current)
@@ -76,6 +38,31 @@ const WhatsappPage = () => {
     }
   }, [])
 
+  const expireQrCode = useCallback(() => {
+    stopQrTimer()
+    stopPolling()
+    setQrCode(null)
+    setStatus('DISCONNECTED')
+    setIsConnected(false)
+  }, [stopQrTimer, stopPolling])
+
+  const startQrTimer = useCallback(() => {
+    stopQrTimer()
+    setQrSecondsLeft(QR_TTL_SECONDS)
+    qrTimerRef.current = setInterval(() => {
+      setQrSecondsLeft((prev) => {
+        if (prev <= 1) {
+          expireQrCode()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }, [stopQrTimer, expireQrCode])
+
+  // checkStatus nao pode depender de "qrCode" (estado reativo): isso mudaria sua
+  // identidade a cada QR gerado, forcando o efeito de montagem abaixo a re-rodar
+  // e disparar sua cleanup (stopQrTimer) logo apos o cronometro ser iniciado.
   const checkStatus = useCallback(async (slug: string) => {
     try {
       const result = await AgentService.getWhatsappStatus(slug)
@@ -87,8 +74,7 @@ const WhatsappPage = () => {
           stopPolling()
           stopQrTimer()
           setQrCode(null)
-          setQrExpired(false)
-          if (qrCode) {
+          if (qrCodeRef.current) {
             toast.success('WhatsApp conectado!')
           }
         }
@@ -96,7 +82,14 @@ const WhatsappPage = () => {
     } catch (err) {
       console.error('[WhatsappPage] checkStatus — exceção:', err)
     }
-  }, [stopPolling, stopQrTimer, qrCode])
+  }, [stopPolling, stopQrTimer])
+
+  const startPolling = useCallback((slug: string) => {
+    stopPolling()
+    pollingRef.current = setInterval(() => {
+      checkStatus(slug)
+    }, 3000)
+  }, [stopPolling, checkStatus])
 
   // Check status on mount and when agent changes
   useEffect(() => {
@@ -123,13 +116,6 @@ const WhatsappPage = () => {
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   })
-
-  const startPolling = useCallback((slug: string) => {
-    stopPolling()
-    pollingRef.current = setInterval(() => {
-      checkStatus(slug)
-    }, 3000)
-  }, [stopPolling, checkStatus])
 
   if (!selectedAgent) {
     return (
@@ -159,7 +145,7 @@ const WhatsappPage = () => {
       if (qrResult.sucesso && qrResult.dados) {
         setQrCode(qrResult.dados.qrCode)
         toast.success('QR Code gerado! Escaneie com seu WhatsApp.')
-        startQrTimer(selectedAgent.slug)
+        startQrTimer()
         startPolling(selectedAgent.slug)
       } else {
         toast.error(qrResult.mensagem || 'Erro ao obter QR Code')
@@ -174,20 +160,6 @@ const WhatsappPage = () => {
     }
   }
 
-  const handleRegenerateQr = async () => {
-    if (!selectedAgent) return
-    setStarting(true)
-    try {
-      const ok = await refreshQr(selectedAgent.slug, false)
-      if (ok) {
-        startQrTimer(selectedAgent.slug)
-        startPolling(selectedAgent.slug)
-      }
-    } finally {
-      setStarting(false)
-    }
-  }
-
   const handleDisconnect = async () => {
     if (!confirm('Tem certeza que deseja desconectar a sessão WhatsApp?')) return
 
@@ -199,7 +171,6 @@ const WhatsappPage = () => {
         setIsConnected(false)
         setStatus('DISCONNECTED')
         setQrCode(null)
-        setQrExpired(false)
         stopPolling()
         stopQrTimer()
       } else {
@@ -250,45 +221,25 @@ const WhatsappPage = () => {
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-gray-900">Escaneie o QR Code</h2>
-            {!qrExpired && (
-              <span className={`text-sm font-medium tabular-nums ${qrSecondsLeft <= 5 ? 'text-red-500' : 'text-gray-500'}`}>
-                {qrSecondsLeft}s
-              </span>
-            )}
+            <span className={`text-sm font-medium tabular-nums ${qrSecondsLeft <= 5 ? 'text-red-500' : 'text-gray-500'}`}>
+              {qrSecondsLeft}s
+            </span>
           </div>
-          {!qrExpired && (
-            <div className="w-full bg-gray-200 rounded-full h-1 mb-4">
-              <div
-                className={`h-1 rounded-full transition-all duration-1000 ease-linear ${qrSecondsLeft <= 5 ? 'bg-red-500' : 'bg-ava-600'}`}
-                style={{ width: `${(qrSecondsLeft / QR_TTL_SECONDS) * 100}%` }}
-              />
-            </div>
-          )}
+          <div className="w-full bg-gray-200 rounded-full h-1 mb-4">
+            <div
+              className={`h-1 rounded-full transition-all duration-1000 ease-linear ${qrSecondsLeft <= 5 ? 'bg-red-500' : 'bg-ava-600'}`}
+              style={{ width: `${(qrSecondsLeft / QR_TTL_SECONDS) * 100}%` }}
+            />
+          </div>
           <p className="text-sm text-gray-500 mb-4">Abra o WhatsApp no seu celular, acesse Configurações &gt; Dispositivos conectados &gt; Conectar dispositivo, e escaneie o QR Code abaixo.</p>
           <div className="flex justify-center">
-            <div className="relative">
-              <img
-                src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
-                alt="QR Code WhatsApp"
-                className={`w-64 h-64 border border-gray-200 rounded-lg transition-all duration-500 ${qrExpired ? 'blur-md opacity-50' : ''}`}
-              />
-              {qrExpired && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <p className="text-sm font-medium text-gray-700 mb-3">QR Code expirado</p>
-                  <button
-                    onClick={handleRegenerateQr}
-                    disabled={starting}
-                    className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md"
-                  >
-                    {starting ? 'Gerando...' : 'Gerar novamente'}
-                  </button>
-                </div>
-              )}
-            </div>
+            <img
+              src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+              alt="QR Code WhatsApp"
+              className="w-64 h-64 border border-gray-200 rounded-lg"
+            />
           </div>
-          {!qrExpired && (
-            <p className="text-xs text-gray-400 text-center mt-3">O status será atualizado automaticamente após o escaneamento.</p>
-          )}
+          <p className="text-xs text-gray-400 text-center mt-3">O status será atualizado automaticamente após o escaneamento.</p>
         </div>
       )}
 
