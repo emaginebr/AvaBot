@@ -138,9 +138,8 @@ const WhatsappPage = () => {
         return
       }
 
-      // Wait a moment for the session to initialize, then fetch QR code
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
+      // O backend aguarda internamente ate o WPP Connect ter um QR Code pronto
+      // (nao adianta buscar antes: client.urlcode so existe apos o primeiro catchQR).
       const qrResult = await AgentService.getWhatsappQrCode(selectedAgent.slug)
       if (qrResult.sucesso && qrResult.dados) {
         setQrCode(qrResult.dados.qrCode)

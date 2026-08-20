@@ -45,29 +45,39 @@ public class WppConnectService : IWppConnectService
 
     public async Task<string> GetQrCodeAsync(string session)
     {
-        var client = await CreateAuthenticatedClientAsync(session);
-        var response = await client.GetAsync($"/api/{session}/qrcode-session");
-        response.EnsureSuccessStatusCode();
+        // Logo apos start-session, o WPP Connect ainda esta subindo o navegador/WhatsApp Web
+        // e pode nao ter gerado o QR ainda (client.urlcode fica vazio ate o primeiro catchQR).
+        // Sem retry, uma chamada prematura retorna o JSON de "QRCode is not available" em vez
+        // de uma imagem, fazendo o admin exibir um QR desatualizado/errado.
+        const int maxAttempts = 15;
+        var delay = TimeSpan.FromSeconds(1);
 
-        var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
-
-        if (contentType.StartsWith("image/"))
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            var base64Img = Convert.ToBase64String(bytes);
-            return $"data:{contentType};base64,{base64Img}";
+            var client = await CreateAuthenticatedClientAsync(session);
+            var response = await client.GetAsync($"/api/{session}/qrcode-session");
+            response.EnsureSuccessStatusCode();
+
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+
+            if (contentType.StartsWith("image/"))
+            {
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                var base64Img = Convert.ToBase64String(bytes);
+                return $"data:{contentType};base64,{base64Img}";
+            }
+
+            if (attempt == maxAttempts)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("QR code nao ficou pronto a tempo. session={Session} ultimaResposta={Json}", session, json);
+                throw new InvalidOperationException("QR code ainda nao esta disponivel, tente novamente em instantes.");
+            }
+
+            await Task.Delay(delay);
         }
 
-        var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
-
-        if (doc.RootElement.TryGetProperty("qrcode", out var qrcode))
-            return qrcode.GetString() ?? "";
-
-        if (doc.RootElement.TryGetProperty("base64", out var base64))
-            return base64.GetString() ?? "";
-
-        return json;
+        throw new InvalidOperationException("QR code ainda nao esta disponivel, tente novamente em instantes.");
     }
 
     public async Task<string> GetStatusAsync(string session)
