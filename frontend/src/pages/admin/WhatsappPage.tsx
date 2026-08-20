@@ -3,6 +3,11 @@ import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
 
+// O WhatsApp Web expira/rotaciona o QR Code a cada ~20s. Mantinhamos uma imagem
+// estatica em tela por ate 60s sem nunca buscar um QR novo do backend, entao
+// escaneios feitos depois dos primeiros segundos falhavam silenciosamente.
+const QR_TTL_SECONDS = 20
+
 const WhatsappPage = () => {
   const { selectedAgent } = useAgentStore()
 
@@ -13,7 +18,7 @@ const WhatsappPage = () => {
   const [disconnecting, setDisconnecting] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
   const [qrExpired, setQrExpired] = useState(false)
-  const [qrSecondsLeft, setQrSecondsLeft] = useState(60)
+  const [qrSecondsLeft, setQrSecondsLeft] = useState(QR_TTL_SECONDS)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -24,21 +29,45 @@ const WhatsappPage = () => {
     }
   }, [])
 
-  const startQrTimer = useCallback(() => {
+  const refreshQr = useCallback(async (slug: string, silent: boolean) => {
+    try {
+      const qrResult = await AgentService.getWhatsappQrCode(slug)
+      if (qrResult.sucesso && qrResult.dados) {
+        setQrCode(qrResult.dados.qrCode)
+        setQrExpired(false)
+        setQrSecondsLeft(QR_TTL_SECONDS)
+        if (!silent) toast.success('QR Code atualizado!')
+        return true
+      }
+      if (!silent) toast.error(qrResult.mensagem || 'Erro ao obter QR Code')
+      return false
+    } catch (err) {
+      console.error('[WhatsappPage] refreshQr — exceção:', err)
+      if (!silent) toast.error('Erro de rede ao gerar QR Code')
+      return false
+    }
+  }, [])
+
+  const startQrTimer = useCallback((slug: string) => {
     stopQrTimer()
     setQrExpired(false)
-    setQrSecondsLeft(60)
+    setQrSecondsLeft(QR_TTL_SECONDS)
     qrTimerRef.current = setInterval(() => {
       setQrSecondsLeft((prev) => {
         if (prev <= 1) {
-          stopQrTimer()
-          setQrExpired(true)
-          return 0
+          // Renova automaticamente em vez de deixar a imagem parada (e invalida) na tela.
+          refreshQr(slug, true).then((ok) => {
+            if (!ok) {
+              stopQrTimer()
+              setQrExpired(true)
+            }
+          })
+          return QR_TTL_SECONDS
         }
         return prev - 1
       })
     }, 1000)
-  }, [stopQrTimer])
+  }, [stopQrTimer, refreshQr])
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -130,7 +159,7 @@ const WhatsappPage = () => {
       if (qrResult.sucesso && qrResult.dados) {
         setQrCode(qrResult.dados.qrCode)
         toast.success('QR Code gerado! Escaneie com seu WhatsApp.')
-        startQrTimer()
+        startQrTimer(selectedAgent.slug)
         startPolling(selectedAgent.slug)
       } else {
         toast.error(qrResult.mensagem || 'Erro ao obter QR Code')
@@ -149,18 +178,11 @@ const WhatsappPage = () => {
     if (!selectedAgent) return
     setStarting(true)
     try {
-      const qrResult = await AgentService.getWhatsappQrCode(selectedAgent.slug)
-      if (qrResult.sucesso && qrResult.dados) {
-        setQrCode(qrResult.dados.qrCode)
-        startQrTimer()
+      const ok = await refreshQr(selectedAgent.slug, false)
+      if (ok) {
+        startQrTimer(selectedAgent.slug)
         startPolling(selectedAgent.slug)
-        toast.success('QR Code atualizado!')
-      } else {
-        toast.error(qrResult.mensagem || 'Erro ao obter QR Code')
       }
-    } catch (err) {
-      console.error('[WhatsappPage] handleRegenerateQr — exceção:', err)
-      toast.error('Erro de rede ao gerar QR Code')
     } finally {
       setStarting(false)
     }
@@ -229,7 +251,7 @@ const WhatsappPage = () => {
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-gray-900">Escaneie o QR Code</h2>
             {!qrExpired && (
-              <span className={`text-sm font-medium tabular-nums ${qrSecondsLeft <= 10 ? 'text-red-500' : 'text-gray-500'}`}>
+              <span className={`text-sm font-medium tabular-nums ${qrSecondsLeft <= 5 ? 'text-red-500' : 'text-gray-500'}`}>
                 {qrSecondsLeft}s
               </span>
             )}
@@ -237,8 +259,8 @@ const WhatsappPage = () => {
           {!qrExpired && (
             <div className="w-full bg-gray-200 rounded-full h-1 mb-4">
               <div
-                className={`h-1 rounded-full transition-all duration-1000 ease-linear ${qrSecondsLeft <= 10 ? 'bg-red-500' : 'bg-ava-600'}`}
-                style={{ width: `${(qrSecondsLeft / 60) * 100}%` }}
+                className={`h-1 rounded-full transition-all duration-1000 ease-linear ${qrSecondsLeft <= 5 ? 'bg-red-500' : 'bg-ava-600'}`}
+                style={{ width: `${(qrSecondsLeft / QR_TTL_SECONDS) * 100}%` }}
               />
             </div>
           )}
