@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+
+  --color-ava-50: #eef4ff;
+  --color-ava-100: #dae6ff;
+  --color-ava-200: #bdd4ff;
+  --color-ava-300: #90b8ff;
+  --color-ava-400: #5c91ff;
+  --color-ava-500: #3668fc;
+  --color-ava-600: #1f45f1;
+  --color-ava-700: #1833de;
+  --color-ava-800: #1a2ab4;
+  --color-ava-900: #1b2a8d;
+  --color-ava-950: #141b56;
+}

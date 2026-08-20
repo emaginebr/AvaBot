@@ -1,0 +1,45 @@
+%% Diagram: Avachat System Architecture
+%% Type: Flowchart
+%% Generated: 2026-04-08
+
+flowchart TD
+    subgraph client["🌐 Browser"]
+        user([Visitante / Usuário])
+        admin([Administrador])
+    end
+
+    subgraph nginx["Nginx - Reverse Proxy"]
+        static["Arquivos Estáticos\n(React SPA)"]
+        proxy_api["/api/ → Backend"]
+        proxy_ws["/ws/ → WebSocket"]
+    end
+
+    subgraph backend["Backend API (api:8080)"]
+        rest["REST API\nAgentes, Sessões,\nArquivos, Histórico"]
+        ws["WebSocket Server\nChat em Tempo Real"]
+    end
+
+    subgraph services["Serviços"]
+        ai["Motor de IA\nProcessamento NLP"]
+        db[("Banco de Dados\nAgentes, Sessões,\nMensagens")]
+        storage["Armazenamento\nBase de Conhecimento"]
+    end
+
+    user -->|"Acessa chat widget"| static
+    admin -->|"Gerencia agentes"| static
+    static -->|"Chamadas REST"| proxy_api
+    static -->|"Conexão WebSocket"| proxy_ws
+    proxy_api -->|"HTTP"| rest
+    proxy_ws -->|"WS Upgrade"| ws
+
+    rest -->|"CRUD"| db
+    rest -->|"Upload de arquivos"| storage
+    ws -->|"Consulta contexto"| ai
+    ai -->|"Busca conhecimento"| storage
+    ai -->|"Persiste mensagens"| db
+    ws -->|"Streaming de chunks"| static
+
+    style client fill:#f0f4ff,stroke:#3668fc,stroke-width:2px
+    style nginx fill:#e8f5e9,stroke:#43a047,stroke-width:2px
+    style backend fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style services fill:#fce4ec,stroke:#e53935,stroke-width:2px

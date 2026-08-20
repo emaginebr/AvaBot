@@ -1,0 +1,38 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap');
+
+@theme {
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+
+  --color-ava-50: #eef4ff;
+  --color-ava-100: #dae6ff;
+  --color-ava-200: #bdd4ff;
+  --color-ava-300: #90b8ff;
+  --color-ava-400: #5c91ff;
+  --color-ava-500: #3668fc;
+  --color-ava-600: #1f45f1;
+  --color-ava-700: #1833de;
+  --color-ava-800: #1a2ab4;
+  --color-ava-900: #1b2a8d;
+  --color-ava-950: #141b56;
+}
+
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes tg-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

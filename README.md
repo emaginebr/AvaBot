@@ -14,6 +14,12 @@ Built with **ASP.NET Core 9**, **Entity Framework Core**, **Elasticsearch** for 
 
 ---
 
+## 🗂️ Monorepo Structure
+
+This repository now unifies both the backend (.NET, at the repo root) and the frontend (React/Vite, under [`frontend/`](frontend/README.md)). See [`frontend/README.md`](frontend/README.md) for frontend-specific setup, scripts, and architecture. Shared feature specs for both live under [`specs/`](specs/).
+
+---
+
 ## 🚀 Features
 
 - 🤖 **Multi-Agent Support** - Create unlimited agents with custom system prompts and knowledge bases
@@ -87,6 +93,7 @@ Avachat/
 ├── docker-compose-prod.yml      # Production environment
 ├── Dockerfile                   # Multi-stage .NET build
 ├── avabot.sql                  # Database schema
+├── frontend/                    # React/Vite frontend (see frontend/README.md)
 └── .github/workflows/           # CI/CD pipelines
 ```
 

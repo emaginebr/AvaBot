@@ -11,8 +11,10 @@ project.lock.json
 # Node.js / Frontend
 node_modules/
 dist/
+dist-ssr/
 build/
 *.log
+*.local
 
 # IDE
 .vscode/
