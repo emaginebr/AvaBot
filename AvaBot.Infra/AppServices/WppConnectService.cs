@@ -3,6 +3,8 @@ using System.Text.Json;
 using AvaBot.Infra.Interfaces.AppServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SkiaSharp;
+using ZXing.SkiaSharp;
 
 namespace AvaBot.Infra.AppServices;
 
@@ -70,9 +72,10 @@ public class WppConnectService : IWppConnectService
             {
                 var bytes = await response.Content.ReadAsByteArrayAsync();
                 var base64Img = Convert.ToBase64String(bytes);
+                var decodedContent = DecodeQrContent(bytes);
 
-                _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] QR code obtido. session={Session} tentativa={Attempt} tamanhoBytes={Bytes} hashBase64={Hash}",
-                    DateTimeOffset.Now, session, attempt, bytes.Length, base64Img.GetHashCode());
+                _logger.LogDebug("[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] QR code obtido. session={Session} tentativa={Attempt} tamanhoBytes={Bytes} conteudoDecodificado={Conteudo}",
+                    DateTimeOffset.Now, session, attempt, bytes.Length, decodedContent ?? "(falha ao decodificar)");
 
                 return $"data:{contentType};base64,{base64Img}";
             }
@@ -92,6 +95,29 @@ public class WppConnectService : IWppConnectService
         }
 
         throw new InvalidOperationException("QR code ainda nao esta disponivel, tente novamente em instantes.");
+    }
+
+    private string? DecodeQrContent(byte[] pngBytes)
+    {
+        try
+        {
+            using var bitmap = SKBitmap.Decode(pngBytes);
+            if (bitmap == null)
+                return null;
+
+            var reader = new BarcodeReader
+            {
+                AutoRotate = true,
+                Options = { TryHarder = true }
+            };
+            var result = reader.Decode(bitmap);
+            return result?.Text;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Falha ao decodificar conteudo do QR code para log.");
+            return null;
+        }
     }
 
     public async Task<string> GetStatusAsync(string session)
