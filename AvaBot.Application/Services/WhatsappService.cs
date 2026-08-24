@@ -106,7 +106,19 @@ public class WhatsappService
     public async Task<WhatsappStatusInfo> DisconnectAsync(string slug)
     {
         var agent = await ResolveAgentAsync(slug);
-        await _wppConnect.CloseSessionAsync(slug);
+
+        // logout-session invalida de fato a sessao do WhatsApp (equivalente a "sair" pelo
+        // celular). close-session sozinho so fecha o browser/puppeteer e mantem os dados
+        // de autenticacao salvos, fazendo o WPP Connect reconectar sozinho em seguida.
+        try
+        {
+            await _wppConnect.LogoutSessionAsync(slug);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao fazer logout da sessao WPP Connect, tentando close-session. agente={Slug}", slug);
+            await _wppConnect.CloseSessionAsync(slug);
+        }
 
         return new WhatsappStatusInfo
         {

@@ -144,6 +144,15 @@ public class WppConnectService : IWppConnectService
         _logger.LogInformation("Sessao WPP Connect encerrada para {Session}", session);
     }
 
+    public async Task LogoutSessionAsync(string session)
+    {
+        var client = await CreateAuthenticatedClientAsync(session);
+        var response = await client.PostAsync($"/api/{session}/logout-session", null);
+        response.EnsureSuccessStatusCode();
+
+        _logger.LogInformation("Logout da sessao WPP Connect realizado para {Session}", session);
+    }
+
     public async Task SendMessageAsync(string session, string phone, string message)
     {
         var client = await CreateAuthenticatedClientAsync(session);
