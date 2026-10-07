@@ -1,0 +1,23 @@
+meta {
+  name: Delete Dataset
+  type: http
+  seq: 8
+}
+
+delete {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/datasets/:id
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+params:path {
+  id: 1
+}

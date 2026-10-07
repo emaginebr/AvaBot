@@ -72,6 +72,21 @@ public class AgentRepository : IAgentRepository<Agent>
                 .ToListAsync();
             _context.KnowledgeFiles.RemoveRange(files);
 
+            var powerBILogs = await _context.PowerBIQueryLogs
+                .Where(l => l.AgentId == id)
+                .ToListAsync();
+            _context.PowerBIQueryLogs.RemoveRange(powerBILogs);
+
+            var powerBIDatasets = await _context.PowerBIDatasets
+                .Where(d => d.AgentId == id)
+                .ToListAsync();
+            _context.PowerBIDatasets.RemoveRange(powerBIDatasets);
+
+            var powerBIConfig = await _context.AgentPowerBIConfigs
+                .FirstOrDefaultAsync(c => c.AgentId == id);
+            if (powerBIConfig != null)
+                _context.AgentPowerBIConfigs.Remove(powerBIConfig);
+
             _context.Agents.Remove(agent);
             await _context.SaveChangesAsync();
         }

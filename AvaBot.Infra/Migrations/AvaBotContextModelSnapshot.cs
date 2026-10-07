@@ -17,7 +17,7 @@ namespace AvaBot.Infra.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.14")
+                .HasAnnotation("ProductVersion", "9.0.19")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -70,6 +70,12 @@ namespace AvaBot.Infra.Migrations
                         .HasMaxLength(260)
                         .HasColumnType("character varying(260)")
                         .HasColumnName("name");
+
+                    b.Property<bool>("PowerBIEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("powerbi_enabled");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -130,6 +136,74 @@ namespace AvaBot.Infra.Migrations
                         .HasFilter("whatsapp_token IS NOT NULL");
 
                     b.ToTable("avabot_agents", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.AgentPowerBIConfig", b =>
+                {
+                    b.Property<long>("AgentPowerBIConfigId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_powerbi_config_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("AgentPowerBIConfigId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("client_id");
+
+                    b.Property<string>("ClientSecretEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("client_secret_encrypted");
+
+                    b.Property<string>("ClientSecretHint")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("client_secret_hint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("LastTestAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("last_test_at");
+
+                    b.Property<string>("LastTestMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_test_message");
+
+                    b.Property<bool?>("LastTestSuccess")
+                        .HasColumnType("boolean")
+                        .HasColumnName("last_test_success");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("AgentPowerBIConfigId")
+                        .HasName("avabot_agent_powerbi_configs_pkey");
+
+                    b.HasIndex("AgentId")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_agent_powerbi_configs_agent_id_key");
+
+                    b.ToTable("avabot_agent_powerbi_configs", (string)null);
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.ChatMessage", b =>
@@ -274,6 +348,170 @@ namespace AvaBot.Infra.Migrations
                     b.ToTable("avabot_knowledge_files", (string)null);
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.PowerBIDataset", b =>
+                {
+                    b.Property<long>("PowerBIDatasetId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("powerbi_dataset_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("PowerBIDatasetId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DatasetId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SchemaError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("schema_error");
+
+                    b.Property<DateTime?>("SchemaGeneratedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("schema_generated_at");
+
+                    b.Property<string>("SchemaJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("schema_json");
+
+                    b.Property<int>("SchemaStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("schema_status");
+
+                    b.Property<string>("ToolKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("tool_key");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("PowerBIDatasetId")
+                        .HasName("avabot_powerbi_datasets_pkey");
+
+                    b.HasIndex("AgentId", "DatasetId")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_powerbi_datasets_agent_id_dataset_id_key");
+
+                    b.HasIndex("AgentId", "ToolKey")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_powerbi_datasets_agent_id_tool_key_key");
+
+                    b.ToTable("avabot_powerbi_datasets", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.PowerBIQueryLog", b =>
+                {
+                    b.Property<long>("PowerBIQueryLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("powerbi_query_log_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("PowerBIQueryLogId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<long?>("ChatSessionId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("chat_session_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DatasetName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("dataset_name");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error_message");
+
+                    b.Property<long?>("PowerBIDatasetId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("powerbi_dataset_id");
+
+                    b.Property<string>("Query")
+                        .HasColumnType("text")
+                        .HasColumnName("query");
+
+                    b.Property<int?>("RowCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_count");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("tool_name");
+
+                    b.Property<bool>("Truncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("truncated");
+
+                    b.Property<string>("UserQuestion")
+                        .HasColumnType("text")
+                        .HasColumnName("user_question");
+
+                    b.HasKey("PowerBIQueryLogId")
+                        .HasName("avabot_powerbi_query_logs_pkey");
+
+                    b.HasIndex("ChatSessionId");
+
+                    b.HasIndex("PowerBIDatasetId");
+
+                    b.HasIndex("AgentId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_avabot_powerbi_query_logs_agent_id_created_at");
+
+                    b.ToTable("avabot_powerbi_query_logs", (string)null);
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.TelegramChat", b =>
                 {
                     b.Property<long>("TelegramChatId")
@@ -316,6 +554,17 @@ namespace AvaBot.Infra.Migrations
                     b.ToTable("avabot_telegram_chats", (string)null);
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.AgentPowerBIConfig", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithOne("PowerBIConfig")
+                        .HasForeignKey("AvaBot.Domain.Models.AgentPowerBIConfig", "AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_agent_powerbi_configs");
+
+                    b.Navigation("Agent");
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.ChatMessage", b =>
                 {
                     b.HasOne("AvaBot.Domain.Models.ChatSession", "ChatSession")
@@ -349,6 +598,42 @@ namespace AvaBot.Infra.Migrations
                     b.Navigation("Agent");
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.PowerBIDataset", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithMany("PowerBIDatasets")
+                        .HasForeignKey("AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_powerbi_datasets");
+
+                    b.Navigation("Agent");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.PowerBIQueryLog", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_powerbi_query_logs");
+
+                    b.HasOne("AvaBot.Domain.Models.ChatSession", "ChatSession")
+                        .WithMany()
+                        .HasForeignKey("ChatSessionId")
+                        .HasConstraintName("avabot_fk_chat_sessions_powerbi_query_logs");
+
+                    b.HasOne("AvaBot.Domain.Models.PowerBIDataset", "PowerBIDataset")
+                        .WithMany()
+                        .HasForeignKey("PowerBIDatasetId")
+                        .HasConstraintName("avabot_fk_powerbi_datasets_powerbi_query_logs");
+
+                    b.Navigation("Agent");
+
+                    b.Navigation("ChatSession");
+
+                    b.Navigation("PowerBIDataset");
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.TelegramChat", b =>
                 {
                     b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
@@ -375,6 +660,10 @@ namespace AvaBot.Infra.Migrations
                     b.Navigation("ChatSessions");
 
                     b.Navigation("KnowledgeFiles");
+
+                    b.Navigation("PowerBIConfig");
+
+                    b.Navigation("PowerBIDatasets");
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.ChatSession", b =>

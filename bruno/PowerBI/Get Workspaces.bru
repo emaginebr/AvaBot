@@ -1,0 +1,19 @@
+meta {
+  name: Get Workspaces
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/workspaces
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}

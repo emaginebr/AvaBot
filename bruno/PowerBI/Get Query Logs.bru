@@ -1,0 +1,24 @@
+meta {
+  name: Get Query Logs
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/query-logs?page=1&pageSize=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+params:query {
+  page: 1
+  pageSize: 20
+}

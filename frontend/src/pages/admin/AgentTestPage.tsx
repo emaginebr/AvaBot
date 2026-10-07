@@ -117,6 +117,51 @@ const AgentTestPage = () => {
             )}
           </div>
 
+          {/* Consultas Power BI */}
+          {result.powerBIQueries.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-900 mb-1">Consultas Power BI</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                {result.powerBIQueries.length} chamada(s) de ferramenta durante a resposta
+              </p>
+              <div className="space-y-3">
+                {result.powerBIQueries.map((call, i) => (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                      <span className="text-xs font-medium text-ava-600 bg-ava-50 px-1.5 py-0.5 rounded">#{i + 1}</span>
+                      <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{call.toolName}</code>
+                      {call.datasetName && (
+                        <span className="text-sm text-gray-700">{call.datasetName}</span>
+                      )}
+                      <span className={`ml-auto text-xs font-medium px-1.5 py-0.5 rounded ${
+                        call.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {call.success ? 'Sucesso' : 'Erro'}
+                      </span>
+                    </div>
+
+                    {call.query && (
+                      <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap mb-2">{call.query}</pre>
+                    )}
+
+                    {call.error && (
+                      <p className="text-xs text-red-600 whitespace-pre-wrap mb-2">{call.error}</p>
+                    )}
+
+                    {call.resultPreview && (
+                      <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap mb-2">{call.resultPreview}</pre>
+                    )}
+
+                    <p className="text-xs text-gray-400">
+                      {call.durationMs} ms · {call.rowCount ?? 0} linha(s)
+                      {call.truncated && ' · truncado'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Messages enviadas à LLM */}
           <details className="bg-white rounded-xl border border-gray-200">
             <summary className="px-5 py-3 cursor-pointer text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">

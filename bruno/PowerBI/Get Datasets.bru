@@ -1,0 +1,19 @@
+meta {
+  name: Get Datasets
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/datasets
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}

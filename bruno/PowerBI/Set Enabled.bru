@@ -1,0 +1,29 @@
+meta {
+  name: Set Enabled
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/enabled
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "enabled": true
+  }
+}

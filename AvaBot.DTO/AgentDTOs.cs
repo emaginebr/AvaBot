@@ -46,6 +46,9 @@ public class AgentInfo
     [JsonPropertyName("whatsappToken")]
     public string? WhatsappToken { get; set; }
 
+    [JsonPropertyName("powerBIEnabled")]
+    public bool PowerBIEnabled { get; set; }
+
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; }
 
@@ -138,6 +141,9 @@ public class AgentTestResultInfo
 
     [JsonPropertyName("assistantResponse")]
     public string AssistantResponse { get; set; } = string.Empty;
+
+    [JsonPropertyName("powerBIQueries")]
+    public List<AgentTestPowerBIQueryInfo> PowerBIQueries { get; set; } = new();
 }
 
 public class AgentTestMessageInfo
