@@ -11,7 +11,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:80
       ConnectionStrings__AvaBotContext: ${AVABOT_CONNECTION_STRING}
-      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      # A chave OpenAI nao e mais variavel de ambiente: cada agente guarda a sua,
+      # cifrada no banco e cadastrada no painel. Usa POWERBI_SECRET_ENCRYPTION_KEY.
       Auth__Username: ${AVABOT_USERNAME}
       Auth__Password: ${AVABOT_PASSWORD}
       Auth__JwtSecret: ${AVABOT_JWT_SECRET}
