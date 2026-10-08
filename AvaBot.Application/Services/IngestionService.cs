@@ -70,7 +70,7 @@ public class IngestionService
                     "[Ingestion] Gerando embedding para chunk [{Index}/{Total}]...",
                     i + 1, chunks.Count);
 
-                var embedding = await _openAIService.GenerateEmbeddingAsync(chunks[i]);
+                var embedding = await _openAIService.GenerateEmbeddingAsync(file.AgentId!.Value, chunks[i]);
 
                 _logger.LogInformation(
                     "[Ingestion] Embedding gerado para chunk [{Index}/{Total}] - {Dimensions} dimensoes",

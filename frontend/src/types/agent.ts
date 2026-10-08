@@ -11,6 +11,7 @@ export interface AgentInfo {
   collectEmail: boolean;
   collectPhone: boolean;
   chatModel: string;
+  hasOpenAIApiKey: boolean;
   telegramBotName: string | null;
   telegramBotToken: string | null;
   telegramWebhookSecret: string | null;
@@ -29,6 +30,15 @@ export interface AgentInsertInfo {
   chatModel: string;
   telegramBotName: string | null;
   telegramBotToken: string | null;
+  /** Nova chave em texto claro; sai apenas na requisicao. Nulo/vazio preserva a salva. */
+  openAIApiKey: string | null;
+  /** Remocao explicita da credencial salva. */
+  removeOpenAIApiKey: boolean;
+}
+
+export interface AgentOpenAIDiagnoseResult {
+  success: boolean;
+  message: string;
 }
 
 export interface TelegramWebhookInfo {

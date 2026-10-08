@@ -61,6 +61,12 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
 
+        // Usado pelo diagnostico de chave (GET /models): sem Body/credencial padrao.
+        services.AddHttpClient("OpenAI", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
         services.AddMemoryCache();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
         services.AddSingleton<IPowerBIClient, PowerBIClient>();
@@ -79,7 +85,9 @@ public static class DependencyInjection
 
         // App Services
         services.AddSingleton<IElasticsearchService, ElasticsearchService>();
-        services.AddSingleton<IOpenAIService, OpenAIService>();
+        // Scoped: resolve a credencial do agente via repositorio (DbContext scoped),
+        // entao nao pode ser singleton capturando uma dependencia de escopo menor.
+        services.AddScoped<IOpenAIService, OpenAIService>();
 
         return services;
     }

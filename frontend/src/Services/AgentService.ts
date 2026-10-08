@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentInsertInfo, AgentChatConfigInfo, AgentTestResult, TelegramWebhookInfo, WhatsappQrCodeInfo, WhatsappStatusInfo } from '../types/agent'
+import type { AgentInfo, AgentInsertInfo, AgentChatConfigInfo, AgentTestResult, AgentOpenAIDiagnoseResult, TelegramWebhookInfo, WhatsappQrCodeInfo, WhatsappStatusInfo } from '../types/agent'
 import type { ChatSessionStartInfo, ChatSessionInfo, ChatSessionResumeInfo } from '../types/chatSession'
 import type { Result } from '../types/result'
 import { AuthService } from './AuthService'
@@ -58,7 +58,8 @@ export const AgentService = {
   },
 
   create: async (data: AgentInsertInfo): Promise<Result<AgentInfo>> => {
-    console.log('[AgentService] create — POST /agents', data)
+    // O corpo pode levar a chave OpenAI do agente: nunca registrar o payload no console.
+    console.log('[AgentService] create — POST /agents')
     const response = await fetch(`${getApiUrl()}/agents`, {
       method: 'POST',
       headers: AuthService.getAuthHeaders(),
@@ -68,7 +69,7 @@ export const AgentService = {
   },
 
   update: async (id: number, data: AgentInsertInfo): Promise<Result<AgentInfo>> => {
-    console.log(`[AgentService] update — PUT /agents/${id}`, data)
+    console.log(`[AgentService] update — PUT /agents/${id}`)
     const response = await fetch(`${getApiUrl()}/agents/${id}`, {
       method: 'PUT',
       headers: AuthService.getAuthHeaders(),
@@ -113,6 +114,17 @@ export const AgentService = {
       body: JSON.stringify({ query }),
     })
     return handleResponse(response, 'test')
+  },
+
+  // A chave sai apenas no corpo da requisicao autenticada; nada dela vai para o log.
+  diagnoseOpenAI: async (agentId: number, apiKey: string | null): Promise<Result<AgentOpenAIDiagnoseResult>> => {
+    console.log(`[AgentService] diagnoseOpenAI — POST /agents/${agentId}/openai/diagnose`)
+    const response = await fetch(`${getApiUrl()}/agents/${agentId}/openai/diagnose`, {
+      method: 'POST',
+      headers: AuthService.getAuthHeaders(),
+      body: JSON.stringify({ apiKey: apiKey || null }),
+    })
+    return handleResponse(response, 'diagnoseOpenAI')
   },
 
   resumeSession: async (slug: string, resumeToken: string): Promise<Result<ChatSessionResumeInfo>> => {

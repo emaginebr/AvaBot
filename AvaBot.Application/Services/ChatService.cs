@@ -82,9 +82,9 @@ public class ChatService
         var messages = BuildMessages(new List<ChatMessage>(), chunks, userMessage);
 
         var response = toolset == null
-            ? await _openAIService.ChatCompletionAsync(chatModel, fullSystemPrompt, messages)
+            ? await _openAIService.ChatCompletionAsync(agentId, chatModel, fullSystemPrompt, messages)
             : await _openAIService.ChatCompletionWithToolsAsync(
-                chatModel, fullSystemPrompt, messages,
+                agentId, chatModel, fullSystemPrompt, messages,
                 toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage);
 
         return new AgentTestResultInfo
@@ -126,7 +126,7 @@ public class ChatService
 
         if (toolset == null)
         {
-            await foreach (var token in _openAIService.StreamChatCompletionAsync(chatModel, fullSystemPrompt, messages, cancellationToken))
+            await foreach (var token in _openAIService.StreamChatCompletionAsync(agentId, chatModel, fullSystemPrompt, messages, cancellationToken))
             {
                 fullResponse += token;
                 yield return token;
@@ -135,7 +135,7 @@ public class ChatService
         else
         {
             await foreach (var token in _openAIService.StreamChatCompletionWithToolsAsync(
-                chatModel, fullSystemPrompt, messages,
+                agentId, chatModel, fullSystemPrompt, messages,
                 toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage, cancellationToken))
             {
                 fullResponse += token;

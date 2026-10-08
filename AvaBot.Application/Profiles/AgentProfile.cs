@@ -8,7 +8,9 @@ public class AgentProfile : Profile
 {
     public AgentProfile()
     {
-        CreateMap<Agent, AgentInfo>();
+        // A credencial e derivada: so o indicador de presenca sai para o cliente.
+        CreateMap<Agent, AgentInfo>()
+            .ForMember(d => d.HasOpenAIApiKey, opt => opt.MapFrom(s => !string.IsNullOrEmpty(s.OpenAIApiKeyEncrypted)));
 
         CreateMap<Agent, AgentChatConfigInfo>();
 
@@ -18,6 +20,7 @@ public class AgentProfile : Profile
             .ForMember(d => d.Status, opt => opt.Ignore())
             .ForMember(d => d.TelegramWebhookSecret, opt => opt.Ignore())
             .ForMember(d => d.WhatsappToken, opt => opt.Ignore())
+            .ForMember(d => d.OpenAIApiKeyEncrypted, opt => opt.Ignore())
             .ForMember(d => d.PowerBIEnabled, opt => opt.Ignore())
             .ForMember(d => d.CreatedAt, opt => opt.Ignore())
             .ForMember(d => d.UpdatedAt, opt => opt.Ignore())

@@ -67,6 +67,9 @@ const TelegramBotPage = () => {
         chatModel: selectedAgent.chatModel,
         telegramBotName: botName.trim() || null,
         telegramBotToken: botToken.trim() || null,
+        // Esta tela nao toca na credencial OpenAI: null + false preserva a chave salva.
+        openAIApiKey: null,
+        removeOpenAIApiKey: false,
       })
 
       if (result.sucesso) {

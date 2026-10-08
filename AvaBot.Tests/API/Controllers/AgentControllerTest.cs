@@ -31,7 +31,7 @@ public class AgentControllerTest
         _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
         var esServiceMock = new Mock<IElasticsearchService>();
         var openAIMock = new Mock<IOpenAIService>();
-        _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, _mapper);
+        _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, new Mock<ISecretProtector>().Object, _mapper);
         _searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var powerBIToolProvider = new PowerBIToolProvider(
@@ -49,7 +49,7 @@ public class AgentControllerTest
             _repositoryMock.Object,
             powerBIToolProvider,
             config, NullLogger<ChatService>.Instance);
-        _sut = new AgentController(_agentService, _searchService, _chatService, _mapper);
+        _sut = new AgentController(_agentService, _searchService, _chatService, openAIMock.Object, _mapper);
     }
 
     [Fact]

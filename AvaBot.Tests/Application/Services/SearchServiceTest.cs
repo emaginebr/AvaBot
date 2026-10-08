@@ -25,7 +25,7 @@ public class SearchServiceTest
         var embedding = new float[] { 0.1f, 0.2f, 0.3f };
         var chunks = new List<string> { "chunk 1", "chunk 2" };
 
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync("test query")).ReturnsAsync(embedding);
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), "test query")).ReturnsAsync(embedding);
         _esServiceMock.Setup(s => s.HybridSearchAsync(1, embedding, "test query", 5)).ReturnsAsync(chunks);
 
         // Act
@@ -34,7 +34,7 @@ public class SearchServiceTest
         // Assert
         Assert.Equal(2, result.Count);
         Assert.Equal("chunk 1", result[0]);
-        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync("test query"), Times.Once);
+        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), "test query"), Times.Once);
         _esServiceMock.Verify(s => s.HybridSearchAsync(1, embedding, "test query", 5), Times.Once);
     }
 
@@ -43,7 +43,7 @@ public class SearchServiceTest
     {
         // Arrange
         var embedding = new float[] { 0.1f };
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(embedding);
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(embedding);
         _esServiceMock.Setup(s => s.HybridSearchAsync(1, embedding, "q", 10)).ReturnsAsync(new List<string>());
 
         // Act
@@ -57,7 +57,7 @@ public class SearchServiceTest
     public async Task SearchAsync_ShouldReturnEmptyList_WhenNoResults()
     {
         // Arrange
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
         _esServiceMock.Setup(s => s.HybridSearchAsync(It.IsAny<long>(), It.IsAny<float[]>(), It.IsAny<string>(), It.IsAny<int>()))
             .ReturnsAsync(new List<string>());
 

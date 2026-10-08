@@ -33,6 +33,7 @@ public class AvaBotContext : DbContext
             entity.Property(e => e.Description).HasColumnName("description").HasColumnType("text");
             entity.Property(e => e.SystemPrompt).HasColumnName("system_prompt").HasColumnType("text").IsRequired();
             entity.Property(e => e.ChatModel).HasColumnName("chat_model").HasMaxLength(100).HasDefaultValue("gpt-4o").IsRequired();
+            entity.Property(e => e.OpenAIApiKeyEncrypted).HasColumnName("openai_api_key_encrypted").HasMaxLength(1000);
             entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1).IsRequired();
             entity.Property(e => e.CollectName).HasColumnName("collect_name").HasDefaultValue(false).IsRequired();
             entity.Property(e => e.CollectEmail).HasColumnName("collect_email").HasDefaultValue(false).IsRequired();
