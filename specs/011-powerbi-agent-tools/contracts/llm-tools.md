@@ -27,8 +27,9 @@ As tools só são enviadas quando `agent.PowerBIEnabled == true` e existe ao men
 **Resultado** (texto compacto, lido do `SchemaJson` salvo, sem chamar o Power BI):
 ```
 Dataset: Comércio Internacional
-Tabela Exportacoes — <userDescription>
-  Colunas: Data (DateTime) — use para filtros por período; Pais (String); Produto (String); Kg (Double)
+Nomes já no formato de referência DAX: copie-os exatamente, com aspas e colchetes.
+Tabela 'Exportacoes' — <userDescription>
+  Colunas: [Data] (DateTime) — use para filtros por período; [Pais] (String); [Produto] (String); [Kg] (Double)
   Medidas: [Valor FOB (US$)] — valor em dólares; [Peso (t)]
 Tabela ...
 ```

@@ -313,7 +313,10 @@ public class PowerBIClient : IPowerBIClient
         // Detalhes aninhados nao substituem a mensagem principal (D1): vem tudo, em ordem.
         CollectDetailTexts(error, parts);
 
-        return string.Join(" ", parts.Distinct(StringComparer.Ordinal));
+        // O Power BI marca identificadores com <oii>...</oii>; sem as tags o modelo le o nome exato.
+        return string.Join(" ", parts.Distinct(StringComparer.Ordinal))
+            .Replace("<oii>", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("</oii>", string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void CollectDetailTexts(JsonElement node, List<string> found)
