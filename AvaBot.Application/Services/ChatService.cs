@@ -14,14 +14,19 @@ public class ChatService
     private readonly IOpenAIService _openAIService;
     private readonly IChatSessionRepository<ChatSession> _sessionRepository;
     private readonly IChatMessageRepository<ChatMessage> _messageRepository;
+    private readonly IAgentRepository<Agent> _agentRepository;
+    private readonly PowerBIToolProvider _powerBIToolProvider;
     private readonly ILogger<ChatService> _logger;
     private readonly int _maxHistoryMessages;
+    private readonly int _maxToolCallsPerMessage;
 
     public ChatService(
         SearchService searchService,
         IOpenAIService openAIService,
         IChatSessionRepository<ChatSession> sessionRepository,
         IChatMessageRepository<ChatMessage> messageRepository,
+        IAgentRepository<Agent> agentRepository,
+        PowerBIToolProvider powerBIToolProvider,
         IConfiguration configuration,
         ILogger<ChatService> logger)
     {
@@ -29,8 +34,11 @@ public class ChatService
         _openAIService = openAIService;
         _sessionRepository = sessionRepository;
         _messageRepository = messageRepository;
+        _agentRepository = agentRepository;
+        _powerBIToolProvider = powerBIToolProvider;
         _logger = logger;
         _maxHistoryMessages = int.TryParse(configuration["Chat:MaxHistoryMessages"], out var maxHistory) ? maxHistory : 20;
+        _maxToolCallsPerMessage = int.TryParse(configuration["PowerBI:MaxToolCallsPerMessage"], out var maxToolCalls) ? maxToolCalls : 5;
     }
 
     public async Task<ChatSession> CreateSessionAsync(long agentId, string? userName, string? userEmail, string? userPhone)
@@ -64,11 +72,20 @@ public class ChatService
 
     public async Task<AgentTestResultInfo> TestMessageAsync(long agentId, string chatModel, string systemPrompt, string userMessage)
     {
+        var agent = await _agentRepository.GetByIdAsync(agentId);
+        var toolset = agent != null
+            ? await _powerBIToolProvider.GetToolsetAsync(agent, null, userMessage)
+            : null;
+
         var chunks = await _searchService.SearchAsync(agentId, userMessage);
-        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, null);
+        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, null, toolset != null);
         var messages = BuildMessages(new List<ChatMessage>(), chunks, userMessage);
 
-        var response = await _openAIService.ChatCompletionAsync(chatModel, fullSystemPrompt, messages);
+        var response = toolset == null
+            ? await _openAIService.ChatCompletionAsync(chatModel, fullSystemPrompt, messages)
+            : await _openAIService.ChatCompletionWithToolsAsync(
+                chatModel, fullSystemPrompt, messages,
+                toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage);
 
         return new AgentTestResultInfo
         {
@@ -76,7 +93,8 @@ public class ChatService
             SearchResults = chunks,
             SystemPrompt = fullSystemPrompt,
             Messages = messages.Select(m => new AgentTestMessageInfo { Role = m.Role, Content = m.Content }).ToList(),
-            AssistantResponse = response
+            AssistantResponse = response,
+            PowerBIQueries = toolset?.ExecutedQueries ?? new List<AgentTestPowerBIQueryInfo>()
         };
     }
 
@@ -93,17 +111,36 @@ public class ChatService
 
         await SaveMessageAsync(sessionId, SenderType.User, userMessage);
 
+        var agent = await _agentRepository.GetByIdAsync(agentId);
+        var toolset = agent != null
+            ? await _powerBIToolProvider.GetToolsetAsync(agent, sessionId, userMessage)
+            : null;
+
         var chunks = await _searchService.SearchAsync(agentId, userMessage);
-        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, session);
+        var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, session, toolset != null);
         var messages = BuildMessages(recentMessages, chunks, userMessage);
 
         LogRequest(fullSystemPrompt, chunks, messages, userMessage);
 
         var fullResponse = string.Empty;
-        await foreach (var token in _openAIService.StreamChatCompletionAsync(chatModel, fullSystemPrompt, messages, cancellationToken))
+
+        if (toolset == null)
         {
-            fullResponse += token;
-            yield return token;
+            await foreach (var token in _openAIService.StreamChatCompletionAsync(chatModel, fullSystemPrompt, messages, cancellationToken))
+            {
+                fullResponse += token;
+                yield return token;
+            }
+        }
+        else
+        {
+            await foreach (var token in _openAIService.StreamChatCompletionWithToolsAsync(
+                chatModel, fullSystemPrompt, messages,
+                toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage, cancellationToken))
+            {
+                fullResponse += token;
+                yield return token;
+            }
         }
 
         _logger.LogInformation(
@@ -115,11 +152,20 @@ public class ChatService
         await SaveMessageAsync(sessionId, SenderType.Assistant, fullResponse);
     }
 
-    private string BuildFullSystemPrompt(string systemPrompt, ChatSession? session)
+    private string BuildFullSystemPrompt(string systemPrompt, ChatSession? session, bool hasDataTools)
     {
-        var fullSystemPrompt = systemPrompt
-            + "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao."
-            + "\n\nFORMATACAO: Responda usando Markdown. Use **negrito** para termos importantes, listas com - ou 1. para enumerar itens, e paragrafos bem estruturados. NAO use titulos ou cabecalhos (nada de # ou ##). Mantenha a resposta clara, objetiva e bem formatada.";
+        var contextRule = hasDataTools
+            ? "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido ou nos dados retornados pelas ferramentas. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao."
+            : "\n\nIMPORTANTE: Responda SOMENTE com base no contexto fornecido. Se nao encontrar informacao relevante no contexto, informe que nao possui essa informacao.";
+
+        var formattingRule = hasDataTools
+            ? "\n\nFORMATACAO: Responda usando Markdown. Use **negrito** para termos importantes, listas com - ou 1. para enumerar itens, e paragrafos bem estruturados. NAO use titulos ou cabecalhos (nada de # ou ##). NAO use tabelas. Mantenha a resposta clara, objetiva e bem formatada."
+            : "\n\nFORMATACAO: Responda usando Markdown. Use **negrito** para termos importantes, listas com - ou 1. para enumerar itens, e paragrafos bem estruturados. NAO use titulos ou cabecalhos (nada de # ou ##). Mantenha a resposta clara, objetiva e bem formatada.";
+
+        var fullSystemPrompt = systemPrompt + contextRule + formattingRule;
+
+        if (hasDataTools)
+            fullSystemPrompt += "\n\n" + PowerBIToolset.PromptAddendum;
 
         var userInfo = BuildUserInfoContext(session);
         if (!string.IsNullOrEmpty(userInfo))

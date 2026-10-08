@@ -1,4 +1,5 @@
 using System.Text;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -24,6 +25,9 @@ builder.Services.AddAvaBotServices(builder.Configuration);
 
 // Controllers
 builder.Services.AddControllers();
+
+// Validators: consumidos explicitamente pelos controllers (sem auto-validacao global)
+builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();

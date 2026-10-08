@@ -1,0 +1,19 @@
+meta {
+  name: Test Connection
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/test
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}

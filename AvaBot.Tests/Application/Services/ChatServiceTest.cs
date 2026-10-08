@@ -3,6 +3,7 @@ using Moq;
 using AvaBot.Application.Services;
 using AvaBot.Domain.Enums;
 using AvaBot.Domain.Models;
+using AvaBot.DTO;
 using AvaBot.Infra.Interfaces.AppServices;
 using AvaBot.Infra.Interfaces.Repository;
 using Microsoft.Extensions.Configuration;
@@ -12,34 +13,66 @@ namespace AvaBot.Tests.Application.Services;
 
 public class ChatServiceTest
 {
+    private const long AgentId = 1;
+    private const long SessionId = 2;
+
     private readonly Mock<SearchService> _searchServiceMock;
+    private readonly Mock<IElasticsearchService> _esServiceMock;
     private readonly Mock<IOpenAIService> _openAIServiceMock;
     private readonly Mock<IChatSessionRepository<ChatSession>> _sessionRepoMock;
     private readonly Mock<IChatMessageRepository<ChatMessage>> _messageRepoMock;
+    private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
+    private readonly Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>> _configRepoMock;
+    private readonly Mock<IPowerBIDatasetRepository<PowerBIDataset>> _datasetRepoMock;
+    private readonly Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>> _queryLogRepoMock;
+    private readonly Mock<IPowerBIClient> _powerBIClientMock;
+    private readonly Mock<ISecretProtector> _secretProtectorMock;
+    private readonly IConfiguration _configuration;
     private readonly ChatService _sut;
 
     public ChatServiceTest()
     {
-        var esServiceMock = new Mock<IElasticsearchService>();
+        _esServiceMock = new Mock<IElasticsearchService>();
         _openAIServiceMock = new Mock<IOpenAIService>();
-        _searchServiceMock = new Mock<SearchService>(esServiceMock.Object, _openAIServiceMock.Object);
+        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object, _openAIServiceMock.Object);
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
+        _agentRepoMock = new Mock<IAgentRepository<Agent>>();
+        _configRepoMock = new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>();
+        _datasetRepoMock = new Mock<IPowerBIDatasetRepository<PowerBIDataset>>();
+        _queryLogRepoMock = new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>();
+        _powerBIClientMock = new Mock<IPowerBIClient>();
+        _secretProtectorMock = new Mock<ISecretProtector>();
 
         var configData = new Dictionary<string, string?>
         {
-            { "Chat:MaxHistoryMessages", "10" }
+            { "Chat:MaxHistoryMessages", "10" },
+            { "PowerBI:MaxToolCallsPerMessage", "5" },
+            { "PowerBI:MaxRows", "100" },
+            { "PowerBI:QueryTimeoutSeconds", "30" }
         };
-        var configuration = new ConfigurationBuilder()
+        _configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configData)
             .Build();
+
+        // Provider real: o que muda entre os cenarios e a flag do agente e o conteo do repositorio.
+        var toolProvider = new PowerBIToolProvider(
+            _configRepoMock.Object,
+            _datasetRepoMock.Object,
+            _queryLogRepoMock.Object,
+            _powerBIClientMock.Object,
+            _secretProtectorMock.Object,
+            _configuration,
+            NullLogger<PowerBIToolProvider>.Instance);
 
         _sut = new ChatService(
             _searchServiceMock.Object,
             _openAIServiceMock.Object,
             _sessionRepoMock.Object,
             _messageRepoMock.Object,
-            configuration,
+            _agentRepoMock.Object,
+            toolProvider,
+            _configuration,
             NullLogger<ChatService>.Instance);
     }
 
@@ -105,5 +138,139 @@ public class ChatServiceTest
 
         // Assert
         _sessionRepoMock.Verify(r => r.UpdateAsync(It.IsAny<ChatSession>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessMessageAsync_ShouldUseStreamWithoutTools_WhenPowerBIIsDisabled()
+    {
+        // Arrange
+        ArrangeChatPipeline();
+        _agentRepoMock.Setup(r => r.GetByIdAsync(AgentId))
+            .ReturnsAsync(new Agent { AgentId = AgentId, PowerBIEnabled = false });
+
+        _openAIServiceMock
+            .Setup(o => o.StreamChatCompletionAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()))
+            .Returns(NoTokens);
+
+        // Act
+        await ConsumeAsync(_sut.ProcessMessageAsync(AgentId, SessionId, "gpt-4o", "Prompt", "Quanto exportamos?"));
+
+        // Assert (SC-005: sem a flag, o caminho executado e o atual)
+        _openAIServiceMock.Verify(o => o.StreamChatCompletionAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Once);
+        _openAIServiceMock.Verify(o => o.StreamChatCompletionWithToolsAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
+            It.IsAny<IReadOnlyList<ChatToolDefinition>>(), It.IsAny<Func<ChatToolCall, CancellationToken, Task<string>>>(),
+            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProcessMessageAsync_ShouldUseStreamWithToolsAndPowerBIPrompt_WhenPowerBIIsEnabled()
+    {
+        // Arrange
+        ArrangeChatPipeline();
+        ArrangeAgentWithUsableDataset();
+
+        string? capturedPrompt = null;
+
+        _openAIServiceMock
+            .Setup(o => o.StreamChatCompletionWithToolsAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
+                It.IsAny<IReadOnlyList<ChatToolDefinition>>(), It.IsAny<Func<ChatToolCall, CancellationToken, Task<string>>>(),
+                It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns((string model, string systemPrompt, List<ChatCompletionMessage> messages,
+                IReadOnlyList<ChatToolDefinition> tools, Func<ChatToolCall, CancellationToken, Task<string>> executor,
+                int maxToolCalls, CancellationToken token) =>
+            {
+                capturedPrompt = systemPrompt;
+                Assert.Equal(2, tools.Count);
+                Assert.Equal(5, maxToolCalls);
+                return NoTokens();
+            });
+
+        // Act
+        await ConsumeAsync(_sut.ProcessMessageAsync(AgentId, SessionId, "gpt-4o", "Prompt", "Quanto exportamos de tilapia em 2025?"));
+
+        // Assert
+        _openAIServiceMock.Verify(o => o.StreamChatCompletionAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        Assert.NotNull(capturedPrompt);
+        Assert.Contains(PowerBIToolset.PromptAddendum, capturedPrompt);
+        Assert.Contains("DADOS DO POWER BI", capturedPrompt);
+        Assert.Contains("ou nos dados retornados pelas ferramentas", capturedPrompt);
+    }
+
+    private void ArrangeChatPipeline()
+    {
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(SessionId)).ReturnsAsync(new ChatSession { ChatSessionId = SessionId });
+        _messageRepoMock.Setup(r => r.GetRecentBySessionIdAsync(SessionId, It.IsAny<int>()))
+            .ReturnsAsync(new List<ChatMessage>());
+        _messageRepoMock.Setup(r => r.CreateAsync(It.IsAny<ChatMessage>()))
+            .ReturnsAsync((ChatMessage m) => m);
+        _esServiceMock.Setup(e => e.HybridSearchAsync(AgentId, It.IsAny<float[]>(), It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<string>());
+    }
+
+    private void ArrangeAgentWithUsableDataset()
+    {
+        var schema = new PowerBISchema
+        {
+            Tables = new List<PowerBISchemaTable>
+            {
+                new()
+                {
+                    Name = "Exportacoes",
+                    Columns = new List<PowerBISchemaColumn>
+                    {
+                        new() { Name = "Data", DataType = "DateTime" }
+                    }
+                }
+            }
+        };
+
+        _agentRepoMock.Setup(r => r.GetByIdAsync(AgentId))
+            .ReturnsAsync(new Agent { AgentId = AgentId, PowerBIEnabled = true });
+
+        _configRepoMock.Setup(r => r.GetByAgentIdAsync(AgentId))
+            .ReturnsAsync(new AgentPowerBIConfig
+            {
+                AgentId = AgentId,
+                TenantId = "tenant",
+                ClientId = "client",
+                ClientSecretEncrypted = "cipher"
+            });
+
+        _secretProtectorMock.Setup(p => p.Unprotect("cipher")).Returns("secret");
+
+        _datasetRepoMock.Setup(r => r.GetByAgentIdAsync(AgentId))
+            .ReturnsAsync(new List<PowerBIDataset>
+            {
+                new()
+                {
+                    PowerBIDatasetId = 10,
+                    AgentId = AgentId,
+                    Name = "Comercio Internacional",
+                    ToolKey = "comercio_internacional",
+                    WorkspaceId = "workspace",
+                    DatasetId = "dataset",
+                    SchemaJson = PowerBISchema.Serialize(schema),
+                    SchemaStatus = PowerBISchemaStatus.Generated
+                }
+            });
+    }
+
+    private static async IAsyncEnumerable<string> NoTokens()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
+    private static async Task ConsumeAsync(IAsyncEnumerable<string> tokens)
+    {
+        await foreach (var _ in tokens)
+        {
+        }
     }
 }

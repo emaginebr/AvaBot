@@ -1,0 +1,23 @@
+meta {
+  name: Generate Schema
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/datasets/:id/schema/generate
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+params:path {
+  id: 1
+}

@@ -1,0 +1,31 @@
+meta {
+  name: Save Config
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/config
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "tenantId": "coloque-o-tenant-id",
+    "clientId": "coloque-o-client-id",
+    "clientSecret": "coloque-o-client-secret"
+  }
+}

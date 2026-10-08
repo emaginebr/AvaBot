@@ -1,3 +1,5 @@
+import type { AgentTestPowerBIQueryInfo } from './powerbi'
+
 export interface AgentInfo {
   agentId: number;
   name: string;
@@ -12,6 +14,7 @@ export interface AgentInfo {
   telegramBotName: string | null;
   telegramBotToken: string | null;
   telegramWebhookSecret: string | null;
+  powerBIEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,4 +68,5 @@ export interface AgentTestResult {
   systemPrompt: string;
   messages: AgentTestMessage[];
   assistantResponse: string;
+  powerBIQueries: AgentTestPowerBIQueryInfo[];
 }

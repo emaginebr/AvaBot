@@ -1,0 +1,37 @@
+meta {
+  name: Update Schema Descriptions
+  type: http
+  seq: 12
+}
+
+put {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/datasets/:id/schema/descriptions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+params:path {
+  id: 1
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "items": [
+      { "kind": "table", "table": "Exportacoes", "name": null, "userDescription": "Exportações de pescado por país e mês" },
+      { "kind": "column", "table": "Exportacoes", "name": "Data", "userDescription": "use para filtros por período" },
+      { "kind": "measure", "table": "Exportacoes", "name": "Valor FOB (US$)", "userDescription": "valor em dólares" }
+    ]
+  }
+}

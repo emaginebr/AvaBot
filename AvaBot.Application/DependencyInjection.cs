@@ -27,6 +27,9 @@ public static class DependencyInjection
         services.AddScoped<IChatSessionRepository<ChatSession>, ChatSessionRepository>();
         services.AddScoped<IChatMessageRepository<ChatMessage>, ChatMessageRepository>();
         services.AddScoped<ITelegramChatRepository<TelegramChat>, TelegramChatRepository>();
+        services.AddScoped<IAgentPowerBIConfigRepository<AgentPowerBIConfig>, AgentPowerBIConfigRepository>();
+        services.AddScoped<IPowerBIDatasetRepository<PowerBIDataset>, PowerBIDatasetRepository>();
+        services.AddScoped<IPowerBIQueryLogRepository<PowerBIQueryLog>, PowerBIQueryLogRepository>();
 
         // Domain Services
         services.AddScoped<AgentService>();
@@ -35,6 +38,9 @@ public static class DependencyInjection
         services.AddScoped<ChatService>();
         services.AddScoped<TelegramService>();
         services.AddScoped<WhatsappService>();
+        services.AddScoped<PowerBIService>();
+        services.AddScoped<PowerBISchemaBuilder>();
+        services.AddScoped<PowerBIToolProvider>();
 
         // WPP Connect HttpClient
         services.AddHttpClient("WppConnect", (sp, client) =>
@@ -44,6 +50,22 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Add("Accept", "application/json");
         });
         services.AddScoped<IWppConnectService, WppConnectService>();
+
+        // Power BI HttpClient
+        services.AddHttpClient("PowerBI", client =>
+        {
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+        services.AddHttpClient("EntraId", client =>
+        {
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
+        services.AddMemoryCache();
+        services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+        services.AddSingleton<IPowerBIClient, PowerBIClient>();
+
+        services.AddHostedService<PowerBIQueryLogCleanupService>();
 
         // AutoMapper
         services.AddSingleton<AutoMapper.IMapper>(sp =>

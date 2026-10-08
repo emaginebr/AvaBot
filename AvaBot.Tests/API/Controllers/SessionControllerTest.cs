@@ -41,7 +41,15 @@ public class SessionControllerTest
         var openAIMock = new Mock<IOpenAIService>();
         var searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
-        var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, config, NullLogger<ChatService>.Instance);
+        var powerBIToolProvider = new PowerBIToolProvider(
+            new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,
+            new Mock<IPowerBIDatasetRepository<PowerBIDataset>>().Object,
+            new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>().Object,
+            new Mock<IPowerBIClient>().Object,
+            new Mock<ISecretProtector>().Object,
+            config,
+            NullLogger<PowerBIToolProvider>.Instance);
+        var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, _agentRepoMock.Object, powerBIToolProvider, config, NullLogger<ChatService>.Instance);
 
         _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper);
     }

@@ -34,10 +34,20 @@ public class AgentControllerTest
         _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, _mapper);
         _searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
+        var powerBIToolProvider = new PowerBIToolProvider(
+            new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,
+            new Mock<IPowerBIDatasetRepository<PowerBIDataset>>().Object,
+            new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>().Object,
+            new Mock<IPowerBIClient>().Object,
+            new Mock<ISecretProtector>().Object,
+            config,
+            NullLogger<PowerBIToolProvider>.Instance);
         _chatService = new ChatService(
             _searchService, openAIMock.Object,
             new Mock<IChatSessionRepository<ChatSession>>().Object,
             new Mock<IChatMessageRepository<ChatMessage>>().Object,
+            _repositoryMock.Object,
+            powerBIToolProvider,
             config, NullLogger<ChatService>.Instance);
         _sut = new AgentController(_agentService, _searchService, _chatService, _mapper);
     }

@@ -13,6 +13,9 @@ public class AvaBotContext : DbContext
     public DbSet<ChatSession> ChatSessions { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<TelegramChat> TelegramChats { get; set; }
+    public DbSet<AgentPowerBIConfig> AgentPowerBIConfigs { get; set; }
+    public DbSet<PowerBIDataset> PowerBIDatasets { get; set; }
+    public DbSet<PowerBIQueryLog> PowerBIQueryLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +51,7 @@ public class AvaBotContext : DbContext
                 .IsUnique()
                 .HasDatabaseName("ix_avabot_agents_whatsapp_token")
                 .HasFilter("whatsapp_token IS NOT NULL");
+            entity.Property(e => e.PowerBIEnabled).HasColumnName("powerbi_enabled").HasDefaultValue(false).IsRequired();
         });
 
         // KnowledgeFile
@@ -136,6 +140,101 @@ public class AvaBotContext : DbContext
                 .HasForeignKey(e => e.ChatSessionId)
                 .HasConstraintName("avabot_fk_chat_sessions_chat_messages")
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // AgentPowerBIConfig
+        modelBuilder.Entity<AgentPowerBIConfig>(entity =>
+        {
+            entity.ToTable("avabot_agent_powerbi_configs");
+            entity.HasKey(e => e.AgentPowerBIConfigId).HasName("avabot_agent_powerbi_configs_pkey");
+            entity.Property(e => e.AgentPowerBIConfigId).HasColumnName("agent_powerbi_config_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.HasIndex(e => e.AgentId).IsUnique().HasDatabaseName("avabot_agent_powerbi_configs_agent_id_key");
+            entity.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.ClientId).HasColumnName("client_id").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.ClientSecretEncrypted).HasColumnName("client_secret_encrypted").HasMaxLength(1000).IsRequired();
+            entity.Property(e => e.ClientSecretHint).HasColumnName("client_secret_hint").HasMaxLength(8).IsRequired();
+            entity.Property(e => e.LastTestAt).HasColumnName("last_test_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.LastTestSuccess).HasColumnName("last_test_success");
+            entity.Property(e => e.LastTestMessage).HasColumnName("last_test_message").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+
+            entity.HasOne(e => e.Agent)
+                .WithOne(a => a.PowerBIConfig)
+                .HasForeignKey<AgentPowerBIConfig>(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_agent_powerbi_configs")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        // PowerBIDataset
+        modelBuilder.Entity<PowerBIDataset>(entity =>
+        {
+            entity.ToTable("avabot_powerbi_datasets");
+            entity.HasKey(e => e.PowerBIDatasetId).HasName("avabot_powerbi_datasets_pkey");
+            entity.Property(e => e.PowerBIDatasetId).HasColumnName("powerbi_dataset_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id").HasMaxLength(64).IsRequired();
+            entity.Property(e => e.DatasetId).HasColumnName("dataset_id").HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => new { e.AgentId, e.DatasetId }).IsUnique().HasDatabaseName("avabot_powerbi_datasets_agent_id_dataset_id_key");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
+            entity.Property(e => e.Description).HasColumnName("description").HasMaxLength(1000);
+            entity.Property(e => e.ToolKey).HasColumnName("tool_key").HasMaxLength(60).IsRequired();
+            entity.HasIndex(e => new { e.AgentId, e.ToolKey }).IsUnique().HasDatabaseName("avabot_powerbi_datasets_agent_id_tool_key_key");
+            entity.Property(e => e.SchemaJson).HasColumnName("schema_json").HasColumnType("jsonb");
+            entity.Property(e => e.SchemaStatus).HasColumnName("schema_status").HasDefaultValue(PowerBISchemaStatus.NotGenerated).IsRequired();
+            entity.Property(e => e.SchemaGeneratedAt).HasColumnName("schema_generated_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.SchemaError).HasColumnName("schema_error").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+
+            entity.HasOne(e => e.Agent)
+                .WithMany(a => a.PowerBIDatasets)
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_powerbi_datasets")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        // PowerBIQueryLog
+        modelBuilder.Entity<PowerBIQueryLog>(entity =>
+        {
+            entity.ToTable("avabot_powerbi_query_logs");
+            entity.HasKey(e => e.PowerBIQueryLogId).HasName("avabot_powerbi_query_logs_pkey");
+            entity.Property(e => e.PowerBIQueryLogId).HasColumnName("powerbi_query_log_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.ChatSessionId).HasColumnName("chat_session_id");
+            entity.Property(e => e.PowerBIDatasetId).HasColumnName("powerbi_dataset_id");
+            entity.Property(e => e.DatasetName).HasColumnName("dataset_name").HasMaxLength(120);
+            entity.Property(e => e.ToolName).HasColumnName("tool_name").HasMaxLength(60).IsRequired();
+            entity.Property(e => e.UserQuestion).HasColumnName("user_question").HasColumnType("text");
+            entity.Property(e => e.Query).HasColumnName("query").HasColumnType("text");
+            entity.Property(e => e.DurationMs).HasColumnName("duration_ms").IsRequired();
+            entity.Property(e => e.RowCount).HasColumnName("row_count");
+            entity.Property(e => e.Truncated).HasColumnName("truncated").HasDefaultValue(false).IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").IsRequired();
+            entity.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.HasIndex(e => new { e.AgentId, e.CreatedAt })
+                .IsDescending(false, true)
+                .HasDatabaseName("ix_avabot_powerbi_query_logs_agent_id_created_at");
+
+            entity.HasOne(e => e.Agent)
+                .WithMany()
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_powerbi_query_logs")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(e => e.ChatSession)
+                .WithMany()
+                .HasForeignKey(e => e.ChatSessionId)
+                .HasConstraintName("avabot_fk_chat_sessions_powerbi_query_logs")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(e => e.PowerBIDataset)
+                .WithMany()
+                .HasForeignKey(e => e.PowerBIDatasetId)
+                .HasConstraintName("avabot_fk_powerbi_datasets_powerbi_query_logs")
+                .OnDelete(DeleteBehavior.ClientSetNull);
         });
     }
 }

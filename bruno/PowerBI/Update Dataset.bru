@@ -1,0 +1,36 @@
+meta {
+  name: Update Dataset
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/datasets/:id
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
+
+params:path {
+  id: 1
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "workspaceId": "a9b9d4ae-e4d4-4a32-a14c-a32177d47770",
+    "datasetId": "eab95e03-0000-0000-0000-000000000000",
+    "name": "Comércio Internacional",
+    "description": "Exportações e importações de pescado por país, produto e mês"
+  }
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Get Config
+  type: http
+  seq: 0
+}
+
+get {
+  url: {{baseUrl}}/powerbi/{{agentSlug}}/config
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: biia
+}
