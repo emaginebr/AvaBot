@@ -81,11 +81,15 @@ public class ChatService
         var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, null, toolset != null);
         var messages = BuildMessages(new List<ChatMessage>(), chunks, userMessage);
 
+        var toolCallBudget = toolset == null
+            ? _maxToolCallsPerMessage
+            : Math.Max(_maxToolCallsPerMessage, toolset.ModelToolCallBudget);
+
         var response = toolset == null
             ? await _openAIService.ChatCompletionAsync(agentId, chatModel, fullSystemPrompt, messages)
             : await _openAIService.ChatCompletionWithToolsAsync(
                 agentId, chatModel, fullSystemPrompt, messages,
-                toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage);
+                toolset.Definitions, toolset.ExecuteAsync, toolCallBudget);
 
         return new AgentTestResultInfo
         {
@@ -122,6 +126,11 @@ public class ChatService
 
         LogRequest(fullSystemPrompt, chunks, messages, userMessage);
 
+        // D3: o limite geral de tools nao pode cortar o orcamento BI depois da leitura de schema.
+        var toolCallBudget = toolset == null
+            ? _maxToolCallsPerMessage
+            : Math.Max(_maxToolCallsPerMessage, toolset.ModelToolCallBudget);
+
         var fullResponse = string.Empty;
 
         if (toolset == null)
@@ -136,7 +145,7 @@ public class ChatService
         {
             await foreach (var token in _openAIService.StreamChatCompletionWithToolsAsync(
                 agentId, chatModel, fullSystemPrompt, messages,
-                toolset.Definitions, toolset.ExecuteAsync, _maxToolCallsPerMessage, cancellationToken))
+                toolset.Definitions, toolset.ExecuteAsync, toolCallBudget, cancellationToken))
             {
                 fullResponse += token;
                 yield return token;

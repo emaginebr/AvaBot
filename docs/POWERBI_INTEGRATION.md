@@ -80,7 +80,8 @@ A migração `AddPowerBIIntegration` cria `avabot_agent_powerbi_configs`, `avabo
 |---|---|---|
 | `SecretEncryptionKey` | vazio | chave AES-256 em base64 (via env) |
 | `MaxRows` | 100 | linhas maximas enviadas ao modelo por consulta |
-| `MaxToolCallsPerMessage` | 5 | chamadas de ferramenta por mensagem |
+| `MaxToolCallsPerMessage` | 5 | chamadas de ferramenta por mensagem (protecao geral do loop de tools) |
+| `MaxQueryAttempts` | 5 | execucoes de `consultar_bi` por mensagem: primeira, replays automaticos e DAX corrigida |
 | `QueryTimeoutSeconds` | 30 | tempo limite de cada consulta DAX |
 | `QueryLogRetentionDays` | 30 | retencao do historico de consultas |
 | `ApiBaseUrl` | `https://api.powerbi.com/v1.0/myorg` | endpoint REST |
@@ -122,7 +123,7 @@ Ao regerar, as descricoes escritas por voce sao preservadas por chave (tabela, t
 
 ### 3. Historico de consultas
 
-Uma linha por chamada de ferramenta (`listar_schema` e `consultar_bi`), com pergunta do usuario, dataset, DAX executado, duracao, linhas, status e erro. Clique na linha para ver o DAX completo. Registros com mais de `QueryLogRetentionDays` sao removidos por um servico em segundo plano (verificacao a cada 24 h).
+Uma linha por **requisicao** ao Power BI, inclusive cada tentativa automatica, mais as chamadas de `listar_schema`. Cada registro traz pergunta do usuario, dataset, DAX executado, duracao, linhas, status e o diagnostico integral da falha (categoria, status HTTP, codigo, mensagem principal com todos os detalhes e o corpo original da resposta, com segredos redigidos). A coluna `error_message` e `text`, entao mensagens longas nao sao cortadas. Clique na linha para ver o DAX completo. Registros com mais de `QueryLogRetentionDays` sao removidos por um servico em segundo plano (verificacao a cada 24 h).
 
 ### Ligar a flag
 
@@ -137,8 +138,14 @@ Ligar sem credenciais ou sem schema e bloqueado com a explicacao do que falta.
 - `listar_schema(dataset)` devolve o schema salvo em texto compacto, sem chamar o Power BI.
 - `consultar_bi(dataset, dax)` executa DAX **somente leitura** (precisa comecar com `EVALUATE` ou `DEFINE`, mesmo depois de comentarios) e devolve `{columns, rows, rowCount, truncated}`.
 - O `dataset` e um enum com as chaves dos datasets **daquele agente**; uma chave de outro agente devolve erro, e o executor valida de novo.
-- Em caso de erro, o texto vai ao modelo como `{error}` para que ele corrija a consulta ou avise o usuario. A conversa nunca quebra por falha de ferramenta.
-- Ao atingir `MaxToolCallsPerMessage`, a rodada seguinte roda sem ferramentas, forcando a resposta final.
+- Em caso de erro de `consultar_bi`, o modelo recebe um diagnostico estruturado: `{error: {category, statusCode, errorCode, message, responseBody, attemptNumber, maxAttempts, queryMayBeCorrected}}`. A conversa nunca quebra por falha de ferramenta.
+- classificacao da falha (`category`):
+  - `dax_query` (normalmente HTTP 400, e rejeicoes locais como DAX sem `EVALUATE`/`DEFINE`) — vai ao modelo com `queryMayBeCorrected: true` para que ele corrija a consulta e tente de novo;
+  - `transient_service` (HTTP 429, 5xx, timeout da consulta e falha de rede) — o proprio executor **repete a mesma DAX**, sem chamar o modelo no meio; com orcamento sobrando, 429 espera o `Retry-After` indicado e o resto usa backoff exponencial com jitter (comeca em ~1 s, teto de 30 s);
+  - `authentication_or_permission` (401/403 e o `PowerBIEntityNotFound` de dataset PBIR) — **nao repete** e nao pede correcao de DAX, porque regerar a consulta nao muda credencial nem permissao;
+  - `attempt_limit` — o orcamento da mensagem acabou e nenhuma nova requisicao e enviada.
+- O orcamento e por mensagem e conta execucoes reais de `consultar_bi` (primeira + replays + DAX corrigida), com teto `MaxQueryAttempts` (padrao 5). `listar_schema` **nao** consome orcamento, e cancelamento do usuario nao gera retentativa.
+- `MaxToolCallsPerMessage` continua valendo como protecao geral do loop de ferramentas; o teto efetivo de chamadas e dimensionado para nao cortar o orcamento BI depois da leitura de schema.
 - O prompt ganha o bloco **DADOS DO POWER BI**: se faltar periodo/produto/indicador, o agente pergunta antes de consultar; numeros so saem das ferramentas; a resposta vem em texto ou lista, sem tabelas.
 
 Cada consulta e gravada com a sessao e a pergunta que a originaram. Nem o client secret nem o access token aparecem em resposta, log ou historico.
@@ -148,8 +155,9 @@ Cada consulta e gravada com a sessao e a pergunta que a originaram. Nem o client
 ## Limites e custos
 
 - Limite de linhas por consulta antes de truncar: `MaxRows` (padrao 100).
-- Rate limit do Power BI: 120 requisicoes/min por principal, sem retry automatico na v1 (um 429 vira erro de ferramenta).
-- Cada mensagem com ferramenta gasta rodadas extras de LLM (ate `MaxToolCallsPerMessage`).
+- Rate limit do Power BI: 120 requisicoes/min por principal. O 429 agora e tratado com retentativa automatica da mesma DAX respeitando `Retry-After`, limitado por `MaxQueryAttempts` por mensagem — o que reduz o risco de estourar o limite, mas uma conversa com muitas correcoes de DAX consome mais cotas que antes.
+- Cada mensagem com ferramenta gasta rodadas extras de LLM (ate `MaxToolCallsPerMessage`) e ate `MaxQueryAttempts` requisicoes ao Power BI. Cada tentativa que falha tambem grava uma linha no historico.
+- O diagnostico integral (com corpo da resposta) e mais texto para o modelo do que a mensagem curta de antes; em erro de DAX isso e proposital, porque e o que permite corrigir a consulta.
 - O schema completo so entra no contexto quando o modelo chama `listar_schema`.
 
 ---

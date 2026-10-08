@@ -187,7 +187,8 @@ public class ChatServiceTest
                 capturedAgentId = agentId;
                 capturedPrompt = systemPrompt;
                 Assert.Equal(2, tools.Count);
-                Assert.Equal(5, maxToolCalls);
+                // D3/014: o teto do loop precisa caber o orcamento BI (5) mais a leitura de schema (1).
+                Assert.Equal(6, maxToolCalls);
                 return NoTokens();
             });
 
