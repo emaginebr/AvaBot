@@ -127,7 +127,9 @@ public class PowerBIToolset
         "- Antes da primeira consulta a um dataset, chame listar_schema.\n" +
         "- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como LIMIT, OFFSET, FETCH, SELECT ou FROM.\n" +
         "- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.\n" +
-        "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema.\n" +
+        "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema, copiando os nomes exatamente como aparecem (ex.: 'Nome da Tabela'[Coluna], [Medida]); não encurte nem remova prefixos.\n" +
+        "- Estrutura DAX: 'DEFINE' (opcional) aceita apenas VAR/MEASURE/TABLE/COLUMN e é seguido de EVALUATE; não existe RETURN no nível do DEFINE. Exemplo: DEFINE VAR _ano = \"2025\" EVALUATE TOPN(10, SUMMARIZECOLUMNS('T'[Col], \"Total\", SUM('T'[Valor])), [Total], DESC).\n" +
+        "- Em TOPN, a ordem é DESC ou ASC, nunca um número. Respeite o tipo da coluna no schema (Text compara com texto entre aspas).\n" +
         "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.\n" +
         "- Se consultar_bi devolver erro com queryMayBeCorrected true, use message, errorCode e responseBody do diagnóstico para corrigir a DAX e tentar de novo, usando apenas tabelas, colunas e medidas do schema. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
         "- Se queryMayBeCorrected for false (autenticação, permissão ou limite de tentativas esgotado), NÃO reenvie a consulta: informe que não foi possível obter os dados no momento.\n" +
@@ -568,10 +570,13 @@ public class PowerBIToolset
     {
         var sb = new StringBuilder();
         sb.Append("Dataset: ").AppendLine(dataset.Name);
+        sb.AppendLine("Nomes já no formato de referência DAX: copie-os exatamente, com aspas e colchetes.");
 
         foreach (var table in schema.Tables)
         {
-            sb.Append("Tabela ").Append(table.Name);
+            // Nome com espaco ("public ABIPESCA_COMTRADE") sem aspas parecia "tabela public X"
+            // e o modelo descartava o prefixo; a forma citada nao deixa ambiguidade.
+            sb.Append("Tabela ").Append(QuoteTable(table.Name));
 
             var tableDescription = table.UserDescription ?? table.Description;
             if (!string.IsNullOrWhiteSpace(tableDescription))
@@ -593,7 +598,7 @@ public class PowerBIToolset
 
     private static string DescribeColumn(PowerBISchemaColumn column)
     {
-        var text = column.Name;
+        var text = QuoteMember(column.Name);
 
         if (!string.IsNullOrWhiteSpace(column.DataType))
             text += $" ({column.DataType})";
@@ -607,7 +612,7 @@ public class PowerBIToolset
 
     private static string DescribeMeasure(PowerBISchemaMeasure measure)
     {
-        var text = $"[{measure.Name}]";
+        var text = QuoteMember(measure.Name);
 
         var description = measure.UserDescription ?? measure.Description;
         if (!string.IsNullOrWhiteSpace(description))
@@ -615,6 +620,11 @@ public class PowerBIToolset
 
         return text;
     }
+
+    // Escape DAX: aspa simples dobra dentro de 'Tabela'; colchete de fechamento dobra dentro de [Coluna].
+    private static string QuoteTable(string name) => $"'{name.Replace("'", "''")}'";
+
+    private static string QuoteMember(string name) => $"[{name.Replace("]", "]]")}]";
 
     private string BuildCatalog() =>
         string.Join("\n", _datasets.Select(d =>

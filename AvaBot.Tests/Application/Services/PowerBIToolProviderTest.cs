@@ -189,6 +189,39 @@ public class PowerBIToolProviderTest
     }
 
     [Fact]
+    public async Task ExecuteAsync_ListSchema_ShouldRenderNamesAsDaxReferences()
+    {
+        // Arrange: "public ABIPESCA_COMTRADE" sem aspas levava o modelo a usar 'ABIPESCA_COMTRADE'
+        var schemaJson = PowerBISchema.Serialize(new PowerBISchema
+        {
+            Tables = new List<PowerBISchemaTable>
+            {
+                new()
+                {
+                    Name = "public ABIPESCA_COMTRADE",
+                    Columns = new List<PowerBISchemaColumn> { new() { Name = "Valor (US$)", DataType = "Number" } }
+                },
+                new()
+                {
+                    Name = "D'Agua",
+                    Measures = new List<PowerBISchemaMeasure> { new() { Name = "Total [kg]" } }
+                }
+            }
+        });
+        var toolset = await BuildToolset(Dataset(schemaJson: schemaJson));
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.ListSchemaToolName, "{\"dataset\":\"comercio\"}"), CancellationToken.None);
+
+        // Assert
+        Assert.Contains("Tabela 'public ABIPESCA_COMTRADE'", result);
+        Assert.Contains("[Valor (US$)] (Number)", result);
+        Assert.Contains("Tabela 'D''Agua'", result);
+        Assert.Contains("[Total [kg]]]", result);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ListSchema_ShouldReturnCompactTextAndLogSuccess()
     {
         // Arrange
@@ -200,8 +233,8 @@ public class PowerBIToolProviderTest
 
         // Assert
         Assert.Contains("Dataset: Comércio Internacional", result);
-        Assert.Contains("Tabela Exportacoes — exportações de pescado", result);
-        Assert.Contains("Data (DateTime) — use para período", result);
+        Assert.Contains("Tabela 'Exportacoes' — exportações de pescado", result);
+        Assert.Contains("[Data] (DateTime) — use para período", result);
         Assert.Contains("[Valor FOB (US$)] — valor em dólares", result);
 
         _queryLogRepoMock.Verify(r => r.CreateAsync(It.Is<PowerBIQueryLog>(l =>

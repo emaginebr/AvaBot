@@ -27,8 +27,9 @@ As tools só são enviadas quando `agent.PowerBIEnabled == true` e existe ao men
 **Resultado** (texto compacto, lido do `SchemaJson` salvo, sem chamar o Power BI):
 ```
 Dataset: Comércio Internacional
-Tabela Exportacoes — <userDescription>
-  Colunas: Data (DateTime) — use para filtros por período; Pais (String); Produto (String); Kg (Double)
+Nomes já no formato de referência DAX: copie-os exatamente, com aspas e colchetes.
+Tabela 'Exportacoes' — <userDescription>
+  Colunas: [Data] (DateTime) — use para filtros por período; [Pais] (String); [Produto] (String); [Kg] (Double)
   Medidas: [Valor FOB (US$)] — valor em dólares; [Peso (t)]
 Tabela ...
 ```
@@ -40,7 +41,7 @@ Tabela ...
   "type": "function",
   "function": {
     "name": "consultar_bi",
-    "description": "Executa uma consulta DAX somente leitura (deve começar com EVALUATE ou DEFINE) em um dataset do Power BI e retorna as linhas. Prefira agregações (SUMMARIZECOLUMNS) e TOPN; o resultado é limitado a 100 linhas.",
+    "description": "Executa uma consulta somente leitura escrita exclusivamente em DAX válido (deve começar com EVALUATE ou DEFINE; não use sintaxe SQL como LIMIT) em um dataset do Power BI e retorna as linhas. Use TOPN dentro da expressão DAX para limitar linhas. Prefira agregações (SUMMARIZECOLUMNS) e TOPN; o resultado é limitado a 100 linhas.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -80,8 +81,12 @@ Tabela ...
 ```
 DADOS DO POWER BI: Você tem acesso a ferramentas que consultam dados reais no Power BI.
 - Use as ferramentas quando a pergunta exigir números/dados; para outras perguntas use a base de conhecimento.
-- Se faltar informação necessária para a consulta (ex.: período, produto, indicador), PERGUNTE ao usuário antes de consultar. Não assuma valores padrão.
+- Para perguntas que exigem dados do BI, consulte o dataset apropriado; não responda usando apenas conhecimento geral ou a base de conhecimento.
+- Se faltar informação necessária para a consulta (ex.: período, produto, indicador, unidade ou escopo geográfico), PERGUNTE ao usuário antes de consultar. Não invente nem assuma valores padrão, inclusive o ano mais recente.
 - Antes da primeira consulta a um dataset, chame listar_schema.
+- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como LIMIT, OFFSET, FETCH, SELECT ou FROM.
+- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.
+- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema.
 - Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.
 - Se a consulta falhar, informe que não foi possível obter os dados no momento.
 - Responda em texto; pode usar listas destacando os principais valores. NÃO use tabelas. Se houver muitas linhas, resuma (totais, maiores e menores valores).
