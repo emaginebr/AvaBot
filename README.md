@@ -8,7 +8,7 @@
 
 ## Overview
 
-**Avachat** is a platform for creating AI-powered chatbot agents with custom knowledge bases. Each agent has its own personality (system prompt), knowledge documents, and can engage in real-time conversations via WebSocket using RAG (Retrieval-Augmented Generation) with hybrid search (kNN + BM25).
+**Avachat** is a platform for creating AI-powered chatbot agents with custom knowledge bases. Each agent has its own personality (system prompt), knowledge documents, and can engage in real-time conversations via WebSocket using RAG (Retrieval-Augmented Generation) with lexical (BM25) search in Elasticsearch.
 
 Built with **ASP.NET Core 9**, **Entity Framework Core**, **Elasticsearch** for vector/text search, and **OpenAI** for embeddings and chat completion. Follows **Clean Architecture** with separated Domain, Application, Infrastructure, and API layers.
 
@@ -24,7 +24,7 @@ This repository now unifies both the backend (.NET, at the repo root) and the fr
 
 - 🤖 **Multi-Agent Support** - Create unlimited agents with custom system prompts and knowledge bases
 - 📚 **RAG Pipeline** - Upload `.md` documents, auto-chunked and indexed with embeddings for retrieval
-- 🔍 **Hybrid Search** - kNN vector search + BM25 text search via Elasticsearch
+- 🔍 **Text Search** - BM25 keyword search via Elasticsearch, with no embedding call at query time
 - 💬 **Real-Time Chat** - WebSocket streaming with token-by-token response delivery
 - 🔄 **Auto Slug Generation** - Agent slugs generated from name with accent handling and uniqueness
 - 📋 **Session Management** - REST endpoint to start sessions with user data collection

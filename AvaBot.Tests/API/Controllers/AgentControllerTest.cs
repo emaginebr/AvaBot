@@ -32,7 +32,7 @@ public class AgentControllerTest
         var esServiceMock = new Mock<IElasticsearchService>();
         var openAIMock = new Mock<IOpenAIService>();
         _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, new Mock<ISecretProtector>().Object, _mapper);
-        _searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
+        _searchService = new SearchService(esServiceMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var powerBIToolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,

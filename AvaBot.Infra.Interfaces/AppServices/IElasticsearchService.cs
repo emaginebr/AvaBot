@@ -6,7 +6,7 @@ public interface IElasticsearchService
     Task IndexChunksAsync(long agentId, long knowledgeFileId, List<ChunkData> chunks);
     Task DeleteChunksByFileIdAsync(long knowledgeFileId);
     Task DeleteChunksByAgentIdAsync(long agentId);
-    Task<List<string>> HybridSearchAsync(long agentId, float[] queryVector, string queryText, int topK = 5);
+    Task<List<string>> TextSearchAsync(long agentId, string queryText, int topK = 5);
 }
 
 public class ChunkData
