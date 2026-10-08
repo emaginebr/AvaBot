@@ -39,7 +39,7 @@ public class SessionControllerTest
 
         var esServiceMock = new Mock<IElasticsearchService>();
         var openAIMock = new Mock<IOpenAIService>();
-        var searchService = new SearchService(esServiceMock.Object, openAIMock.Object);
+        var searchService = new SearchService(esServiceMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var powerBIToolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,

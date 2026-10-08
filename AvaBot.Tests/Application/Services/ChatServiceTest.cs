@@ -34,7 +34,7 @@ public class ChatServiceTest
     {
         _esServiceMock = new Mock<IElasticsearchService>();
         _openAIServiceMock = new Mock<IOpenAIService>();
-        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object, _openAIServiceMock.Object);
+        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object);
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
         _agentRepoMock = new Mock<IAgentRepository<Agent>>();
@@ -187,7 +187,8 @@ public class ChatServiceTest
                 capturedAgentId = agentId;
                 capturedPrompt = systemPrompt;
                 Assert.Equal(2, tools.Count);
-                Assert.Equal(5, maxToolCalls);
+                // D3/014: o teto do loop precisa caber o orcamento BI (5) mais a leitura de schema (1).
+                Assert.Equal(6, maxToolCalls);
                 return NoTokens();
             });
 
@@ -213,7 +214,7 @@ public class ChatServiceTest
             .ReturnsAsync(new List<ChatMessage>());
         _messageRepoMock.Setup(r => r.CreateAsync(It.IsAny<ChatMessage>()))
             .ReturnsAsync((ChatMessage m) => m);
-        _esServiceMock.Setup(e => e.HybridSearchAsync(AgentId, It.IsAny<float[]>(), It.IsAny<string>(), It.IsAny<int>()))
+        _esServiceMock.Setup(e => e.TextSearchAsync(AgentId, It.IsAny<string>(), It.IsAny<int>()))
             .ReturnsAsync(new List<string>());
     }
 

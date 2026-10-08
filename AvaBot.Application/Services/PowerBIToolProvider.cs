@@ -83,11 +83,19 @@ public class PowerBIToolProvider
             _queryLogRepository,
             GetInt("PowerBI:MaxRows", 100),
             GetInt("PowerBI:QueryTimeoutSeconds", 30),
+            GetPositiveInt("PowerBI:MaxQueryAttempts", PowerBIToolset.DefaultMaxQueryAttempts),
             _logger);
     }
 
     private int GetInt(string key, int fallback) =>
         int.TryParse(_configuration[key], out var value) ? value : fallback;
+
+    // Ausente, nao numerico, zero ou negativo: cai no padrao (data-model.md, validade da chave).
+    private int GetPositiveInt(string key, int fallback)
+    {
+        var value = GetInt(key, fallback);
+        return value > 0 ? value : fallback;
+    }
 }
 
 public class PowerBIToolset
@@ -95,7 +103,15 @@ public class PowerBIToolset
     public const string ListSchemaToolName = "listar_schema";
     public const string QueryToolName = "consultar_bi";
 
-    private const int ResultPreviewLength = 2000;
+    // Categorias de contracts/powerbi-query-error.md.
+    public const string CategoryDaxQuery = "dax_query";
+    public const string CategoryTransientService = "transient_service";
+    public const string CategoryAuthOrPermission = "authentication_or_permission";
+    public const string CategoryAttemptLimit = "attempt_limit";
+
+    public const int DefaultMaxQueryAttempts = 5;
+    private static readonly TimeSpan BackoffBase = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan BackoffCeiling = TimeSpan.FromSeconds(30);
 
     private const string DatasetPermissionMessage =
         "Credenciais válidas, mas o aplicativo não tem permissão para consultar este dataset. " +
@@ -113,7 +129,9 @@ public class PowerBIToolset
         "- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.\n" +
         "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema.\n" +
         "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.\n" +
-        "- Se a consulta falhar, informe que não foi possível obter os dados no momento.\n" +
+        "- Se consultar_bi devolver erro com queryMayBeCorrected true, use message, errorCode e responseBody do diagnóstico para corrigir a DAX e tentar de novo, usando apenas tabelas, colunas e medidas do schema. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
+        "- Se queryMayBeCorrected for false (autenticação, permissão ou limite de tentativas esgotado), NÃO reenvie a consulta: informe que não foi possível obter os dados no momento.\n" +
+        "- Falhas temporárias já foram repetidas automaticamente; você não precisa insistir nelas.\n" +
         "- Responda em texto; pode usar listas destacando os principais valores. NÃO use tabelas. Se houver muitas linhas, resuma (totais, maiores e menores valores).";
 
     private readonly Agent _agent;
@@ -126,6 +144,10 @@ public class PowerBIToolset
     private readonly int _maxRows;
     private readonly int _queryTimeoutSeconds;
     private readonly ILogger _logger;
+    private readonly Random _jitter = new();
+
+    // Orcamento por mensagem: execucoes reais de consultar_bi (inicial + replays + DAX corrigida).
+    private int _queryAttempts;
 
     internal PowerBIToolset(
         Agent agent,
@@ -137,6 +159,7 @@ public class PowerBIToolset
         IPowerBIQueryLogRepository<PowerBIQueryLog> queryLogRepository,
         int maxRows,
         int queryTimeoutSeconds,
+        int maxQueryAttempts,
         ILogger logger)
     {
         _agent = agent;
@@ -148,6 +171,7 @@ public class PowerBIToolset
         _queryLogRepository = queryLogRepository;
         _maxRows = maxRows;
         _queryTimeoutSeconds = queryTimeoutSeconds;
+        MaxQueryAttempts = maxQueryAttempts > 0 ? maxQueryAttempts : DefaultMaxQueryAttempts;
         _logger = logger;
 
         var datasetEnum = BuildDatasetEnum();
@@ -176,6 +200,12 @@ public class PowerBIToolset
     }
 
     public IReadOnlyList<ChatToolDefinition> Definitions { get; }
+
+    /// <summary>Limite de execucoes de consultar_bi por mensagem; ChatService usa isso para dimensionar o loop de tools.</summary>
+    public int MaxQueryAttempts { get; }
+
+    /// <summary>Chamadas de tool que o loop OpenAI precisa permitir: o orcamento BI mais a leitura auxiliar de schema.</summary>
+    public int ModelToolCallBudget => MaxQueryAttempts + 1;
 
     public string SystemPromptAddendum => PromptAddendum;
 
@@ -231,7 +261,7 @@ public class PowerBIToolset
             DurationMs = 0,
             RowCount = schema.Tables.Count,
             Success = true,
-            ResultPreview = Truncate(text, ResultPreviewLength)
+            ResultPreview = text
         });
 
         return text;
@@ -242,78 +272,191 @@ public class PowerBIToolset
         var dataset = ResolveDataset(argumentsJson, out var resolveError);
 
         if (dataset == null)
-            return await FailAsync(null, QueryToolName, null, resolveError!, cancellationToken);
+            return await FailLocalQueryAsync(null, null, resolveError!);
 
         var dax = ReadDaxArgument(argumentsJson);
 
         if (string.IsNullOrWhiteSpace(dax) || !StartsWithQueryKeyword(dax))
         {
-            return await FailAsync(dataset, QueryToolName, dax,
-                "A consulta DAX deve começar com EVALUATE ou DEFINE.", cancellationToken);
+            return await FailLocalQueryAsync(dataset, dax,
+                "A consulta DAX deve começar com EVALUATE ou DEFINE. Não use sintaxe SQL (SELECT, FROM, LIMIT); " +
+                "para limitar linhas use TOPN dentro da expressão DAX.");
         }
 
-        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutSource.CancelAfter(TimeSpan.FromSeconds(_queryTimeoutSeconds));
+        QueryFailure? lastFailure = null;
 
-        var stopwatch = Stopwatch.StartNew();
-
-        try
+        // D3: o orcamento conta execucoes reais de consultar_bi (inicial, replays e DAX corrigida).
+        while (_queryAttempts < MaxQueryAttempts)
         {
-            var queryResult = await _powerBIClient.ExecuteQueryAsync(
-                _credentials, dataset.WorkspaceId, dataset.DatasetId, dax, timeoutSource.Token);
+            _queryAttempts++;
 
-            stopwatch.Stop();
+            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutSource.CancelAfter(TimeSpan.FromSeconds(_queryTimeoutSeconds));
 
-            var rows = queryResult.Rows;
-            var truncated = rows.Count > _maxRows;
+            var stopwatch = Stopwatch.StartNew();
 
-            if (truncated)
-                rows = rows.GetRange(0, _maxRows);
-
-            var json = JsonSerializer.Serialize(new
+            try
             {
-                columns = queryResult.Columns,
-                rows,
-                rowCount = rows.Count,
-                truncated
-            });
+                var queryResult = await _powerBIClient.ExecuteQueryAsync(
+                    _credentials, dataset.WorkspaceId, dataset.DatasetId, dax, timeoutSource.Token);
 
-            await WriteLogAsync(dataset, QueryToolName, dax, (int)stopwatch.ElapsedMilliseconds,
-                PowerBIQueryStatus.Success, null, rows.Count, truncated);
-
-            ExecutedQueries.Add(new AgentTestPowerBIQueryInfo
+                stopwatch.Stop();
+                return await CompleteQueryAsync(dataset, dax, queryResult, (int)stopwatch.ElapsedMilliseconds);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                ToolName = QueryToolName,
-                DatasetName = dataset.Name,
-                Query = dax,
-                DurationMs = (int)stopwatch.ElapsedMilliseconds,
-                RowCount = rows.Count,
-                Truncated = truncated,
-                Success = true,
-                ResultPreview = Truncate(json, ResultPreviewLength)
-            });
+                // Cancelamento do usuario nao e falha transitaria: nao gera nova tentativa (plan:2).
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                stopwatch.Stop();
+                lastFailure = QueryFailure.OfTimeout((int)stopwatch.ElapsedMilliseconds,
+                    $"A consulta excedeu {_queryTimeoutSeconds} segundos.");
+            }
+            catch (PowerBIApiException ex)
+            {
+                stopwatch.Stop();
+                lastFailure = Classify(ex, (int)stopwatch.ElapsedMilliseconds);
+            }
 
-            return json;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            stopwatch.Stop();
-            return await FailAsync(dataset, QueryToolName, dax,
-                $"A consulta excedeu {_queryTimeoutSeconds} segundos.",
-                CancellationToken.None, PowerBIQueryStatus.Timeout, (int)stopwatch.ElapsedMilliseconds);
-        }
-        catch (PowerBIApiException ex)
-        {
-            stopwatch.Stop();
-            var message = IsPermissionError(ex) ? DatasetPermissionMessage : ex.Message;
+            // Cada requisicao que falha tem registro proprio, inclusive os replays transitarios.
+            await RecordFailureAsync(dataset, dax, lastFailure);
 
-            return await FailAsync(dataset, QueryToolName, dax, message,
-                CancellationToken.None, PowerBIQueryStatus.Error, (int)stopwatch.ElapsedMilliseconds);
+            if (!lastFailure.Transient)
+                return QueryErrorJson(lastFailure, CanModelCorrect(lastFailure));
+
+            if (_queryAttempts >= MaxQueryAttempts)
+                break;
+
+            await Task.Delay(NextDelay(lastFailure.RetryAfter), cancellationToken);
         }
+
+        // Sem orcamento: nenhuma outra requisicao e enviada ao Power BI, e o modelo nao e convidado a corrigir.
+        var limitFailure = lastFailure ?? QueryFailure.OfLimitReached(
+            $"O limite de {MaxQueryAttempts} execucoes da consulta foi atingido; nenhuma nova requisicao foi enviada.");
+
+        return QueryErrorJson(limitFailure with { Category = CategoryAttemptLimit }, queryMayBeCorrected: false);
+    }
+
+    private async Task<string> CompleteQueryAsync(
+        PowerBIDataset dataset, string dax, PowerBIQueryResult queryResult, int durationMs)
+    {
+        var rows = queryResult.Rows;
+        var truncated = rows.Count > _maxRows;
+
+        if (truncated)
+            rows = rows.GetRange(0, _maxRows);
+
+        var json = JsonSerializer.Serialize(new
+        {
+            columns = queryResult.Columns,
+            rows,
+            rowCount = rows.Count,
+            truncated
+        });
+
+        await WriteLogAsync(dataset, QueryToolName, dax, durationMs,
+            PowerBIQueryStatus.Success, null, rows.Count, truncated);
+
+        ExecutedQueries.Add(new AgentTestPowerBIQueryInfo
+        {
+            ToolName = QueryToolName,
+            DatasetName = dataset.Name,
+            Query = dax,
+            DurationMs = durationMs,
+            RowCount = rows.Count,
+            Truncated = truncated,
+            Success = true,
+            ResultPreview = json
+        });
+
+        return json;
+    }
+
+    private static QueryFailure Classify(PowerBIApiException ex, int durationMs)
+    {
+        var transient = ex.StatusCode is 429 or 0 || ex.StatusCode >= 500;
+
+        if (IsPermissionError(ex))
+        {
+            return QueryFailure.Of(CategoryAuthOrPermission, PowerBIQueryStatus.Error, durationMs,
+                DatasetPermissionMessage, ex.StatusCode, ex.ErrorCode, ex.ResponseBody, null, transient: false);
+        }
+
+        if (transient)
+        {
+            return QueryFailure.Of(CategoryTransientService,
+                ex.StatusCode == 0 ? PowerBIQueryStatus.Timeout : PowerBIQueryStatus.Error,
+                durationMs, ex.Message, ex.StatusCode == 0 ? null : ex.StatusCode, ex.ErrorCode,
+                ex.ResponseBody, ex.RetryAfter, transient: true);
+        }
+
+        return QueryFailure.Of(CategoryDaxQuery, PowerBIQueryStatus.Error, durationMs,
+            ex.Message, ex.StatusCode, ex.ErrorCode, ex.ResponseBody, null, transient: false);
+    }
+
+    private static bool CanModelCorrect(QueryFailure failure) =>
+        failure.Category == CategoryDaxQuery;
+
+    private async Task<string> FailLocalQueryAsync(
+        PowerBIDataset? dataset, string? dax, string message)
+    {
+        var failure = QueryFailure.Of(CategoryDaxQuery, PowerBIQueryStatus.Error, 0,
+            message, null, null, null, null, transient: false);
+
+        // Rejeicao local nao enviou requisicao: nao consome orcamento, mas fica no historico.
+        await RecordFailureAsync(dataset, dax, failure);
+
+        return QueryErrorJson(failure, queryMayBeCorrected: true);
+    }
+
+    private async Task RecordFailureAsync(PowerBIDataset? dataset, string? dax, QueryFailure failure)
+    {
+        var diagnostic = BuildDiagnostic(failure, queryMayBeCorrected: CanModelCorrect(failure));
+
+        await WriteLogAsync(dataset, QueryToolName, dax, failure.DurationMs,
+            failure.Status, JsonSerializer.Serialize(diagnostic), null, false);
+
+        ExecutedQueries.Add(new AgentTestPowerBIQueryInfo
+        {
+            ToolName = QueryToolName,
+            DatasetName = dataset?.Name,
+            Query = dax,
+            DurationMs = failure.DurationMs,
+            Success = false,
+            Error = failure.Diagnosis
+        });
+    }
+
+    private object BuildDiagnostic(QueryFailure failure, bool queryMayBeCorrected) => new
+    {
+        category = failure.Category,
+        statusCode = failure.StatusCode,
+        errorCode = failure.ErrorCode,
+        // O corpo integral so e exposto depois da redacao: o cliente ja limpa, mas o
+        // executor e a ultima barreira antes do modelo e do historico (FR-027).
+        message = Sanitize(failure.Diagnosis),
+        responseBody = failure.ResponseBody == null ? null : Sanitize(failure.ResponseBody),
+        attemptNumber = _queryAttempts,
+        maxAttempts = MaxQueryAttempts,
+        queryMayBeCorrected
+    };
+
+    private string QueryErrorJson(QueryFailure failure, bool queryMayBeCorrected) =>
+        JsonSerializer.Serialize(new { error = BuildDiagnostic(failure, queryMayBeCorrected) });
+
+    private TimeSpan NextDelay(TimeSpan? retryAfter)
+    {
+        // 429: respeita o tempo indicado pelo servico. 5xx/rede: exponencial com jitter e teto de 30s.
+        if (retryAfter.HasValue)
+            return retryAfter.Value > TimeSpan.Zero ? retryAfter.Value : TimeSpan.Zero;
+
+        var steps = Math.Max(0, _queryAttempts - 1);
+        var ceiling = BackoffBase * Math.Pow(2, Math.Min(steps, 10));
+        var capped = ceiling > BackoffCeiling ? BackoffCeiling : ceiling;
+
+        return TimeSpan.FromMilliseconds(capped.TotalMilliseconds * (0.5 + _jitter.NextDouble() * 0.5));
     }
 
     private async Task<string> FailAsync(
@@ -334,7 +477,7 @@ public class PowerBIToolset
             Query = query,
             DurationMs = durationMs,
             Success = false,
-            Error = Truncate(message, 2000)
+            Error = message
         });
 
         return ErrorJson(Sanitize(message));
@@ -485,12 +628,12 @@ public class PowerBIToolset
 
     private string Sanitize(string message)
     {
-        // FR-027: nem o segredo nem outra credencial podem chegar ao modelo ou ao historico.
-        var sanitized = string.IsNullOrEmpty(_credentials.ClientSecret)
-            ? message
-            : message.Replace(_credentials.ClientSecret, "[redacted]");
+        // FR-027: o segredo nao chega ao modelo nem ao historico. Sem truncamento (T007):
+        // a mensagem integral e o requisito do diagnostico.
+        if (string.IsNullOrEmpty(_credentials.ClientSecret))
+            return message;
 
-        return sanitized.Length > 2000 ? sanitized[..2000] : sanitized;
+        return message.Replace(_credentials.ClientSecret, "[redacted]");
     }
 
     private static string? Truncate(string? value, int maxLength)
@@ -499,6 +642,32 @@ public class PowerBIToolset
             return value;
 
         return value[..maxLength];
+    }
+
+    // Uma falha de consulta ja classificada, com tudo que o diagnostico precisa carregar.
+    private sealed record QueryFailure(
+        string Category,
+        PowerBIQueryStatus Status,
+        int DurationMs,
+        string Diagnosis,
+        int? StatusCode,
+        string? ErrorCode,
+        string? ResponseBody,
+        TimeSpan? RetryAfter,
+        bool Transient)
+    {
+        public static QueryFailure Of(
+            string category, PowerBIQueryStatus status, int durationMs, string diagnosis,
+            int? statusCode, string? errorCode, string? responseBody, TimeSpan? retryAfter, bool transient)
+            => new(category, status, durationMs, diagnosis, statusCode, errorCode, responseBody, retryAfter, transient);
+
+        public static QueryFailure OfTimeout(int durationMs, string diagnosis)
+            => new(CategoryTransientService, PowerBIQueryStatus.Timeout, durationMs, diagnosis,
+                null, null, null, null, Transient: true);
+
+        public static QueryFailure OfLimitReached(string diagnosis)
+            => new(CategoryAttemptLimit, PowerBIQueryStatus.Error, 0, diagnosis,
+                null, null, null, null, Transient: false);
     }
 
     private async Task WriteLogAsync(
@@ -538,7 +707,7 @@ public class PowerBIToolset
                 RowCount = rowCount,
                 Truncated = truncated,
                 Status = status,
-                ErrorMessage = errorMessage == null ? null : Truncate(Sanitize(errorMessage), 2000)
+                ErrorMessage = errorMessage == null ? null : Sanitize(errorMessage)
             });
         }
         catch (Exception ex)

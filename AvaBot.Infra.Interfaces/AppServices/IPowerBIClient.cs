@@ -28,13 +28,28 @@ public class PowerBIQueryResult
 
 public class PowerBIApiException : Exception
 {
+    /// <summary>Status HTTP; 0 quando a falha e de transporte e nao houve resposta.</summary>
     public int StatusCode { get; }
+
     public string? ErrorCode { get; }
 
-    public PowerBIApiException(int statusCode, string? errorCode, string message) : base(message)
+    /// <summary>Corpo original integral (segredos conhecidos ja redigidos) para nao perder estrutura nao interpretada.</summary>
+    public string? ResponseBody { get; }
+
+    /// <summary>Valor do header Retry-After quando o servico indicou quando voltar.</summary>
+    public TimeSpan? RetryAfter { get; }
+
+    public PowerBIApiException(
+        int statusCode,
+        string? errorCode,
+        string message,
+        string? responseBody = null,
+        TimeSpan? retryAfter = null) : base(message)
     {
         StatusCode = statusCode;
         ErrorCode = errorCode;
+        ResponseBody = responseBody;
+        RetryAfter = retryAfter;
     }
 }
 

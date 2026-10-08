@@ -213,7 +213,7 @@ public class AvaBotContext : DbContext
             entity.Property(e => e.RowCount).HasColumnName("row_count");
             entity.Property(e => e.Truncated).HasColumnName("truncated").HasDefaultValue(false).IsRequired();
             entity.Property(e => e.Status).HasColumnName("status").IsRequired();
-            entity.Property(e => e.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
+            entity.Property(e => e.ErrorMessage).HasColumnName("error_message").HasColumnType("text");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
             entity.HasIndex(e => new { e.AgentId, e.CreatedAt })
                 .IsDescending(false, true)
