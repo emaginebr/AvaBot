@@ -9,6 +9,7 @@ const AgentFormPage = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [initialData, setInitialData] = useState<AgentInsertInfo | undefined>()
+  const [hasSavedOpenAIApiKey, setHasSavedOpenAIApiKey] = useState(false)
   const [loading, setLoading] = useState(false)
   const isEditing = Boolean(id)
 
@@ -28,7 +29,12 @@ const AgentFormPage = () => {
               chatModel: agent.chatModel || 'gpt-4o',
               telegramBotName: agent.telegramBotName,
               telegramBotToken: agent.telegramBotToken,
+              // A chave salva nunca volta para o cliente: o campo comeca vazio e
+              // deixar em branco preserva o que esta no banco.
+              openAIApiKey: null,
+              removeOpenAIApiKey: false,
             })
+            setHasSavedOpenAIApiKey(agent.hasOpenAIApiKey)
           } else {
             toast.error('Agente não encontrado')
           }
@@ -76,6 +82,8 @@ const AgentFormPage = () => {
         initialData={initialData}
         onSubmit={handleSubmit}
         loading={loading}
+        agentId={isEditing ? Number(id) : undefined}
+        hasSavedOpenAIApiKey={hasSavedOpenAIApiKey}
       />
     </div>
   )

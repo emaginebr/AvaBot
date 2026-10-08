@@ -150,7 +150,7 @@ public class ChatServiceTest
 
         _openAIServiceMock
             .Setup(o => o.StreamChatCompletionAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()))
+                AgentId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()))
             .Returns(NoTokens);
 
         // Act
@@ -158,9 +158,9 @@ public class ChatServiceTest
 
         // Assert (SC-005: sem a flag, o caminho executado e o atual)
         _openAIServiceMock.Verify(o => o.StreamChatCompletionAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Once);
+            AgentId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Once);
         _openAIServiceMock.Verify(o => o.StreamChatCompletionWithToolsAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
+            It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
             It.IsAny<IReadOnlyList<ChatToolDefinition>>(), It.IsAny<Func<ChatToolCall, CancellationToken, Task<string>>>(),
             It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -173,16 +173,18 @@ public class ChatServiceTest
         ArrangeAgentWithUsableDataset();
 
         string? capturedPrompt = null;
+        long capturedAgentId = 0;
 
         _openAIServiceMock
             .Setup(o => o.StreamChatCompletionWithToolsAsync(
-                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
+                AgentId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(),
                 It.IsAny<IReadOnlyList<ChatToolDefinition>>(), It.IsAny<Func<ChatToolCall, CancellationToken, Task<string>>>(),
                 It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns((string model, string systemPrompt, List<ChatCompletionMessage> messages,
+            .Returns((long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages,
                 IReadOnlyList<ChatToolDefinition> tools, Func<ChatToolCall, CancellationToken, Task<string>> executor,
                 int maxToolCalls, CancellationToken token) =>
             {
+                capturedAgentId = agentId;
                 capturedPrompt = systemPrompt;
                 Assert.Equal(2, tools.Count);
                 Assert.Equal(5, maxToolCalls);
@@ -194,7 +196,9 @@ public class ChatServiceTest
 
         // Assert
         _openAIServiceMock.Verify(o => o.StreamChatCompletionAsync(
-            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<ChatCompletionMessage>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        Assert.Equal(AgentId, capturedAgentId);
 
         Assert.NotNull(capturedPrompt);
         Assert.Contains(PowerBIToolset.PromptAddendum, capturedPrompt);

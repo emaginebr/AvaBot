@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import OpenAIConnectionDiagnosticModal from './OpenAIConnectionDiagnosticModal'
 import type { AgentInsertInfo } from '../../types/agent'
 
 interface AgentFormProps {
   initialData?: AgentInsertInfo
   onSubmit: (data: AgentInsertInfo) => Promise<void>
   loading: boolean
+  agentId?: number
+  hasSavedOpenAIApiKey?: boolean
 }
 
-const AgentForm = ({ initialData, onSubmit, loading }: AgentFormProps) => {
+const AgentForm = ({ initialData, onSubmit, loading, agentId, hasSavedOpenAIApiKey = false }: AgentFormProps) => {
   const navigate = useNavigate()
   const chatModels = [
     { value: 'gpt-5.4', label: 'GPT-5.4' },
@@ -34,7 +37,11 @@ const AgentForm = ({ initialData, onSubmit, loading }: AgentFormProps) => {
     chatModel: 'gpt-4o',
     telegramBotName: null,
     telegramBotToken: null,
+    openAIApiKey: null,
+    removeOpenAIApiKey: false,
   })
+  const [revealKey, setRevealKey] = useState(false)
+  const [diagnosing, setDiagnosing] = useState(false)
 
   useEffect(() => {
     if (initialData) setFormData(initialData)
@@ -131,6 +138,74 @@ const AgentForm = ({ initialData, onSubmit, loading }: AgentFormProps) => {
             Modelo utilizado para gerar as respostas do agente
           </p>
         </div>
+
+        <div className="mt-5 pt-5 border-t border-gray-100">
+          <label htmlFor="openAIApiKey" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Chave OpenAI
+          </label>
+          <div className="relative">
+            <input
+              id="openAIApiKey"
+              name="openAIApiKey"
+              type={revealKey ? 'text' : 'password'}
+              value={formData.openAIApiKey ?? ''}
+              onChange={handleChange}
+              autoComplete="new-password"
+              spellCheck={false}
+              placeholder={hasSavedOpenAIApiKey && !formData.removeOpenAIApiKey ? '••••••••••••' : 'sk-...'}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow font-mono text-sm pr-20"
+            />
+            {(formData.openAIApiKey ?? '') !== '' && (
+              <button
+                type="button"
+                onClick={() => setRevealKey(!revealKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded"
+              >
+                {revealKey ? 'Ocultar' : 'Mostrar'}
+              </button>
+            )}
+          </div>
+
+          {formData.removeOpenAIApiKey ? (
+            <p className="mt-1.5 text-xs text-red-600">
+              A chave salva será removida ao salvar. Sem chave, este agente não usa chat, busca semântica nem ingestão de arquivos.
+            </p>
+          ) : hasSavedOpenAIApiKey ? (
+            <p className="mt-1.5 text-xs text-gray-400">
+              Uma chave está salva e não é exibida aqui. Deixe o campo em branco para mantê-la.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-xs text-gray-400">
+              Cada agente usa a sua própria chave. Sem chave, os recursos de IA ficam indisponíveis para este agente.
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            {hasSavedOpenAIApiKey && (
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, removeOpenAIApiKey: !prev.removeOpenAIApiKey }))}
+                className={
+                  formData.removeOpenAIApiKey
+                    ? 'px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors'
+                    : 'px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors'
+                }
+              >
+                {formData.removeOpenAIApiKey ? 'Cancelar remoção' : 'Remover chave salva'}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setDiagnosing(true)}
+              disabled={!agentId}
+              title={!agentId ? 'Salve o agente antes de diagnosticar' : ''}
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Diagnóstico
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -190,6 +265,15 @@ const AgentForm = ({ initialData, onSubmit, loading }: AgentFormProps) => {
           Cancelar
         </button>
       </div>
+
+      {diagnosing && agentId && (
+        <OpenAIConnectionDiagnosticModal
+          agentId={agentId}
+          apiKey={formData.openAIApiKey}
+          hasSavedKey={hasSavedOpenAIApiKey && !formData.removeOpenAIApiKey}
+          onClose={() => setDiagnosing(false)}
+        />
+      )}
     </form>
   )
 }

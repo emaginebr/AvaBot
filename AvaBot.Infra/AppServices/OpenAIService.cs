@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -6,37 +7,70 @@ using Microsoft.Extensions.Configuration;
 using OpenAI;
 using OpenAI.Chat;
 using OpenAI.Embeddings;
+using AvaBot.Domain.Models;
 using AvaBot.Infra.Interfaces.AppServices;
+using AvaBot.Infra.Interfaces.Repository;
 using AvaChatToolCall = AvaBot.Infra.Interfaces.AppServices.ChatToolCall;
 
 namespace AvaBot.Infra.AppServices;
 
 public class OpenAIService : IOpenAIService
 {
-    private readonly OpenAIClient _client;
+    private readonly IAgentRepository<Agent> _agentRepository;
+    private readonly ISecretProtector _secretProtector;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _embeddingModel;
+    private readonly string _openAIBaseUrl;
 
-    public OpenAIService(IConfiguration configuration)
+    public OpenAIService(
+        IAgentRepository<Agent> agentRepository,
+        ISecretProtector secretProtector,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration)
     {
-        var apiKey = configuration["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI:ApiKey not configured");
+        _agentRepository = agentRepository;
+        _secretProtector = secretProtector;
+        _httpClientFactory = httpClientFactory;
         _embeddingModel = configuration["OpenAI:EmbeddingModel"] ?? "text-embedding-3-small";
-        _client = new OpenAIClient(apiKey);
+        _openAIBaseUrl = (configuration["OpenAI:BaseUrl"] ?? "https://api.openai.com/v1").TrimEnd('/');
     }
 
-    public async Task<float[]> GenerateEmbeddingAsync(string text)
+    // A credencial e resolvida por agente a cada operacao: nenhum cliente e
+    // guardado em campo, entao uma chave nunca fica viva em memoria alem da chamada (D3).
+    private async Task<OpenAIClient> ResolveClientAsync(long agentId)
     {
-        var embeddingClient = _client.GetEmbeddingClient(_embeddingModel);
+        var agent = await _agentRepository.GetByIdAsync(agentId)
+            ?? throw new InvalidOperationException("Agente nao encontrado para usar os recursos de IA.");
+
+        if (string.IsNullOrEmpty(agent.OpenAIApiKeyEncrypted))
+            throw new InvalidOperationException("Este agente ainda nao possui uma chave OpenAI configurada.");
+
+        var apiKey = _secretProtector.Unprotect(agent.OpenAIApiKeyEncrypted);
+        return new OpenAIClient(apiKey);
+    }
+
+    private async Task<ChatClient> ResolveChatClientAsync(long agentId, string model)
+    {
+        var client = await ResolveClientAsync(agentId);
+        return client.GetChatClient(model);
+    }
+
+    public async Task<float[]> GenerateEmbeddingAsync(long agentId, string text)
+    {
+        var client = await ResolveClientAsync(agentId);
+        var embeddingClient = client.GetEmbeddingClient(_embeddingModel);
         var result = await embeddingClient.GenerateEmbeddingAsync(text);
         return result.Value.ToFloats().ToArray();
     }
 
     public async Task<string> ChatCompletionAsync(
+        long agentId,
         string model,
         string systemPrompt,
         List<ChatCompletionMessage> messages,
         CancellationToken cancellationToken = default)
     {
-        var chatClient = _client.GetChatClient(model);
+        var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
 
         var result = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
@@ -44,12 +78,13 @@ public class OpenAIService : IOpenAIService
     }
 
     public async IAsyncEnumerable<string> StreamChatCompletionAsync(
+        long agentId,
         string model,
         string systemPrompt,
         List<ChatCompletionMessage> messages,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var chatClient = _client.GetChatClient(model);
+        var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
 
         var streamingResult = chatClient.CompleteChatStreamingAsync(chatMessages, cancellationToken: cancellationToken);
@@ -67,6 +102,7 @@ public class OpenAIService : IOpenAIService
     }
 
     public async IAsyncEnumerable<string> StreamChatCompletionWithToolsAsync(
+        long agentId,
         string model,
         string systemPrompt,
         List<ChatCompletionMessage> messages,
@@ -75,7 +111,7 @@ public class OpenAIService : IOpenAIService
         int maxToolCalls,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var chatClient = _client.GetChatClient(model);
+        var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
         var executedToolCalls = 0;
 
@@ -133,6 +169,7 @@ public class OpenAIService : IOpenAIService
     }
 
     public async Task<string> ChatCompletionWithToolsAsync(
+        long agentId,
         string model,
         string systemPrompt,
         List<ChatCompletionMessage> messages,
@@ -141,7 +178,7 @@ public class OpenAIService : IOpenAIService
         int maxToolCalls,
         CancellationToken cancellationToken = default)
     {
-        var chatClient = _client.GetChatClient(model);
+        var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
         var executedToolCalls = 0;
 
@@ -162,6 +199,68 @@ public class OpenAIService : IOpenAIService
                 var toolResult = await ExecuteToolAsync(toolExecutor, toolCall, cancellationToken);
                 chatMessages.Add(new ToolChatMessage(toolCall.Id, toolResult));
             }
+        }
+    }
+
+    // D4: listar modelos e uma operacao autenticada sem geracao de conteudo,
+    // entao o diagnostico confirma a chave sem gastar tokens.
+    public async Task<OpenAIAuthCheckResult> TestApiKeyAsync(string apiKey, CancellationToken cancellationToken = default)
+    {
+        var key = apiKey?.Trim() ?? string.Empty;
+
+        if (key.Length == 0)
+        {
+            return new OpenAIAuthCheckResult
+            {
+                Success = false,
+                Message = "Nenhuma chave informada. Digite a chave ou salve uma credencial para este agente."
+            };
+        }
+
+        var client = _httpClientFactory.CreateClient("OpenAI");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_openAIBaseUrl}/models");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+                return new OpenAIAuthCheckResult { Success = true, Message = "A chave autenticou com sucesso." };
+
+            // O corpo do provedor nao e lido: a mensagem nao pode ecoar nada da resposta externa.
+            return new OpenAIAuthCheckResult
+            {
+                Success = false,
+                Message = response.StatusCode switch
+                {
+                    HttpStatusCode.Unauthorized => "A OpenAI recusou a chave (401). Confirme o valor e se ela pertence a esta conta.",
+                    HttpStatusCode.Forbidden => "A chave autenticou, mas nao tem permissao para listar modelos (403).",
+                    HttpStatusCode.TooManyRequests => "A OpenAI limitou as requisicoes agora (429). Tente novamente em instantes.",
+                    _ => $"A OpenAI respondeu com status {(int)response.StatusCode}. A autenticacao nao foi confirmada."
+                }
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException)
+        {
+            return new OpenAIAuthCheckResult
+            {
+                Success = false,
+                Message = "Nao foi possivel falar com a OpenAI a partir deste servidor. Verifique a rede e o acesso a api.openai.com."
+            };
+        }
+        catch (TaskCanceledException)
+        {
+            return new OpenAIAuthCheckResult
+            {
+                Success = false,
+                Message = "A OpenAI nao respondeu dentro do tempo esperado. Tente novamente."
+            };
         }
     }
 

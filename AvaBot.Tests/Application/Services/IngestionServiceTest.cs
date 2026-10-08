@@ -50,7 +50,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         // Act
         await _sut.ProcessFileAsync(1);
@@ -97,7 +97,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f, 0.2f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f, 0.2f });
 
         await _sut.ProcessFileAsync(5);
 
@@ -120,7 +120,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.5f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.5f });
 
         List<ChunkData>? capturedChunks = null;
         _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
@@ -144,7 +144,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(embedding);
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(embedding);
 
         List<ChunkData>? capturedChunks = null;
         _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
@@ -167,7 +167,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         List<ChunkData>? capturedChunks = null;
         _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
@@ -194,11 +194,11 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         await _sut.ProcessFileAsync(1);
 
-        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<string>()), Times.Exactly(expectedChunks.Count));
+        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()), Times.Exactly(expectedChunks.Count));
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         _esServiceMock.Setup(s => s.DeleteChunksByFileIdAsync(1))
             .Callback(() => callOrder.Add("delete"));
@@ -236,7 +236,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(42)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         await _sut.ProcessFileAsync(42);
 
@@ -256,7 +256,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         await _sut.ProcessFileAsync(7);
 
@@ -291,7 +291,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
         _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .ThrowsAsync(new Exception("Index failed"));
 
@@ -314,13 +314,13 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
+        _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         await _sut.ProcessFileAsync(1);
 
         _esServiceMock.Verify(s => s.IndexChunksAsync(10, 1,
             It.Is<List<ChunkData>>(list => list.Count == expectedChunks.Count)), Times.Once);
-        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<string>()), Times.Exactly(expectedChunks.Count));
+        _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()), Times.Exactly(expectedChunks.Count));
         Assert.Equal(ProcessingStatus.Ready, file.ProcessingStatus);
     }
 

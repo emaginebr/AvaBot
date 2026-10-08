@@ -15,7 +15,7 @@ public class SearchService
 
     public async Task<List<string>> SearchAsync(long agentId, string query, int topK = 5)
     {
-        var queryVector = await _openAIService.GenerateEmbeddingAsync(query);
+        var queryVector = await _openAIService.GenerateEmbeddingAsync(agentId, query);
         return await _esService.HybridSearchAsync(agentId, queryVector, query, topK);
     }
 }

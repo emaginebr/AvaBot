@@ -22,6 +22,9 @@ public class AgentInfo
     [JsonPropertyName("chatModel")]
     public string ChatModel { get; set; } = string.Empty;
 
+    [JsonPropertyName("hasOpenAIApiKey")]
+    public bool HasOpenAIApiKey { get; set; }
+
     [JsonPropertyName("status")]
     public int Status { get; set; }
 
@@ -84,6 +87,14 @@ public class AgentInsertInfo
 
     [JsonPropertyName("telegramBotToken")]
     public string? TelegramBotToken { get; set; }
+
+    /// <summary>Chave nova em texto claro, aceita apenas na requisição. Nulo/vazio preserva a chave salva.</summary>
+    [JsonPropertyName("openAIApiKey")]
+    public string? OpenAIApiKey { get; set; }
+
+    /// <summary>Remoção explícita da credencial salva. Incompatível com openAIApiKey preenchida.</summary>
+    [JsonPropertyName("removeOpenAIApiKey")]
+    public bool RemoveOpenAIApiKey { get; set; }
 }
 
 public class TelegramWebhookInfo
@@ -174,6 +185,22 @@ public class WhatsappStatusInfo
 
     [JsonPropertyName("isConnected")]
     public bool IsConnected { get; set; }
+}
+
+public class AgentOpenAIDiagnoseInfo
+{
+    /// <summary>Chave atual do formulario. Opcional: vazio usa a credencial salva do agente.</summary>
+    [JsonPropertyName("apiKey")]
+    public string? ApiKey { get; set; }
+}
+
+public class AgentOpenAIDiagnoseResultInfo
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("message")]
+    public string Message { get; set; } = string.Empty;
 }
 
 public class Result<T>

@@ -22,7 +22,7 @@ public class AgentServiceTest
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
-        _sut = new AgentService(_repositoryMock.Object, new Mock<IElasticsearchService>().Object, _mapper);
+        _sut = new AgentService(_repositoryMock.Object, new Mock<IElasticsearchService>().Object, new Mock<ISecretProtector>().Object, _mapper);
     }
 
     [Fact]

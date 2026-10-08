@@ -13,12 +13,18 @@ public class AgentService
 {
     private readonly IAgentRepository<Agent> _repository;
     private readonly IElasticsearchService _esService;
+    private readonly ISecretProtector _secretProtector;
     private readonly IMapper _mapper;
 
-    public AgentService(IAgentRepository<Agent> repository, IElasticsearchService esService, IMapper mapper)
+    public AgentService(
+        IAgentRepository<Agent> repository,
+        IElasticsearchService esService,
+        ISecretProtector secretProtector,
+        IMapper mapper)
     {
         _repository = repository;
         _esService = esService;
+        _secretProtector = secretProtector;
         _mapper = mapper;
     }
 
@@ -48,6 +54,8 @@ public class AgentService
         if (!string.IsNullOrEmpty(info.TelegramBotToken))
             agent.TelegramWebhookSecret = TelegramService.GenerateWebhookSecret();
 
+        ApplyOpenAIApiKey(agent, info);
+
         return await _repository.CreateAsync(agent);
     }
 
@@ -68,7 +76,40 @@ public class AgentService
         if (!string.IsNullOrEmpty(info.TelegramBotToken) && !hadToken)
             agent.TelegramWebhookSecret = TelegramService.GenerateWebhookSecret();
 
+        ApplyOpenAIApiKey(agent, info);
+
         return await _repository.UpdateAsync(agent);
+    }
+
+    // FR: campo em branco preserva a credencial salva; remocao e sempre explicita (D2).
+    private void ApplyOpenAIApiKey(Agent agent, AgentInsertInfo info)
+    {
+        var newKey = info.OpenAIApiKey?.Trim();
+        var hasNewKey = !string.IsNullOrEmpty(newKey);
+
+        if (info.RemoveOpenAIApiKey && hasNewKey)
+            throw new InvalidOperationException("Envie a nova chave ou a remocao, nao os dois");
+
+        if (info.RemoveOpenAIApiKey)
+        {
+            agent.OpenAIApiKeyEncrypted = null;
+            return;
+        }
+
+        if (hasNewKey)
+            agent.OpenAIApiKeyEncrypted = _secretProtector.Protect(newKey!);
+    }
+
+    /// <summary>Resolve a credencial salva do agente em texto claro. Somente para uso interno (diagnostico).</summary>
+    public async Task<string> GetOpenAIApiKeyAsync(long agentId)
+    {
+        var agent = await _repository.GetByIdAsync(agentId)
+            ?? throw new KeyNotFoundException($"Agente com ID {agentId} nao encontrado");
+
+        if (string.IsNullOrEmpty(agent.OpenAIApiKeyEncrypted))
+            throw new InvalidOperationException("Este agente ainda nao tem uma chave OpenAI salva");
+
+        return _secretProtector.Unprotect(agent.OpenAIApiKeyEncrypted);
     }
 
     private async Task ValidateTelegramBotTokenAsync(string? token, long? excludeId = null)

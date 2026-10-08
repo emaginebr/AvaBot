@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using AvaBot.DTO;
 using AvaBot.Domain.Models;
 using AvaBot.Application.Services;
+using AvaBot.Infra.Interfaces.AppServices;
 
 namespace AvaBot.API.Controllers;
 
@@ -15,13 +16,20 @@ public class AgentController : ControllerBase
     private readonly AgentService _agentService;
     private readonly SearchService _searchService;
     private readonly ChatService _chatService;
+    private readonly IOpenAIService _openAIService;
     private readonly IMapper _mapper;
 
-    public AgentController(AgentService agentService, SearchService searchService, ChatService chatService, IMapper mapper)
+    public AgentController(
+        AgentService agentService,
+        SearchService searchService,
+        ChatService chatService,
+        IOpenAIService openAIService,
+        IMapper mapper)
     {
         _agentService = agentService;
         _searchService = searchService;
         _chatService = chatService;
+        _openAIService = openAIService;
         _mapper = mapper;
     }
 
@@ -88,6 +96,10 @@ public class AgentController : ControllerBase
             var agent = await _agentService.CreateAsync(info);
             return Created($"/agents/{agent.Slug}", Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente criado com sucesso"));
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
+        }
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -104,6 +116,10 @@ public class AgentController : ControllerBase
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
             return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente atualizado com sucesso"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
         }
         catch (Exception ex)
         {
@@ -176,6 +192,36 @@ public class AgentController : ControllerBase
 
             var result = await _chatService.TestMessageAsync(id, agent.ChatModel, agent.SystemPrompt, info.Query);
             return Ok(Result<AgentTestResultInfo>.Success(result));
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, Result<object>.Failure(ex.Message));
+        }
+    }
+
+    [HttpPost("{id:long}/openai/diagnose")]
+    public async Task<IActionResult> DiagnoseOpenAI(long id, [FromBody] AgentOpenAIDiagnoseInfo? info)
+    {
+        try
+        {
+            var agent = await _agentService.GetByIdAsync(id);
+            if (agent == null)
+                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+
+            // Sem chave no corpo, usa a credencial salva (e falha com orientacao se nao houver).
+            var apiKey = !string.IsNullOrWhiteSpace(info?.ApiKey)
+                ? info!.ApiKey!.Trim()
+                : await _agentService.GetOpenAIApiKeyAsync(id);
+
+            var check = await _openAIService.TestApiKeyAsync(apiKey);
+
+            return Ok(Result<AgentOpenAIDiagnoseResultInfo>.Success(
+                new AgentOpenAIDiagnoseResultInfo { Success = check.Success, Message = check.Message },
+                "Diagnóstico concluído"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
         }
         catch (Exception ex)
         {
