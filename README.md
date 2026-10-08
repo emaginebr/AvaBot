@@ -331,7 +331,12 @@ docker compose --env-file .env.prod -f docker-compose-prod.yml up -d --build
 
 Production deploy via SSH is configured in `.github/workflows/deploy-prod.yml` (manual trigger via `workflow_dispatch`).
 
-**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `ELASTICSEARCH_URL`
+**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `ELASTICSEARCH_URL`, `POWERBI_SECRET_ENCRYPTION_KEY`
+
+`POWERBI_SECRET_ENCRYPTION_KEY` is required: it is the AES-256 key that protects each
+agent's stored credentials (OpenAI API key and Power BI client secret). Use a fresh
+32-byte base64 value (`openssl rand -base64 32`), different from the one used in
+development — rotating it afterwards makes every already-saved credential unreadable.
 
 ---
 

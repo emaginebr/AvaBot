@@ -41,6 +41,7 @@ jobs:
           # Inject .env.prod from GitHub Secrets
           cat > .env.prod <<'ENVEOF'
           AVABOT_CONNECTION_STRING=${{ secrets.AVABOT_CONNECTION_STRING }}
+          POWERBI_SECRET_ENCRYPTION_KEY=${{ secrets.POWERBI_SECRET_ENCRYPTION_KEY }}
           AVABOT_USERNAME=${{ secrets.AVABOT_USERNAME }}
           AVABOT_PASSWORD=${{ secrets.AVABOT_PASSWORD }}
           AVABOT_JWT_SECRET=${{ secrets.AVABOT_JWT_SECRET }}
