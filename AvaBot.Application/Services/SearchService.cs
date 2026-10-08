@@ -5,17 +5,14 @@ namespace AvaBot.Application.Services;
 public class SearchService
 {
     private readonly IElasticsearchService _esService;
-    private readonly IOpenAIService _openAIService;
 
-    public SearchService(IElasticsearchService esService, IOpenAIService openAIService)
+    public SearchService(IElasticsearchService esService)
     {
         _esService = esService;
-        _openAIService = openAIService;
     }
 
     public async Task<List<string>> SearchAsync(long agentId, string query, int topK = 5)
     {
-        var queryVector = await _openAIService.GenerateEmbeddingAsync(agentId, query);
-        return await _esService.HybridSearchAsync(agentId, queryVector, query, topK);
+        return await _esService.TextSearchAsync(agentId, query, topK);
     }
 }

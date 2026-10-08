@@ -161,14 +161,17 @@ public class ElasticsearchService : IElasticsearchService
             agentId, response.Deleted);
     }
 
-    public async Task<List<string>> HybridSearchAsync(long agentId, float[] queryVector, string queryText, int topK = 5)
+    public async Task<List<string>> TextSearchAsync(long agentId, string queryText, int topK = 5)
     {
         await EnsureIndexAsync();
 
         _logger.LogInformation(
-            "[Elasticsearch] Busca hibrida - AgentId={AgentId}, Query=\"{Query}\", TopK={TopK}",
+            "[Elasticsearch] Busca textual - AgentId={AgentId}, Query=\"{Query}\", TopK={TopK}",
             agentId, queryText.Length > 100 ? queryText[..100] + "..." : queryText, topK);
 
+        // D2: o match vai em Must, nao em Should. Um bool com filter + should tem
+        // minimum_should_match zero, entao sem kNN ele devolveria todos os chunks
+        // do agente mesmo sem nenhuma correspondencia no conteudo.
         var response = await _client.SearchAsync<Dictionary<string, object>>(s => s
             .Index(_indexName)
             .Size(topK)
@@ -178,26 +181,25 @@ public class ElasticsearchService : IElasticsearchService
                     {
                         new TermQuery("agent_id") { Value = agentId.ToString() }
                     })
-                    .Should(new Query[]
+                    .Must(new Query[]
                     {
                         new MatchQuery("content") { Query = queryText }
                     })
                 )
             )
-            .Knn(k => k
-                .Field("embedding")
-                .QueryVector(queryVector)
-                .k(topK)
-                .NumCandidates(topK * 10)
-                .Filter(new Query[]
-                {
-                    new TermQuery("agent_id") { Value = agentId.ToString() }
-                })
-            )
         );
 
+        // Falha do Elasticsearch nao pode virar lista vazia: seria indistinguivel de
+        // "o agente nao tem esse conteudo" na tela.
+        if (!response.IsValidResponse)
+        {
+            _logger.LogWarning("[Elasticsearch] Busca textual falhou - AgentId={AgentId}", agentId);
+            throw new InvalidOperationException(
+                "Não foi possível consultar a base de conhecimento no Elasticsearch.");
+        }
+
         var results = new List<string>();
-        if (response.IsValidResponse && response.Documents != null)
+        if (response.Documents != null)
         {
             foreach (var doc in response.Documents)
             {
@@ -209,8 +211,8 @@ public class ElasticsearchService : IElasticsearchService
         }
 
         _logger.LogInformation(
-            "[Elasticsearch] Busca concluida - AgentId={AgentId}, Resultados={Count}, Valida={Valid}",
-            agentId, results.Count, response.IsValidResponse);
+            "[Elasticsearch] Busca concluida - AgentId={AgentId}, Resultados={Count}",
+            agentId, results.Count);
 
         for (int i = 0; i < results.Count; i++)
         {

@@ -34,7 +34,7 @@ public class ChatServiceTest
     {
         _esServiceMock = new Mock<IElasticsearchService>();
         _openAIServiceMock = new Mock<IOpenAIService>();
-        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object, _openAIServiceMock.Object);
+        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object);
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
         _agentRepoMock = new Mock<IAgentRepository<Agent>>();
@@ -213,7 +213,7 @@ public class ChatServiceTest
             .ReturnsAsync(new List<ChatMessage>());
         _messageRepoMock.Setup(r => r.CreateAsync(It.IsAny<ChatMessage>()))
             .ReturnsAsync((ChatMessage m) => m);
-        _esServiceMock.Setup(e => e.HybridSearchAsync(AgentId, It.IsAny<float[]>(), It.IsAny<string>(), It.IsAny<int>()))
+        _esServiceMock.Setup(e => e.TextSearchAsync(AgentId, It.IsAny<string>(), It.IsAny<int>()))
             .ReturnsAsync(new List<string>());
     }
 
