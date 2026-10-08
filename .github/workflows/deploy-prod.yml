@@ -41,7 +41,6 @@ jobs:
           # Inject .env.prod from GitHub Secrets
           cat > .env.prod <<'ENVEOF'
           AVABOT_CONNECTION_STRING=${{ secrets.AVABOT_CONNECTION_STRING }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           AVABOT_USERNAME=${{ secrets.AVABOT_USERNAME }}
           AVABOT_PASSWORD=${{ secrets.AVABOT_PASSWORD }}
           AVABOT_JWT_SECRET=${{ secrets.AVABOT_JWT_SECRET }}
