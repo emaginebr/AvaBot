@@ -10,7 +10,8 @@ services:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__AvaBotContext: ${CONNECTION_STRING}
       Elasticsearch__Url: ${ELASTICSEARCH_URL}
-      OpenAI__ApiKey: ${OPENAI_API_KEY}
+      # A chave OpenAI nao e mais variavel de ambiente: cada agente guarda a sua,
+      # cifrada no banco e cadastrada no painel. Usa POWERBI_SECRET_ENCRYPTION_KEY.
       Auth__Username: ${AVABOT_USERNAME}
       Auth__Password: ${AVABOT_PASSWORD}
       Auth__JwtSecret: ${AVABOT_JWT_SECRET}

@@ -131,9 +131,6 @@ CONNECTION_STRING=Host=db;Database=avabot;Username=postgres;Password=your_passwo
 # Elasticsearch
 ELASTICSEARCH_URL=http://elasticsearch:9200
 
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
-
 # App
 APP_PORT=5000
 ```
@@ -141,7 +138,10 @@ APP_PORT=5000
 ⚠️ **IMPORTANT**:
 - Never commit the `.env` file with real credentials
 - Only `.env.example` and `.env.prod.example` are version controlled
-- You **must** provide a valid OpenAI API key for the chat to work
+- Each agent carries its own OpenAI API key, configured in the admin panel and stored
+  encrypted in the database (`POWERBI_SECRET_ENCRYPTION_KEY` is the key that protects it).
+  There is no global `OPENAI_API_KEY` anymore, and no fallback: an agent without its own
+  key cannot use chat, semantic search or file ingestion.
 
 ---
 
@@ -331,7 +331,12 @@ docker compose --env-file .env.prod -f docker-compose-prod.yml up -d --build
 
 Production deploy via SSH is configured in `.github/workflows/deploy-prod.yml` (manual trigger via `workflow_dispatch`).
 
-**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `ELASTICSEARCH_URL`, `OPENAI_API_KEY`
+**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `ELASTICSEARCH_URL`, `POWERBI_SECRET_ENCRYPTION_KEY`
+
+`POWERBI_SECRET_ENCRYPTION_KEY` is required: it is the AES-256 key that protects each
+agent's stored credentials (OpenAI API key and Power BI client secret). Use a fresh
+32-byte base64 value (`openssl rand -base64 32`), different from the one used in
+development — rotating it afterwards makes every already-saved credential unreadable.
 
 ---
 
