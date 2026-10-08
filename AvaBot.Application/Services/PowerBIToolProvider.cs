@@ -106,8 +106,12 @@ public class PowerBIToolset
     public const string PromptAddendum =
         "DADOS DO POWER BI: Você tem acesso a ferramentas que consultam dados reais no Power BI.\n" +
         "- Use as ferramentas quando a pergunta exigir números/dados; para outras perguntas use a base de conhecimento.\n" +
-        "- Se faltar informação necessária para a consulta (ex.: período, produto, indicador), PERGUNTE ao usuário antes de consultar. Não assuma valores padrão.\n" +
+        "- Para perguntas que exigem dados do BI, consulte o dataset apropriado; não responda usando apenas conhecimento geral ou a base de conhecimento.\n" +
+        "- Se faltar informação necessária para a consulta (ex.: período, produto, indicador, unidade ou escopo geográfico), PERGUNTE ao usuário antes de consultar. Não invente nem assuma valores padrão, inclusive o ano mais recente.\n" +
         "- Antes da primeira consulta a um dataset, chame listar_schema.\n" +
+        "- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como LIMIT, OFFSET, FETCH, SELECT ou FROM.\n" +
+        "- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.\n" +
+        "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema.\n" +
         "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.\n" +
         "- Se a consulta falhar, informe que não foi possível obter os dados no momento.\n" +
         "- Responda em texto; pode usar listas destacando os principais valores. NÃO use tabelas. Se houver muitas linhas, resuma (totais, maiores e menores valores).";
@@ -161,8 +165,8 @@ public class PowerBIToolset
             new()
             {
                 Name = QueryToolName,
-                Description = "Executa uma consulta DAX somente leitura (deve começar com EVALUATE ou DEFINE) " +
-                    $"em um dataset do Power BI e retorna as linhas. Prefira agregações (SUMMARIZECOLUMNS) e TOPN; " +
+                Description = "Executa uma consulta somente leitura escrita exclusivamente em DAX válido (deve começar com EVALUATE ou DEFINE; não use sintaxe SQL como LIMIT). " +
+                    $"Use TOPN dentro da expressão DAX para limitar linhas. Prefira agregações (SUMMARIZECOLUMNS) e TOPN; " +
                     $"o resultado é limitado a {maxRows} linhas.",
                 ParametersJsonSchema = "{\"type\":\"object\",\"properties\":{\"dataset\":{\"type\":\"string\",\"enum\":"
                     + datasetEnum + "},\"dax\":{\"type\":\"string\",\"description\":\"Consulta DAX completa\"}}" +
