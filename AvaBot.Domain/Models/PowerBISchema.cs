@@ -13,6 +13,9 @@ public class PowerBISchema
     [JsonPropertyName("tables")]
     public List<PowerBISchemaTable> Tables { get; set; } = new List<PowerBISchemaTable>();
 
+    [JsonPropertyName("relationships")]
+    public List<PowerBISchemaRelationship> Relationships { get; set; } = new List<PowerBISchemaRelationship>();
+
     public static string Serialize(PowerBISchema schema)
         => JsonSerializer.Serialize(schema, SerializerOptions);
 
@@ -98,6 +101,11 @@ public class PowerBISchemaColumn
 
     [JsonPropertyName("userDescription")]
     public string? UserDescription { get; set; }
+
+    // Valores distintos de colunas de texto com poucos valores (ex.: grupo de espécie),
+    // para o modelo filtrar pelo valor exato sem ter que listar a tabela.
+    [JsonPropertyName("sampleValues")]
+    public List<string>? SampleValues { get; set; }
 }
 
 public class PowerBISchemaMeasure
@@ -110,4 +118,26 @@ public class PowerBISchemaMeasure
 
     [JsonPropertyName("userDescription")]
     public string? UserDescription { get; set; }
+
+    // Formula DAX da medida: mostra ao modelo quais filtros ela ja aplica.
+    [JsonPropertyName("expression")]
+    public string? Expression { get; set; }
+}
+
+public class PowerBISchemaRelationship
+{
+    [JsonPropertyName("fromTable")]
+    public string FromTable { get; set; } = string.Empty;
+
+    [JsonPropertyName("fromColumn")]
+    public string FromColumn { get; set; } = string.Empty;
+
+    [JsonPropertyName("toTable")]
+    public string ToTable { get; set; } = string.Empty;
+
+    [JsonPropertyName("toColumn")]
+    public string ToColumn { get; set; } = string.Empty;
+
+    [JsonPropertyName("isActive")]
+    public bool IsActive { get; set; } = true;
 }

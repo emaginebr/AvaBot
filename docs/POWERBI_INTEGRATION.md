@@ -115,6 +115,13 @@ A **descricao de negocio** e enviada ao modelo na descricao da ferramenta e e o 
 
 **Gerar schema** executa `INFO.VIEW.TABLES()`, `INFO.VIEW.COLUMNS()` e `INFO.VIEW.MEASURES()` (ate 60 s, sincrono). Itens ocultos do modelo sao ignorados. Se as funcoes `INFO.VIEW.*` nao estiverem disponiveis, o sistema cai para `COLUMNSTATISTICS()` e o schema fica marcado como **Parcial** (sem medidas e sem tipos).
 
+No schema completo, a geracao tambem guarda, para o agente:
+- a formula DAX de cada medida (vinda de `INFO.VIEW.MEASURES()`), para ele saber que filtros a medida ja aplica;
+- os relacionamentos entre tabelas visiveis (`INFO.VIEW.RELATIONSHIPS()`), para filtrar a tabela de fatos pelas dimensoes;
+- os valores distintos das colunas de texto com ate 30 valores (cardinalidade lida em `COLUMNSTATISTICS()`, valores lidos numa unica consulta `UNION`), para filtrar pelo valor exato.
+
+Esses tres itens sao opcionais: se alguma dessas consultas falhar, o schema basico e gerado do mesmo jeito. Schemas gerados antes desta versao nao os tem; use **Gerar schema** de novo.
+
 Ao regerar, as descricoes escritas por voce sao preservadas por chave (tabela, tabela+coluna, tabela+medida). Se a geracao falhar, o schema anterior continua valendo e o erro aparece no card.
 
 **Ver schema** abre o catalogo com busca por nome e edicao das descricoes de tabelas, colunas e medidas. A descricao do modelo aparece em cinza; a sua aparece abaixo. Salve antes de fechar.

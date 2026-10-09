@@ -38,6 +38,93 @@ public class PowerBISchemaBuilderTest
             .ReturnsAsync(columns);
         _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE INFO.VIEW.MEASURES()", It.IsAny<CancellationToken>()))
             .ReturnsAsync(measures);
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE INFO.VIEW.RELATIONSHIPS()", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FromRows(new[] { "[FromTable]", "[FromColumn]", "[ToTable]", "[ToColumn]", "[IsActive]" }));
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE COLUMNSTATISTICS()", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FromRows(new[] { "[Table Name]", "[Column Name]", "[Cardinality]" }));
+    }
+
+    [Fact]
+    public async Task BuildAsync_ShouldAddExpressionsRelationshipsAndSampleValues()
+    {
+        // Arrange: fatos + dimensao SH6; so a coluna de texto de baixa cardinalidade ganha valores
+        SetupInfoViews(
+            FromRows(
+                new[] { "[Name]", "[IsHidden]" },
+                new object?[] { "public COMTRADE", false },
+                new object?[] { "SH6", false },
+                new object?[] { "Oculta", true }),
+            FromRows(
+                new[] { "[Table]", "[Name]", "[DataType]", "[IsHidden]" },
+                new object?[] { "public COMTRADE", "cmdCode", "Text", false },
+                new object?[] { "SH6", "id", "Text", false },
+                new object?[] { "SH6", "ABIPESCA", "Text", false },
+                new object?[] { "SH6", "aggrLevel", "Integer", false }),
+            FromRows(
+                new[] { "[Table]", "[Name]", "[Expression]", "[IsHidden]" },
+                new object?[] { "SH6", "Exportação (Peso Kg)", "CALCULATE(SUM(x), y = \"X\")", false }));
+
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE INFO.VIEW.RELATIONSHIPS()", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FromRows(
+                new[] { "[FromTable]", "[FromColumn]", "[ToTable]", "[ToColumn]", "[IsActive]" },
+                new object?[] { "public COMTRADE", "cmdCode", "SH6", "id", true },
+                new object?[] { "public COMTRADE", "cmdCode", "Oculta", "id", true }));
+
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE COLUMNSTATISTICS()", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(FromRows(
+                new[] { "[Table Name]", "[Column Name]", "[Cardinality]" },
+                new object?[] { "public COMTRADE", "cmdCode", 5000 },
+                new object?[] { "SH6", "id", 5000 },
+                new object?[] { "SH6", "ABIPESCA", 3 },
+                new object?[] { "SH6", "aggrLevel", 4 }));
+
+        string? sampleDax = null;
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds",
+                It.Is<string>(q => q.Contains("SELECTCOLUMNS")), It.IsAny<CancellationToken>()))
+            .Callback<PowerBICredentials, string, string, string, CancellationToken>((_, _, _, q, _) => sampleDax = q)
+            .ReturnsAsync(FromRows(
+                new[] { "[c]", "[v]" },
+                new object?[] { "SH6|ABIPESCA", "Tilápia" },
+                new object?[] { "SH6|ABIPESCA", "Camarão" },
+                new object?[] { "SH6|ABIPESCA", "" }));
+
+        // Act
+        var (schema, status) = await _sut.BuildAsync(Credentials(), "ws", "ds");
+
+        // Assert
+        Assert.Equal(PowerBISchemaStatus.Generated, status);
+        Assert.Equal("CALCULATE(SUM(x), y = \"X\")", schema.Tables[1].Measures.Single().Expression);
+
+        var relationship = Assert.Single(schema.Relationships);
+        Assert.Equal(("public COMTRADE", "cmdCode", "SH6", "id"),
+            (relationship.FromTable, relationship.FromColumn, relationship.ToTable, relationship.ToColumn));
+
+        Assert.Equal("EVALUATE SELECTCOLUMNS(VALUES('SH6'[ABIPESCA]), \"c\", \"SH6|ABIPESCA\", \"v\", 'SH6'[ABIPESCA] & \"\")", sampleDax);
+        Assert.Equal(new[] { "Camarão", "Tilápia" }, schema.Tables[1].Columns.Single(c => c.Name == "ABIPESCA").SampleValues);
+        Assert.Null(schema.Tables[1].Columns.Single(c => c.Name == "id").SampleValues);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ShouldKeepBasicSchema_WhenEnrichmentQueriesFail()
+    {
+        // Arrange
+        SetupInfoViews(
+            FromRows(new[] { "[Name]" }, new object?[] { "T" }),
+            FromRows(new[] { "[Table]", "[Name]", "[DataType]" }, new object?[] { "T", "C", "Text" }),
+            FromRows(new[] { "[Table]", "[Name]" }));
+
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE INFO.VIEW.RELATIONSHIPS()", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PowerBIApiException(400, "DatasetExecuteQueriesError", "not supported"));
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), "ws", "ds", "EVALUATE COLUMNSTATISTICS()", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PowerBIApiException(400, "DatasetExecuteQueriesError", "not supported"));
+
+        // Act
+        var (schema, status) = await _sut.BuildAsync(Credentials(), "ws", "ds");
+
+        // Assert
+        Assert.Equal(PowerBISchemaStatus.Generated, status);
+        Assert.Equal("C", schema.Tables.Single().Columns.Single().Name);
+        Assert.Empty(schema.Relationships);
     }
 
     [Fact]

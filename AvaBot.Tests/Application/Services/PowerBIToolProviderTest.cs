@@ -222,6 +222,46 @@ public class PowerBIToolProviderTest
     }
 
     [Fact]
+    public async Task ExecuteAsync_ListSchema_ShouldRenderExpressionsSampleValuesAndRelationships()
+    {
+        // Arrange
+        var schemaJson = PowerBISchema.Serialize(new PowerBISchema
+        {
+            Tables = new List<PowerBISchemaTable>
+            {
+                new()
+                {
+                    Name = "SH6",
+                    Columns = new List<PowerBISchemaColumn>
+                    {
+                        new() { Name = "ABIPESCA", DataType = "Text", SampleValues = new List<string> { "Tilápia", "Peixe \"X\"" } }
+                    },
+                    Measures = new List<PowerBISchemaMeasure>
+                    {
+                        new() { Name = "Exportação (Peso Kg)", Expression = "CALCULATE(\n    SUM(x),\n    y = \"X\")" }
+                    }
+                }
+            },
+            Relationships = new List<PowerBISchemaRelationship>
+            {
+                new() { FromTable = "public COMTRADE", FromColumn = "cmdCode", ToTable = "SH6", ToColumn = "id" },
+                new() { FromTable = "public COMTRADE", FromColumn = "period", ToTable = "Calendar", ToColumn = "period", IsActive = false }
+            }
+        });
+        var toolset = await BuildToolset(Dataset(schemaJson: schemaJson));
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.ListSchemaToolName, "{\"dataset\":\"comercio\"}"), CancellationToken.None);
+
+        // Assert
+        Assert.Contains("[ABIPESCA] (Text) — valores: \"Tilápia\", \"Peixe \"\"X\"\"\"", result);
+        Assert.Contains("    [Exportação (Peso Kg)] = CALCULATE( SUM(x), y = \"X\")", result);
+        Assert.Contains("  'public COMTRADE'[cmdCode] → 'SH6'[id]", result);
+        Assert.Contains("'Calendar'[period] (inativo; só vale com USERELATIONSHIP)", result);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ListSchema_ShouldReturnCompactTextAndLogSuccess()
     {
         // Arrange

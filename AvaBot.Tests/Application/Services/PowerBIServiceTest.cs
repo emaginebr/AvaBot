@@ -422,6 +422,12 @@ public class PowerBIServiceTest
                 Rows = new List<List<object?>>()
             });
 
+        // Enriquecimento (relacionamentos e valores de exemplo) sem dados
+        _clientMock.Setup(c => c.ExecuteQueryAsync(
+                It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(),
+                It.Is<string>(q => q.EndsWith("RELATIONSHIPS()") || q.EndsWith("COLUMNSTATISTICS()")), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PowerBIQueryResult());
+
         // Act
         var result = await _sut.GenerateSchemaAsync(Slug, dataset.PowerBIDatasetId);
 

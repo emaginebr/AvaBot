@@ -123,13 +123,17 @@ public class PowerBIToolset
         "DADOS DO POWER BI: Você tem acesso a ferramentas que consultam dados reais no Power BI.\n" +
         "- Use as ferramentas quando a pergunta exigir números/dados; para outras perguntas use a base de conhecimento.\n" +
         "- Para perguntas que exigem dados do BI, consulte o dataset apropriado; não responda usando apenas conhecimento geral ou a base de conhecimento.\n" +
-        "- Se faltar informação necessária para a consulta (ex.: período, produto, indicador, unidade ou escopo geográfico), PERGUNTE ao usuário antes de consultar. Não invente nem assuma valores padrão, inclusive o ano mais recente.\n" +
+        "- Se a pergunta do usuário não informar algo necessário (ex.: período, produto, indicador, unidade ou escopo geográfico), PERGUNTE antes de consultar. Não invente nem assuma valores padrão, inclusive o ano mais recente.\n" +
         "- Antes da primeira consulta a um dataset, chame listar_schema.\n" +
         "- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como LIMIT, OFFSET, FETCH, SELECT ou FROM.\n" +
         "- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.\n" +
         "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema, copiando os nomes exatamente como aparecem (ex.: 'Nome da Tabela'[Coluna], [Medida]); não encurte nem remova prefixos.\n" +
         "- Estrutura DAX: 'DEFINE' (opcional) aceita apenas VAR/MEASURE/TABLE/COLUMN e é seguido de EVALUATE; não existe RETURN no nível do DEFINE. Exemplo: DEFINE VAR _ano = \"2025\" EVALUATE TOPN(10, SUMMARIZECOLUMNS('T'[Col], \"Total\", SUM('T'[Valor])), [Total], DESC).\n" +
-        "- Em TOPN, a ordem é DESC ou ASC, nunca um número. Respeite o tipo da coluna no schema (Text compara com texto entre aspas).\n" +
+        "- Em TOPN, ordene por uma coluna ou medida e use DESC ou ASC; nunca ordene por constante (empates devolvem todas as linhas). Respeite o tipo da coluna no schema (Text compara com texto entre aspas).\n" +
+        "- Medidas são expressões, nunca colunas de agrupamento. Para um valor único: EVALUATE ROW(\"Valor\", CALCULATE([Medida], 'Dim'[Col] = \"x\", 'Calendar'[Year] = 2024)). Por categoria: SUMMARIZECOLUMNS('Dim'[Col], \"Valor\", [Medida]).\n" +
+        "- Leia a fórmula de cada medida no schema para saber que filtros ela já aplica, e use os relacionamentos do schema para filtrar a tabela de fatos pelas dimensões.\n" +
+        "- Quando a coluna lista seus valores no schema, filtre pelo valor exato listado. Para achar um produto, país ou categoria pelo nome, não liste a tabela inteira: filtre com CONTAINSSTRING, ex.: FILTER(VALUES('Dim'[Col]), CONTAINSSTRING('Dim'[Col], \"termo\")), tentando também sem acento ou em inglês.\n" +
+        "- Se a dúvida for sobre como o dado está modelado (qual coluna, código ou valor representa algo), investigue com as ferramentas usando as tentativas restantes; só pergunte ao usuário o que depende da intenção dele.\n" +
         "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.\n" +
         "- Se consultar_bi devolver erro com queryMayBeCorrected true, use message, errorCode e responseBody do diagnóstico para corrigir a DAX e tentar de novo, usando apenas tabelas, colunas e medidas do schema. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
         "- Se queryMayBeCorrected for false (autenticação, permissão ou limite de tentativas esgotado), NÃO reenvie a consulta: informe que não foi possível obter os dados no momento.\n" +
@@ -589,8 +593,30 @@ public class PowerBIToolset
                   .AppendLine(string.Join("; ", table.Columns.Select(DescribeColumn)));
 
             if (table.Measures.Count > 0)
-                sb.Append("  Medidas: ")
-                  .AppendLine(string.Join("; ", table.Measures.Select(DescribeMeasure)));
+            {
+                // Uma por linha: a formula mostra quais filtros a medida ja aplica.
+                sb.AppendLine("  Medidas (use como expressão, nunca como coluna de agrupamento):");
+                foreach (var measure in table.Measures)
+                    sb.Append("    ").AppendLine(DescribeMeasure(measure));
+            }
+        }
+
+        if (schema.Relationships.Count > 0)
+        {
+            // Sem isto o modelo nao sabe que filtrar uma dimensao (ex.: SH6) afeta a tabela de fatos.
+            sb.AppendLine("Relacionamentos (filtrar a tabela da direita filtra a da esquerda):");
+            foreach (var relationship in schema.Relationships)
+            {
+                sb.Append("  ")
+                  .Append(QuoteTable(relationship.FromTable)).Append(QuoteMember(relationship.FromColumn))
+                  .Append(" → ")
+                  .Append(QuoteTable(relationship.ToTable)).Append(QuoteMember(relationship.ToColumn));
+
+                if (!relationship.IsActive)
+                    sb.Append(" (inativo; só vale com USERELATIONSHIP)");
+
+                sb.AppendLine();
+            }
         }
 
         return sb.ToString().TrimEnd();
@@ -607,8 +633,13 @@ public class PowerBIToolset
         if (!string.IsNullOrWhiteSpace(description))
             text += $" — {description}";
 
+        if (column.SampleValues is { Count: > 0 })
+            text += " — valores: " + string.Join(", ", column.SampleValues.Select(v => $"\"{v.Replace("\"", "\"\"")}\""));
+
         return text;
     }
+
+    private const int MaxExpressionLength = 400;
 
     private static string DescribeMeasure(PowerBISchemaMeasure measure)
     {
@@ -617,6 +648,16 @@ public class PowerBIToolset
         var description = measure.UserDescription ?? measure.Description;
         if (!string.IsNullOrWhiteSpace(description))
             text += $" — {description}";
+
+        if (!string.IsNullOrWhiteSpace(measure.Expression))
+        {
+            // Formula em uma linha e com teto, para nao inflar o contexto com medidas longas.
+            var expression = string.Join(" ", measure.Expression.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            if (expression.Length > MaxExpressionLength)
+                expression = expression[..MaxExpressionLength] + "…";
+
+            text += $" = {expression}";
+        }
 
         return text;
     }

@@ -29,9 +29,13 @@ As tools só são enviadas quando `agent.PowerBIEnabled == true` e existe ao men
 Dataset: Comércio Internacional
 Nomes já no formato de referência DAX: copie-os exatamente, com aspas e colchetes.
 Tabela 'Exportacoes' — <userDescription>
-  Colunas: [Data] (DateTime) — use para filtros por período; [Pais] (String); [Produto] (String); [Kg] (Double)
-  Medidas: [Valor FOB (US$)] — valor em dólares; [Peso (t)]
+  Colunas: [Data] (DateTime) — use para filtros por período; [Pais] (String); [Grupo] (Text) — valores: "Camarão", "Tilápia"; [Kg] (Double)
+  Medidas (use como expressão, nunca como coluna de agrupamento):
+    [Valor FOB (US$)] — valor em dólares = SUM('Exportacoes'[FOB])
+    [Peso (t)] = DIVIDE(SUM('Exportacoes'[Kg]), 1000)
 Tabela ...
+Relacionamentos (filtrar a tabela da direita filtra a da esquerda):
+  'Exportacoes'[Data] → 'Calendar'[Date]
 ```
 
 ## `consultar_bi`
