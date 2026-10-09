@@ -190,8 +190,32 @@ public class AgentController : ControllerBase
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
-            var result = await _chatService.TestMessageAsync(id, agent.ChatModel, agent.SystemPrompt, info.Query);
+            if (info.History != null)
+            {
+                for (var i = 0; i < info.History.Count; i++)
+                {
+                    var item = info.History[i];
+
+                    if (item.Role is not ("user" or "assistant"))
+                        return BadRequest(Result<object>.Failure($"Historico invalido: item {i + 1} tem role '{item.Role}' (use 'user' ou 'assistant')"));
+
+                    if (string.IsNullOrWhiteSpace(item.Content))
+                        return BadRequest(Result<object>.Failure($"Historico invalido: item {i + 1} esta vazio"));
+                }
+            }
+
+            var result = await _chatService.TestMessageAsync(id, agent.ChatModel, agent.SystemPrompt, info.Query, info.History);
             return Ok(Result<AgentTestResultInfo>.Success(result));
+        }
+        catch (AgentTestFailedException ex)
+        {
+            // O painel le so a mensagem; o relatorio de calibracao usa as rodadas concluidas em dados.
+            return StatusCode(500, new Result<AgentTestResultInfo>
+            {
+                Sucesso = false,
+                Mensagem = ex.Message,
+                Dados = ex.PartialResult
+            });
         }
         catch (Exception ex)
         {

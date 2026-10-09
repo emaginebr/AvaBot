@@ -356,6 +356,30 @@ public class PowerBIToolProviderTest
         using var doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.TryGetProperty("error", out _));
         Assert.Equal(1, doc.RootElement.GetProperty("rowCount").GetInt32());
+
+        // O modelo le o texto cru: acento sem escape á (calibracao 015).
+        Assert.Contains("Tilápia", result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldNotEscapeQuotesAndAccentsInTheErrorDiagnostic()
+    {
+        // Arrange
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PowerBIApiException(400, "DatasetExecuteQueriesError",
+                "Query (1, 1) Cannot find table 'Exportação'. (EVALUATE \"Tilápia\")"));
+
+        var toolset = await BuildToolset(Dataset());
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.QueryToolName, "{\"dataset\":\"comercio\",\"dax\":\"EVALUATE 'Exportação'\"}"),
+            CancellationToken.None);
+
+        // Assert
+        Assert.Contains("Cannot find table 'Exportação'", result);
+        Assert.Contains("\\\"Tilápia\\\"", result);
+        Assert.DoesNotContain("\\u00", result);
     }
 
     [Fact]

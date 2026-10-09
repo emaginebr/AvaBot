@@ -51,3 +51,7 @@ nginx/certs/
 *.key
 *.pfx
 *.crt
+
+# Calibracao de perguntas: configuracao local (chaves OpenAI e Power BI) e schemas gerados
+AvaBot.Calibration/appsettings.json
+calibration/schemas/

@@ -1,8 +1,12 @@
 # AvaBot Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-12 (unified 2026-08-20)
+Auto-generated from all feature plans. Last updated: 2026-10-08 (unified 2026-10-08)
 
 ## Active Technologies
+- C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, OpenAI SDK 2.10 (já instalado; usa `ChatTool`/`ToolChatMessage`), `HttpClient` nativo (Entra ID + Power BI REST), `IMemoryCache` (cache de token), `System.Security.Cryptography.AesGcm`, AutoMapper; frontend com React Router 7, Zustand 5, Tailwind 4 e sonner 2. **Nenhuma dependência nova.** (011-powerbi-agent-tools)
+- PostgreSQL. Uma coluna nova em `avabot_agents` e três tabelas novas, com o schema em `jsonb`. O Elasticsearch não é afetado. (011-powerbi-agent-tools)
+- C# / .NET 9.0 (backend e testes); PowerShell 7 (script de execução) + ASP.NET Core 9, OpenAI SDK 2.10 (`ChatCompletion.Usage`), xUnit 2.9 + Flurl.Http 4 (já no `AvaBot.Tests.API`). **Nenhuma dependência nova.** (015-question-calibration-report)
+- N/A. Sem tabelas nem migração; o rastreamento vive só durante a requisição. As consultas BI continuam indo para `avabot_powerbi_query_logs`, como no teste de agente atual. (015-question-calibration-report)
 
 ### Backend (repo root)
 - C# / .NET 9.0 + ASP.NET Core, Entity Framework Core 9.x (001-knowledge-agent-chatbot)
@@ -53,12 +57,9 @@ C# / .NET 9.0: Follow standard conventions
 TypeScript 6.0.2 (frontend/): Follow standard conventions
 
 ## Recent Changes
+- 015-question-calibration-report: Added C# / .NET 9.0 (backend e testes); PowerShell 7 (script de execução) + ASP.NET Core 9, OpenAI SDK 2.10 (`ChatCompletion.Usage`), xUnit 2.9 + Flurl.Http 4 (já no `AvaBot.Tests.API`). **Nenhuma dependência nova.**
+- 011-powerbi-agent-tools: Added C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, OpenAI SDK 2.10 (já instalado; usa `ChatTool`/`ToolChatMessage`), `HttpClient` nativo (Entra ID + Power BI REST), `IMemoryCache` (cache de token), `System.Security.Cryptography.AesGcm`, AutoMapper; frontend com React Router 7, Zustand 5, Tailwind 4 e sonner 2. **Nenhuma dependência nova.**
 - 010-whatsapp-admin: Added TypeScript 6.x + React 19.x + React Router 7.x, Zustand 5.x, Tailwind CSS 4.x, sonner 2.x
-- 009-telegram-bot-admin: Added TypeScript 6.x + React 19.x + React Router 7.x, Zustand 5.x, Tailwind CSS 4.x, sonner 2.x
-- 008-session-resume-cookies: Added TypeScript 6.0.2 + React 19.x + React Router 7.x, Zustand 5.x, Tailwind CSS 4.x, react-markdown 10.x, Vite 8.x
-- 004-whatsapp-wpp-integration: Added C# / .NET 9.0 + ASP.NET Core 9.0 + Entity Framework Core 9.x, HttpClient (nativo), AutoMapper, NAuth
-- 003-telegram-per-agent-config: Added C# / .NET 9.0 + ASP.NET Core 9.0 + Entity Framework Core 9.x, Telegram.Bot 22.x, AutoMapper, NAuth
-- 002-session-resume-telegram-bot: Added C# / .NET 9.0 + ASP.NET Core 9.0, Entity Framework Core 9.x, Telegram.Bot (NuGet), OpenAI SDK 2.10, Elasticsearch.Net 8.17
 
 
 <!-- MANUAL ADDITIONS START -->

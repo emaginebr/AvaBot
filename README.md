@@ -235,6 +235,14 @@ docker compose up -d
 dotnet test AvaBot.Tests.API
 ```
 
+### Question Calibration Report (console)
+
+`AvaBot.Calibration` runs a question (or a set of conversations) straight against OpenAI and Power BI — no API, database or Elasticsearch; the knowledge base is read from a local folder — and prints a markdown report with the full flow: knowledge base, Power BI schema, every model round with the DAX and its result, tokens, final prompt and answer, for an AI to analyze. Configure `AvaBot.Calibration/appsettings.json` (git-ignored; copy from `appsettings.Example.json`). See [docs/CALIBRATION.md](docs/CALIBRATION.md).
+
+```powershell
+dotnet run --project AvaBot.Calibration -- -q "Qual foi o volume de exportação da tilápia em 2024?"
+```
+
 ### Test Structure
 
 ```
