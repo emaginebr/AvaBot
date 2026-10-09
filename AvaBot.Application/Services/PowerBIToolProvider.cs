@@ -159,6 +159,7 @@ public class PowerBIToolset
         "DEPOIS DA CONSULTA\n" +
         "- Se consultar_bi devolver erro com queryMayBeCorrected true, corrija a DAX com base em message, errorCode e responseBody do diagnóstico e tente de novo, usando apenas tabelas, colunas e medidas do schema. Enquanto attemptNumber for menor que maxAttempts é PROIBIDO desistir ou devolver uma pergunta ao usuário por causa do erro. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
         "- Se queryMayBeCorrected for false (autenticação, permissão ou limite de tentativas esgotado), NÃO reenvie a consulta: informe que não foi possível obter os dados no momento.\n" +
+        "- Se o resultado vier com um campo 'warning', trate-o como erro a corrigir: siga a instrução do aviso, reescreva a consulta e consulte de novo antes de responder.\n" +
         "- Falhas temporárias já foram repetidas automaticamente; você não precisa insistir nelas.\n" +
         "- Antes de responder, confira a ordem de grandeza: se o número parecer implausível para o escopo (ex.: milhões de toneladas de um produto para um único país), revise os filtros (cenário, parceiro, país, fluxo, produto) e consulte de novo.\n" +
         "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números. Numa conversa, mantenha as mesmas premissas, filtros e códigos das respostas anteriores.\n" +
@@ -381,13 +382,21 @@ public class PowerBIToolset
         if (truncated)
             rows = rows.GetRange(0, _maxRows);
 
-        var json = JsonSerializer.Serialize(new
+        var payload = new Dictionary<string, object?>
         {
-            columns = queryResult.Columns,
-            rows,
-            rowCount = rows.Count,
-            truncated
-        }, ModelJson);
+            ["columns"] = queryResult.Columns,
+            ["rows"] = rows,
+            ["rowCount"] = rows.Count,
+            ["truncated"] = truncated
+        };
+
+        // Calibracao 015: agrupar por uma coluna e filtra-la dentro do CALCULATE anula o
+        // agrupamento sem dar erro; o aviso vira diagnostico concreto para o modelo corrigir.
+        var warning = DetectIdenticalRows(queryResult.Columns, rows);
+        if (warning != null)
+            payload["warning"] = warning;
+
+        var json = JsonSerializer.Serialize(payload, ModelJson);
 
         await WriteLogAsync(dataset, QueryToolName, dax, durationMs,
             PowerBIQueryStatus.Success, null, rows.Count, truncated);
@@ -407,6 +416,40 @@ public class PowerBIToolset
         return json;
     }
 
+    /// <summary>
+    /// Duas ou mais linhas em que todas as colunas de medida ("[nome]", sem tabela) repetem os
+    /// mesmos numeros enquanto ha coluna de agrupamento ("Tabela[Coluna]"): quase sempre um filtro
+    /// na coluna agrupada dentro do CALCULATE (ex.: agrupar por ano e filtrar 'T'[Ano] IN {...}
+    /// na medida), que substitui o agrupamento e repete o total em todas as linhas.
+    /// </summary>
+    public static string? DetectIdenticalRows(IReadOnlyList<string> columns, List<List<object?>> rows)
+    {
+        if (rows.Count < 2 || columns.Count == 0)
+            return null;
+
+        var measureColumns = Enumerable.Range(0, columns.Count).Where(i => columns[i].StartsWith('[')).ToList();
+        if (measureColumns.Count == 0 || measureColumns.Count == columns.Count)
+            return null;
+
+        foreach (var column in measureColumns)
+        {
+            var values = rows.Select(r => column < r.Count ? r[column] : null).ToList();
+
+            if (!values.All(v => v is long or double or int or decimal))
+                return null;
+
+            var first = Convert.ToDouble(values[0]);
+            if (values.Any(v => Convert.ToDouble(v) != first))
+                return null;
+        }
+
+        return $"ATENÇÃO: as {rows.Count} linhas têm exatamente os mesmos valores nas medidas. Isso quase sempre " +
+               "significa que a coluna usada no agrupamento foi filtrada dentro do CALCULATE da medida (ex.: agrupar por " +
+               "'T'[Ano] e usar 'T'[Ano] IN {...} ou >= / <= dentro do CALCULATE), o que anula o agrupamento. Corrija: " +
+               "mova esse filtro para argumento do SUMMARIZECOLUMNS, ex.: FILTER(VALUES('T'[Ano]), 'T'[Ano] IN {...}), " +
+               "ou use ROW com um CALCULATE por valor, e consulte de novo antes de responder. Não interprete este " +
+               "resultado como 'valores estáveis' nem como 'dados indisponíveis'.";
+    }
     private static QueryFailure Classify(PowerBIApiException ex, int durationMs)
     {
         var transient = ex.StatusCode is 429 or 0 || ex.StatusCode >= 500;

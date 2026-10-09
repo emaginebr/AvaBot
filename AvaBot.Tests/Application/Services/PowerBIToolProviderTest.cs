@@ -362,6 +362,56 @@ public class PowerBIToolProviderTest
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldWarn_WhenEveryRowHasTheSameNumbers()
+    {
+        // Arrange: agrupado por ano, mas o filtro de ano dentro do CALCULATE repetiu o total (calibracao 015)
+        _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PowerBIQueryResult
+            {
+                Columns = new List<string> { "T[Ano]", "[kg]", "[usd]" },
+                Rows = new List<List<object?>>
+                {
+                    new() { 2022L, 188672.5, 1133L },
+                    new() { 2023L, 188672.5, 1133L },
+                    new() { 2024L, 188672.5, 1133L }
+                }
+            });
+
+        var toolset = await BuildToolset(Dataset());
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.QueryToolName, "{\"dataset\":\"comercio\",\"dax\":\"EVALUATE SUMMARIZECOLUMNS('T'[Ano])\"}"),
+            CancellationToken.None);
+
+        // Assert
+        using var doc = JsonDocument.Parse(result);
+        // MaxRows = 2 nesta configuracao: as 3 linhas viram 2, e o aviso continua valendo
+        Assert.Equal(2, doc.RootElement.GetProperty("rowCount").GetInt32());
+        Assert.True(doc.RootElement.GetProperty("truncated").GetBoolean());
+        Assert.Contains("mesmos valores nas medidas", doc.RootElement.GetProperty("warning").GetString());
+    }
+
+    [Fact]
+    public void DetectIdenticalRows_ShouldIgnoreNormalResults()
+    {
+        var yearAndKg = new List<string> { "T[Ano]", "[kg]" };
+
+        // Serie normal, linha unica e resultado so de medidas (ROW/UNION) nao geram aviso
+        Assert.Null(PowerBIToolset.DetectIdenticalRows(yearAndKg, new() { new() { 2022L, 10L }, new() { 2023L, 12L } }));
+        Assert.Null(PowerBIToolset.DetectIdenticalRows(yearAndKg, new() { new() { 2022L, 10L } }));
+        Assert.Null(PowerBIToolset.DetectIdenticalRows(new List<string> { "[kg_2023]", "[kg_2024]" }, new() { new() { 10L, 10L }, new() { 10L, 10L } }));
+
+        // Uma medida constante e outra variavel: agrupamento intacto
+        Assert.Null(PowerBIToolset.DetectIdenticalRows(new List<string> { "T[Ano]", "[kg]", "[usd]" },
+            new() { new() { 2022L, 10L, 5L }, new() { 2023L, 10L, 6L } }));
+
+        // Mesmo total em todas as linhas, com o agrupamento numerico (ano) variando
+        Assert.NotNull(PowerBIToolset.DetectIdenticalRows(new List<string> { "T[Ano]", "[kg]" },
+            new() { new() { 2022L, 100L }, new() { 2023L, 100.0 } }));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldNotEscapeQuotesAndAccentsInTheErrorDiagnostic()
     {
         // Arrange

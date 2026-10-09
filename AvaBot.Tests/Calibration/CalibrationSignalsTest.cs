@@ -90,6 +90,17 @@ public class CalibrationSignalsTest
     }
 
     [Fact]
+    public void From_ShouldFlagExecutorWarning()
+    {
+        var turn = Turn("Ficou estável.",
+            Round(1, 100, Query("EVALUATE SUMMARIZECOLUMNS('T'[Ano])", "{\"rows\":[[2022,1],[2023,1]],\"rowCount\":2,\"warning\":\"ATENÇÃO: linhas iguais\"}")));
+
+        var signals = CalibrationSignals.From(turn);
+
+        Assert.Contains("Aviso do executor (linhas idênticas) na(s) rodada(s) 1.", signals.Warnings);
+    }
+
+    [Fact]
     public void From_ShouldReportUnavailablePowerBIAndMissingTokens()
     {
         var turn = Turn("Olá!", Round(1, null));

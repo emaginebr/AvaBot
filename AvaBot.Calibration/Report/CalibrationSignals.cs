@@ -76,6 +76,13 @@ public class CalibrationSignals
         if (result != null && !result.PowerBIAvailable)
             warnings.Add("Ferramentas de BI não estavam disponíveis para este agente.");
 
+        var executorWarnings = rounds
+            .Where(r => r.ToolCalls.Any(c => HasWarning(c.Result)))
+            .Select(r => r.Number)
+            .ToList();
+        if (executorWarnings.Count > 0)
+            warnings.Add($"Aviso do executor (linhas idênticas) na(s) rodada(s) {string.Join(", ", executorWarnings)}.");
+
         if (!string.IsNullOrWhiteSpace(result?.Trace.Error))
             warnings.Add("O fluxo foi interrompido por erro antes da resposta final.");
 
@@ -111,6 +118,13 @@ public class CalibrationSignals
     {
         var root = TryParse(toolResult);
         return root.HasValue && root.Value.ValueKind == JsonValueKind.Object && root.Value.TryGetProperty("error", out _);
+    }
+
+    /// <summary>Resultado de consulta com o campo "warning" do executor (linhas identicas).</summary>
+    public static bool HasWarning(string? toolResult)
+    {
+        var root = TryParse(toolResult);
+        return root is { ValueKind: JsonValueKind.Object } value && value.TryGetProperty("warning", out _);
     }
 
     /// <summary>"rowCount" do resultado de consultar_bi; null quando nao e um resultado de linhas.</summary>
