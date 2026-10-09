@@ -180,6 +180,11 @@ public class PowerBIToolset
     // Orcamento por mensagem: execucoes reais de consultar_bi (inicial + replays + DAX corrigida).
     private int _queryAttempts;
 
+    // Calibracao 015: datasets cujo schema o modelo ja leu nesta mensagem, e o schema em si,
+    // para validar a DAX antes de gastar uma tentativa no Power BI.
+    private readonly HashSet<long> _listedSchemas = new();
+    private readonly Dictionary<long, PowerBISchema> _schemaCache = new();
+
     internal PowerBIToolset(
         Agent agent,
         PowerBICredentials credentials,
@@ -284,6 +289,9 @@ public class PowerBIToolset
 
         var text = RenderSchemaText(dataset, schema);
 
+        _listedSchemas.Add(dataset.PowerBIDatasetId);
+        _schemaCache[dataset.PowerBIDatasetId] = schema;
+
         // Regra 5 de contracts/llm-tools.md: listar_schema tambem e registrado, com duracao ~0.
         await WriteLogAsync(dataset, ListSchemaToolName, null, 0, PowerBIQueryStatus.Success,
             null, schema.Tables.Count, false);
@@ -310,12 +318,25 @@ public class PowerBIToolset
 
         var dax = ReadDaxArgument(argumentsJson);
 
+        // Guarda 1: sem o schema o modelo inventa nomes de tabela; a rejeicao e local e nao conta no limite.
+        if (!_listedSchemas.Contains(dataset.PowerBIDatasetId))
+        {
+            return await FailLocalQueryAsync(dataset, dax,
+                $"Chame listar_schema para o dataset '{dataset.ToolKey}' antes de consultar_bi: a consulta precisa usar " +
+                "os nomes exatos de tabelas, colunas e valores do schema. Esta tentativa não contou no limite.");
+        }
+
         if (string.IsNullOrWhiteSpace(dax) || !StartsWithQueryKeyword(dax))
         {
             return await FailLocalQueryAsync(dataset, dax,
                 "A consulta DAX deve começar com EVALUATE ou DEFINE. Não use sintaxe SQL (SELECT, FROM, LIMIT); " +
                 "para limitar linhas use TOPN dentro da expressão DAX.");
         }
+
+        // Guarda 2: literal que nao existe na coluna (ex.: apresentacao do produto filtrada na coluna de fluxo).
+        var literalProblem = ValidateLiterals(dax, _schemaCache.GetValueOrDefault(dataset.PowerBIDatasetId));
+        if (literalProblem != null)
+            return await FailLocalQueryAsync(dataset, dax, literalProblem);
 
         QueryFailure? lastFailure = null;
 
@@ -450,6 +471,81 @@ public class PowerBIToolset
                "ou use ROW com um CALCULATE por valor, e consulte de novo antes de responder. Não interprete este " +
                "resultado como 'valores estáveis' nem como 'dados indisponíveis'.";
     }
+    private static readonly System.Text.RegularExpressions.Regex VarListPattern = new(
+        @"\bVAR\s+(\w+)\s*=\s*(\{[^}]*\}|""(?:[^""]|"""")*"")",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex LiteralFilterPattern = new(
+        @"'((?:[^']|'')+)'\s*\[([^\]]+)\]\s*(=|\bIN\b)\s*(\{[^}]*\}|""(?:[^""]|"""")*""|\w+)",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex StringLiteralPattern = new(
+        @"""((?:[^""]|"""")*)""", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Confere os filtros 'Tabela'[Coluna] = "x" / IN {...} contra os valores conhecidos da coluna
+    /// (lista completa quando o schema a traz). Devolve a mensagem do problema, ou null.
+    /// Erro tipico da calibracao: filtrar a apresentacao do produto na coluna de fluxo com o mesmo nome.
+    /// </summary>
+    public static string? ValidateLiterals(string dax, PowerBISchema? schema)
+    {
+        if (schema == null)
+            return null;
+
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Text.RegularExpressions.Match variable in VarListPattern.Matches(dax))
+            variables[variable.Groups[1].Value] = variable.Groups[2].Value;
+
+        foreach (System.Text.RegularExpressions.Match filter in LiteralFilterPattern.Matches(dax))
+        {
+            var tableName = filter.Groups[1].Value.Replace("''", "'");
+            var columnName = filter.Groups[2].Value;
+            var operand = filter.Groups[4].Value;
+
+            if (!operand.StartsWith('{') && !operand.StartsWith('"'))
+            {
+                if (!variables.TryGetValue(operand, out var resolved))
+                    continue;
+                operand = resolved;
+            }
+
+            var literals = StringLiteralPattern.Matches(operand)
+                .Select(m => m.Groups[1].Value.Replace("\"\"", "\""))
+                .ToList();
+
+            if (literals.Count == 0)
+                continue;
+
+            var table = schema.Tables.FirstOrDefault(t => string.Equals(t.Name, tableName, StringComparison.OrdinalIgnoreCase));
+            var column = table?.Columns.FirstOrDefault(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
+
+            if (column?.SampleValues is not { Count: > 0 } known)
+                continue;
+
+            var missing = literals.Where(l => !known.Contains(l, StringComparer.OrdinalIgnoreCase)).Distinct().ToList();
+            if (missing.Count == 0)
+                continue;
+
+            var message = $"Valor(es) {string.Join(", ", missing.Select(m => $"\"{m}\""))} não existe(m) na coluna " +
+                          $"{QuoteTable(table!.Name)}{QuoteMember(column.Name)}. Valores existentes: " +
+                          $"{string.Join(", ", known.Select(v => $"\"{v}\""))}.";
+
+            var elsewhere = schema.Tables
+                .SelectMany(t => t.Columns.Select(c => (Table: t, Column: c)))
+                .Where(x => x.Column != column && x.Column.SampleValues != null
+                    && missing.All(m => x.Column.SampleValues.Contains(m, StringComparer.OrdinalIgnoreCase)))
+                .Select(x => QuoteTable(x.Table.Name) + QuoteMember(x.Column.Name))
+                .ToList();
+
+            if (elsewhere.Count > 0)
+                message += $" Esses valores existem em {string.Join(" e ", elsewhere)}: filtre essa coluna no lugar.";
+
+            return message + " Esta tentativa não contou no limite.";
+        }
+
+        return null;
+    }
+
     private static QueryFailure Classify(PowerBIApiException ex, int durationMs)
     {
         var transient = ex.StatusCode is 429 or 0 || ex.StatusCode >= 500;

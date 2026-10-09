@@ -121,6 +121,55 @@ public class PowerBIToolProviderTest
         return toolset!;
     }
 
+    // Guarda da calibracao 015: consultar_bi exige listar_schema antes. Os testes de consulta
+    // partem de um toolset com o schema ja lido e as contagens de log/execucoes zeradas.
+    private async Task<PowerBIToolset> BuildReadyToolset(params PowerBIDataset[] datasets)
+    {
+        var toolset = await BuildToolset(datasets);
+        return await ReadyAsync(toolset, datasets[0].ToolKey);
+    }
+
+    private async Task<PowerBIToolset> ReadyAsync(PowerBIToolset toolset, string toolKey)
+    {
+        await toolset.ExecuteAsync(Call(PowerBIToolset.ListSchemaToolName, "{\"dataset\":\"" + toolKey + "\"}"), CancellationToken.None);
+        _queryLogRepoMock.Invocations.Clear();
+        toolset.ExecutedQueries.Clear();
+        return toolset;
+    }
+
+    private static PowerBIDataset DatasetWithValues() => new()
+    {
+        PowerBIDatasetId = 12,
+        AgentId = AgentId,
+        Name = "Comex",
+        ToolKey = "comex",
+        WorkspaceId = "workspace",
+        DatasetId = "dataset-3",
+        SchemaJson = PowerBISchema.Serialize(new PowerBISchema
+        {
+            Tables = new List<PowerBISchemaTable>
+            {
+                new()
+                {
+                    Name = "IMP_COMPLETA",
+                    Columns = new List<PowerBISchemaColumn>
+                    {
+                        new() { Name = "TIPO", DataType = "Text", SampleValues = new List<string> { "Exportação", "Importação" } },
+                        new() { Name = "CO_PAIS", DataType = "Text" }
+                    }
+                },
+                new()
+                {
+                    Name = "NCMs",
+                    Columns = new List<PowerBISchemaColumn>
+                    {
+                        new() { Name = "TIPO", DataType = "Text", SampleValues = new List<string> { "Congelado", "Resfriado" } }
+                    }
+                }
+            }
+        })
+    };
+
     [Fact]
     public async Task GetToolsetAsync_ShouldReturnNull_WhenTheFlagIsOff()
     {
@@ -312,7 +361,7 @@ public class PowerBIToolProviderTest
     public async Task ExecuteAsync_ShouldRejectDaxWithoutEvaluateOrDefine()
     {
         // Arrange
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -344,7 +393,7 @@ public class PowerBIToolProviderTest
                 Rows = new List<List<object?>> { new() { "Tilápia" } }
             });
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -377,7 +426,7 @@ public class PowerBIToolProviderTest
                 }
             });
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -419,7 +468,7 @@ public class PowerBIToolProviderTest
             .ThrowsAsync(new PowerBIApiException(400, "DatasetExecuteQueriesError",
                 "Query (1, 1) Cannot find table 'Exportação'. (EVALUATE \"Tilápia\")"));
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -449,7 +498,7 @@ public class PowerBIToolProviderTest
                 }
             });
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -473,7 +522,7 @@ public class PowerBIToolProviderTest
         _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new PowerBIApiException(404, "PowerBIEntityNotFound", "The dataset 'x' does not support queries."));
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -506,7 +555,7 @@ public class PowerBIToolProviderTest
                 Rows = new List<List<object?>> { new() { 12345.67 } }
             });
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         await toolset.ExecuteAsync(
@@ -546,7 +595,7 @@ public class PowerBIToolProviderTest
             .ThrowsAsync(new PowerBIApiException(400, "DatasetExecuteQueriesError",
                 "Falha usando super-segredo como credencial", "corpo: super-segredo aparecia aqui"));
 
-        var toolset = await BuildToolset(Dataset());
+        var toolset = await BuildReadyToolset(Dataset());
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -615,7 +664,7 @@ public class PowerBIToolProviderTest
                 };
             });
 
-        var toolset = await BuildToolsetWith(BuildProvider(5), Dataset());
+        var toolset = await ReadyAsync(await BuildToolsetWith(BuildProvider(5), Dataset()), "comercio");
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -640,7 +689,7 @@ public class PowerBIToolProviderTest
         _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(RateLimited());
 
-        var toolset = await BuildToolsetWith(BuildProvider(2), Dataset());
+        var toolset = await ReadyAsync(await BuildToolsetWith(BuildProvider(2), Dataset()), "comercio");
 
         // Act: o modelo chama de novo depois de esgotar o orcamento
         var first = await toolset.ExecuteAsync(
@@ -672,7 +721,7 @@ public class PowerBIToolProviderTest
         _clientMock.Setup(c => c.ExecuteQueryAsync(It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(RateLimited());
 
-        var toolset = await BuildToolsetWith(BuildProvider(3), Dataset());
+        var toolset = await ReadyAsync(await BuildToolsetWith(BuildProvider(3), Dataset()), "comercio");
 
         for (var i = 0; i < 3; i++)
         {
@@ -703,7 +752,7 @@ public class PowerBIToolProviderTest
             .Callback<PowerBIQueryLog>(l => saved = l)
             .ReturnsAsync((PowerBIQueryLog l) => l);
 
-        var toolset = await BuildToolsetWith(BuildProvider(5), Dataset());
+        var toolset = await ReadyAsync(await BuildToolsetWith(BuildProvider(5), Dataset()), "comercio");
 
         // Act
         var result = await toolset.ExecuteAsync(
@@ -725,5 +774,67 @@ public class PowerBIToolProviderTest
         Assert.NotNull(saved);
         Assert.Contains(longMessage, saved!.ErrorMessage);
         Assert.True(saved.ErrorMessage!.Length > 2000);
+    }
+    // ---------- Guardas da calibracao 015 ----------
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRequireListSchemaBeforeQuery_WithoutSpendingAnAttempt()
+    {
+        // Arrange: schema nao lido nesta mensagem
+        var toolset = await BuildToolset(Dataset());
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.QueryToolName, "{\"dataset\":\"comercio\",\"dax\":\"EVALUATE ROW(1,1)\"}"),
+            CancellationToken.None);
+
+        // Assert
+        using var doc = JsonDocument.Parse(result);
+        var error = doc.RootElement.GetProperty("error");
+        Assert.Contains("listar_schema", error.GetProperty("message").GetString());
+        Assert.True(error.GetProperty("queryMayBeCorrected").GetBoolean());
+        Assert.Equal(0, error.GetProperty("attemptNumber").GetInt32());
+        _clientMock.Verify(c => c.ExecuteQueryAsync(
+            It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRejectLiteralsThatDoNotExistInTheColumn_AndSuggestTheRightOne()
+    {
+        // Arrange: apresentacao do produto filtrada na coluna de fluxo com o mesmo nome
+        var toolset = await BuildReadyToolset(DatasetWithValues());
+
+        // Act
+        var result = await toolset.ExecuteAsync(
+            Call(PowerBIToolset.QueryToolName,
+                "{\"dataset\":\"comex\",\"dax\":\"EVALUATE ROW(\\\"kg\\\", CALCULATE(SUM('IMP_COMPLETA'[KG]), 'IMP_COMPLETA'[TIPO] IN {\\\"Fresco\\\", \\\"Congelado\\\"}))\"}"),
+            CancellationToken.None);
+
+        // Assert
+        using var doc = JsonDocument.Parse(result);
+        var message = doc.RootElement.GetProperty("error").GetProperty("message").GetString()!;
+        Assert.Contains("\"Fresco\", \"Congelado\"", message);
+        Assert.Contains("'IMP_COMPLETA'[TIPO]", message);
+        Assert.Contains("\"Exportação\", \"Importação\"", message);
+        Assert.DoesNotContain("'NCMs'[TIPO]", message); // "Fresco" nao existe la tambem: sem sugestao
+        _clientMock.Verify(c => c.ExecuteQueryAsync(
+            It.IsAny<PowerBICredentials>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void ValidateLiterals_ShouldSuggestTheColumnThatHasTheValues_AndResolveVarLists()
+    {
+        var schema = PowerBISchema.Deserialize(DatasetWithValues().SchemaJson)!;
+
+        var viaVar = PowerBIToolset.ValidateLiterals(
+            "DEFINE VAR _tipos = {\"Congelado\", \"Resfriado\"} EVALUATE ROW(\"kg\", CALCULATE(SUM('IMP_COMPLETA'[KG]), 'IMP_COMPLETA'[TIPO] IN _tipos))", schema);
+        Assert.NotNull(viaVar);
+        Assert.Contains("existem em 'NCMs'[TIPO]", viaVar);
+
+        // Valores certos, coluna sem lista conhecida e comparacao case-insensitive passam
+        Assert.Null(PowerBIToolset.ValidateLiterals("EVALUATE ROW(\"kg\", CALCULATE(SUM('IMP_COMPLETA'[KG]), 'IMP_COMPLETA'[TIPO] = \"Exportação\", 'NCMs'[TIPO] = \"congelado\"))", schema));
+        Assert.Null(PowerBIToolset.ValidateLiterals("EVALUATE ROW(\"kg\", CALCULATE(SUM('IMP_COMPLETA'[KG]), 'IMP_COMPLETA'[CO_PAIS] = \"249\"))", schema));
+        Assert.Null(PowerBIToolset.ValidateLiterals("EVALUATE ROW(\"kg\", CALCULATE(SUM('IMP_COMPLETA'[KG]), 'IMP_COMPLETA'[CO_ANO] = 2024))", schema));
+        Assert.Null(PowerBIToolset.ValidateLiterals("EVALUATE ROW(1,1)", null));
     }
 }
