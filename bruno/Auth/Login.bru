@@ -16,11 +16,11 @@ headers {
 
 body:json {
   {
-    "username": "landim32",
-    "password": "pikpro6"
+    "email": "{{email}}",
+    "password": "{{password}}"
   }
 }
 
 script:post-response {
-  bru.setVar("token", res.body.token);
+  bru.setVar("token", res.body.dados.token);
 }

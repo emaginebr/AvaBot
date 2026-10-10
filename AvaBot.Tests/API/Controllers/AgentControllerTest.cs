@@ -21,6 +21,7 @@ public class AgentControllerTest
     private readonly AgentService _agentService;
     private readonly SearchService _searchService;
     private readonly ChatService _chatService;
+    private const long OwnerId = 7;
     private readonly AgentController _sut;
 
     public AgentControllerTest()
@@ -49,7 +50,7 @@ public class AgentControllerTest
             _repositoryMock.Object,
             powerBIToolProvider,
             config, NullLogger<ChatService>.Instance);
-        _sut = new AgentController(_agentService, _searchService, _chatService, openAIMock.Object, _mapper);
+        _sut = new AgentController(_agentService, _searchService, _chatService, openAIMock.Object, _mapper).WithUser(OwnerId);
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public class AgentControllerTest
         {
             new() { AgentId = 1, Name = "Agent 1", Slug = "agent-1", SystemPrompt = "Prompt" }
         };
-        _repositoryMock.Setup(r => r.GetAllAsync()).ReturnsAsync(agents);
+        _repositoryMock.Setup(r => r.GetAllByOwnerAsync(OwnerId)).ReturnsAsync(agents);
 
         var result = await _sut.GetAll();
 
@@ -150,7 +151,7 @@ public class AgentControllerTest
     [Fact]
     public async Task Update_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
 
         var result = await _sut.Update(999, new AgentInsertInfo { Name = "X", SystemPrompt = "P" });
 
@@ -161,7 +162,7 @@ public class AgentControllerTest
     public async Task Update_ShouldReturnOk_WhenAgentExists()
     {
         var existing = new Agent { AgentId = 1, Name = "Old", Slug = "old" };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(existing);
         _repositoryMock.Setup(r => r.SlugExistsAsync("new-name", 1L)).ReturnsAsync(false);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
@@ -176,14 +177,14 @@ public class AgentControllerTest
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
         Assert.IsType<NotFoundObjectResult>(await _sut.Delete(999));
     }
 
     [Fact]
     public async Task Delete_ShouldReturnOk_WhenAgentExists()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Agent { AgentId = 1 });
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1 });
 
         var result = await _sut.Delete(1);
 
@@ -194,7 +195,7 @@ public class AgentControllerTest
     [Fact]
     public async Task ToggleStatus_ShouldReturnNotFound_WhenAgentNotExists()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
         Assert.IsType<NotFoundObjectResult>(await _sut.ToggleStatus(999));
     }
 
@@ -202,7 +203,7 @@ public class AgentControllerTest
     public async Task ToggleStatus_ShouldReturnOk_WhenAgentExists()
     {
         var agent = new Agent { AgentId = 1, Status = 1, Name = "A", Slug = "a" };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(agent);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
         var result = await _sut.ToggleStatus(1);
@@ -210,5 +211,49 @@ public class AgentControllerTest
         var okResult = Assert.IsType<OkObjectResult>(result);
         var response = Assert.IsType<Result<AgentInfo>>(okResult.Value);
         Assert.True(response.Sucesso);
+    }
+    [Fact]
+    public async Task Create_ShouldStoreTheOwnerFromTheToken()
+    {
+        Agent? created = null;
+        _repositoryMock.Setup(r => r.SlugExistsAsync("mine", null)).ReturnsAsync(false);
+        _repositoryMock.Setup(r => r.CreateAsync(It.IsAny<Agent>()))
+            .Callback<Agent>(a => created = a)
+            .ReturnsAsync((Agent a) => { a.AgentId = 1; return a; });
+
+        await _sut.Create(new AgentInsertInfo { Name = "Mine", SystemPrompt = "P" });
+
+        Assert.Equal(OwnerId, created!.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        // FR-011: mesma resposta de agente inexistente
+        _repositoryMock.Setup(r => r.GetByIdAsync(5, OwnerId)).ReturnsAsync((Agent?)null);
+
+        var result = await _sut.Update(5, new AgentInsertInfo { Name = "X", SystemPrompt = "P" });
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Agente nao encontrado", Assert.IsType<Result<object>>(notFound.Value).Mensagem);
+    }
+
+    [Fact]
+    public async Task Search_ShouldReturnNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(5, OwnerId)).ReturnsAsync((Agent?)null);
+
+        var result = await _sut.Search(5, "pergunta");
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Agente nao encontrado", Assert.IsType<Result<object>>(notFound.Value).Mensagem);
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldReturnUnauthorized_WhenTheTokenHasNoUserId()
+    {
+        var result = await _sut.WithoutUser().GetAll();
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
     }
 }

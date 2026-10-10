@@ -22,6 +22,9 @@ public class AgentProfile : Profile
             .ForMember(d => d.WhatsappToken, opt => opt.Ignore())
             .ForMember(d => d.OpenAIApiKeyEncrypted, opt => opt.Ignore())
             .ForMember(d => d.PowerBIEnabled, opt => opt.Ignore())
+            // O dono vem do service (usuario do token), nunca do corpo da requisicao.
+            .ForMember(d => d.OwnerUserId, opt => opt.Ignore())
+            .ForMember(d => d.Owner, opt => opt.Ignore())
             .ForMember(d => d.CreatedAt, opt => opt.Ignore())
             .ForMember(d => d.UpdatedAt, opt => opt.Ignore())
             .ForMember(d => d.KnowledgeFiles, opt => opt.Ignore())

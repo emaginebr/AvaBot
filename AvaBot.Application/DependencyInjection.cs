@@ -30,8 +30,11 @@ public static class DependencyInjection
         services.AddScoped<IAgentPowerBIConfigRepository<AgentPowerBIConfig>, AgentPowerBIConfigRepository>();
         services.AddScoped<IPowerBIDatasetRepository<PowerBIDataset>, PowerBIDatasetRepository>();
         services.AddScoped<IPowerBIQueryLogRepository<PowerBIQueryLog>, PowerBIQueryLogRepository>();
+        services.AddScoped<IUserRepository<User>, UserRepository>();
 
         // Domain Services
+        services.AddScoped<UserService>();
+        services.AddScoped<UserBootstrapService>();
         services.AddScoped<AgentService>();
         services.AddScoped<IngestionService>();
         services.AddScoped<SearchService>();
@@ -69,6 +72,7 @@ public static class DependencyInjection
 
         services.AddMemoryCache();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<IPowerBIClient, PowerBIClient>();
 
         services.AddHostedService<PowerBIQueryLogCleanupService>();

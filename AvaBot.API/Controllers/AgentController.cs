@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using AvaBot.DTO;
 using AvaBot.Domain.Models;
 using AvaBot.Application.Services;
+using AvaBot.API.Auth;
 using AvaBot.Infra.Interfaces.AppServices;
 
 namespace AvaBot.API.Controllers;
@@ -38,10 +39,15 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var agents = await _agentService.GetAllAsync();
+            var agents = await _agentService.GetAllAsync(User.GetUserId());
             var result = _mapper.Map<List<AgentInfo>>(agents);
             return Ok(Result<List<AgentInfo>>.Success(result, "Agentes listados com sucesso"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -60,6 +66,11 @@ public class AgentController : ControllerBase
 
             return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent)));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -82,6 +93,11 @@ public class AgentController : ControllerBase
             var config = _mapper.Map<AgentChatConfigInfo>(agent);
             return Ok(Result<AgentChatConfigInfo>.Success(config));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -93,13 +109,18 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var agent = await _agentService.CreateAsync(info);
+            var agent = await _agentService.CreateAsync(info, User.GetUserId());
             return Created($"/agents/{agent.Slug}", Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Agente criado com sucesso"));
         }
         catch (InvalidOperationException ex)
         {
             return BadRequest(Result<object>.Failure(ex.Message));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -111,7 +132,7 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var agent = await _agentService.UpdateAsync(id, info);
+            var agent = await _agentService.UpdateAsync(id, info, User.GetUserId());
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
@@ -121,6 +142,11 @@ public class AgentController : ControllerBase
         {
             return BadRequest(Result<object>.Failure(ex.Message));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -132,12 +158,17 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var deleted = await _agentService.DeleteAsync(id);
+            var deleted = await _agentService.DeleteAsync(id, User.GetUserId());
             if (!deleted)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
             return Ok(Result<object>.Success(null!, "Agente removido com sucesso"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -149,12 +180,17 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var agent = await _agentService.ToggleStatusAsync(id);
+            var agent = await _agentService.ToggleStatusAsync(id, User.GetUserId());
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
             return Ok(Result<AgentInfo>.Success(_mapper.Map<AgentInfo>(agent), "Status atualizado com sucesso"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -169,9 +205,17 @@ public class AgentController : ControllerBase
             if (string.IsNullOrWhiteSpace(query))
                 return BadRequest(Result<object>.Failure("O parametro 'query' e obrigatorio"));
 
+            if (await _agentService.GetOwnedByIdAsync(id, User.GetUserId()) == null)
+                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+
             var chunks = await _searchService.SearchAsync(id, query, topK);
             return Ok(Result<List<string>>.Success(chunks, $"{chunks.Count} resultado(s) encontrado(s)"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -186,7 +230,7 @@ public class AgentController : ControllerBase
             if (string.IsNullOrWhiteSpace(info.Query))
                 return BadRequest(Result<object>.Failure("O parametro 'query' e obrigatorio"));
 
-            var agent = await _agentService.GetByIdAsync(id);
+            var agent = await _agentService.GetOwnedByIdAsync(id, User.GetUserId());
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
@@ -217,6 +261,11 @@ public class AgentController : ControllerBase
                 Dados = ex.PartialResult
             });
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -228,14 +277,14 @@ public class AgentController : ControllerBase
     {
         try
         {
-            var agent = await _agentService.GetByIdAsync(id);
+            var agent = await _agentService.GetOwnedByIdAsync(id, User.GetUserId());
             if (agent == null)
                 return NotFound(Result<object>.Failure("Agente nao encontrado"));
 
             // Sem chave no corpo, usa a credencial salva (e falha com orientacao se nao houver).
             var apiKey = !string.IsNullOrWhiteSpace(info?.ApiKey)
                 ? info!.ApiKey!.Trim()
-                : await _agentService.GetOpenAIApiKeyAsync(id);
+                : await _agentService.GetOpenAIApiKeyAsync(id, User.GetUserId());
 
             var check = await _openAIService.TestApiKeyAsync(apiKey);
 
@@ -247,6 +296,11 @@ public class AgentController : ControllerBase
         {
             return BadRequest(Result<object>.Failure(ex.Message));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
+
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));

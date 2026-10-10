@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/LoginPage'
+import RegisterPage from './pages/auth/RegisterPage'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import AdminLayout from './components/admin/AdminLayout'
 import DashboardPage from './pages/admin/DashboardPage'
@@ -16,6 +17,7 @@ import AgentTestPage from './pages/admin/AgentTestPage'
 import TelegramBotPage from './pages/admin/TelegramBotPage'
 import WhatsappPage from './pages/admin/WhatsappPage'
 import PowerBIPage from './pages/admin/PowerBIPage'
+import AccountPage from './pages/admin/AccountPage'
 import ChatPage from './pages/chat/ChatPage'
 import AbipescaPage from './pages/AbipescaPage'
 import NotFoundPage from './components/common/NotFoundPage'
@@ -28,6 +30,7 @@ const App = () => {
       {/* Public routes */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/chat/:slug" element={<ChatPage />} />
       <Route path="/abipesca" element={<AbipescaPage />} />
 
@@ -35,6 +38,7 @@ const App = () => {
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<DashboardPage />} />
+          <Route path="/admin/account" element={<AccountPage />} />
           <Route path="/admin/agents" element={<AgentListPage />} />
           <Route path="/admin/agents/new" element={<AgentFormPage />} />
           <Route path="/admin/agents/:id/edit" element={<AgentFormPage />} />

@@ -17,6 +17,13 @@ public class LocalAgentRepository : IAgentRepository<Agent>
     public Task<Agent?> GetBySlugAsync(string slug) => Task.FromResult(slug == _agent.Slug ? _agent : null);
     public Task<List<Agent>> GetAllAsync() => Task.FromResult(new List<Agent> { _agent });
 
+    // A calibracao nao tem usuario: o dono e ignorado e nao ha orfaos a atribuir.
+    public Task<List<Agent>> GetAllByOwnerAsync(long ownerUserId) => GetAllAsync();
+    public Task<Agent?> GetByIdAsync(long id, long ownerUserId) => GetByIdAsync(id);
+    public Task<Agent?> GetBySlugAsync(string slug, long ownerUserId) => GetBySlugAsync(slug);
+    public Task<int> CountWithoutOwnerAsync() => Task.FromResult(0);
+    public Task<int> AssignOwnerToOrphansAsync(long ownerUserId) => Task.FromResult(0);
+
     public Task<Agent> CreateAsync(Agent agent) => throw ReadOnly();
     public Task<Agent> UpdateAsync(Agent agent) => throw ReadOnly();
     public Task DeleteAsync(long id) => throw ReadOnly();

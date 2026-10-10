@@ -18,9 +18,12 @@ public class Agent
     public string? TelegramWebhookSecret { get; set; }
     public string? WhatsappToken { get; set; }
     public bool PowerBIEnabled { get; set; }
+    // Nulo so entre a migracao de schema e o bootstrap da conta do administrador (feature 016).
+    public long? OwnerUserId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
+    public User? Owner { get; set; }
     public ICollection<KnowledgeFile> KnowledgeFiles { get; set; } = new List<KnowledgeFile>();
     public ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
     public ICollection<PowerBIDataset> PowerBIDatasets { get; set; } = new List<PowerBIDataset>();

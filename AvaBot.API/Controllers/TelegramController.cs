@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AvaBot.API.Auth;
 using AvaBot.Application.Services;
 using AvaBot.DTO;
 using Telegram.Bot.Types;
@@ -47,12 +48,17 @@ public class TelegramController : ControllerBase
     {
         try
         {
-            var result = await _telegramService.SetupWebhookAsync(id);
+            var result = await _telegramService.SetupWebhookAsync(id, User.GetUserId());
             return Ok(Result<TelegramWebhookInfo>.Success(result, "Webhook registrado com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {
@@ -70,12 +76,17 @@ public class TelegramController : ControllerBase
     {
         try
         {
-            var result = await _telegramService.GetWebhookInfoAsync(id);
+            var result = await _telegramService.GetWebhookInfoAsync(id, User.GetUserId());
             return Ok(Result<TelegramWebhookInfo>.Success(result, "Informacao do webhook obtida com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {
@@ -93,12 +104,17 @@ public class TelegramController : ControllerBase
     {
         try
         {
-            var result = await _telegramService.RegenerateWebhookSecretAsync(id);
+            var result = await _telegramService.RegenerateWebhookSecretAsync(id, User.GetUserId());
             return Ok(Result<TelegramWebhookInfo>.Success(result, "Secret regenerado e webhook atualizado com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {

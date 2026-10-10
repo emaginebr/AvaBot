@@ -1,6 +1,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AvaBot.API.Auth;
 using AvaBot.Application.Services;
 using AvaBot.DTO;
 using AvaBot.Infra.Interfaces.AppServices;
@@ -30,7 +31,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.GetConfigAsync(slug);
+            var result = await _powerBIService.GetConfigAsync(slug, User.GetUserId());
             return Ok(Result<PowerBIConfigInfo>.Success(result, "Configuracao obtida com sucesso"));
         }
         catch (Exception ex)
@@ -46,7 +47,7 @@ public class PowerBIController : ControllerBase
         try
         {
             await _configValidator.ValidateAndThrowAsync(info);
-            var result = await _powerBIService.SaveConfigAsync(slug, info);
+            var result = await _powerBIService.SaveConfigAsync(slug, User.GetUserId(), info);
             return Ok(Result<PowerBIConfigInfo>.Success(result, "Credenciais salvas com sucesso"));
         }
         catch (Exception ex)
@@ -61,7 +62,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.TestConnectionAsync(slug);
+            var result = await _powerBIService.TestConnectionAsync(slug, User.GetUserId());
             return Ok(Result<PowerBIConnectionTestInfo>.Success(result, "Teste de conexao executado"));
         }
         catch (Exception ex)
@@ -76,7 +77,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.SetEnabledAsync(slug, info.Enabled);
+            var result = await _powerBIService.SetEnabledAsync(slug, User.GetUserId(), info.Enabled);
             return Ok(Result<PowerBIConfigInfo>.Success(result,
                 info.Enabled ? "Power BI ativado com sucesso" : "Power BI desativado com sucesso"));
         }
@@ -92,7 +93,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.ListWorkspacesAsync(slug);
+            var result = await _powerBIService.ListWorkspacesAsync(slug, User.GetUserId());
             return Ok(Result<List<PowerBIWorkspaceInfo>>.Success(result, "Workspaces listados com sucesso"));
         }
         catch (Exception ex)
@@ -107,7 +108,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.GetDatasetsAsync(slug);
+            var result = await _powerBIService.GetDatasetsAsync(slug, User.GetUserId());
             return Ok(Result<List<PowerBIDatasetInfo>>.Success(result, "Datasets listados com sucesso"));
         }
         catch (Exception ex)
@@ -123,7 +124,7 @@ public class PowerBIController : ControllerBase
         try
         {
             await _datasetValidator.ValidateAndThrowAsync(info);
-            var result = await _powerBIService.CreateDatasetAsync(slug, info);
+            var result = await _powerBIService.CreateDatasetAsync(slug, User.GetUserId(), info);
             return Ok(Result<PowerBIDatasetInfo>.Success(result, "Dataset vinculado com sucesso"));
         }
         catch (Exception ex)
@@ -139,7 +140,7 @@ public class PowerBIController : ControllerBase
         try
         {
             await _datasetValidator.ValidateAndThrowAsync(info);
-            var result = await _powerBIService.UpdateDatasetAsync(slug, id, info);
+            var result = await _powerBIService.UpdateDatasetAsync(slug, User.GetUserId(), id, info);
             return Ok(Result<PowerBIDatasetInfo>.Success(result, "Dataset atualizado com sucesso"));
         }
         catch (Exception ex)
@@ -154,7 +155,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var message = await _powerBIService.DeleteDatasetAsync(slug, id);
+            var message = await _powerBIService.DeleteDatasetAsync(slug, User.GetUserId(), id);
             return Ok(Result<bool>.Success(true, message));
         }
         catch (Exception ex)
@@ -169,7 +170,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.GenerateSchemaAsync(slug, id);
+            var result = await _powerBIService.GenerateSchemaAsync(slug, User.GetUserId(), id);
             return Ok(Result<PowerBIDatasetSchemaInfo>.Success(result, "Schema gerado com sucesso"));
         }
         catch (Exception ex)
@@ -184,7 +185,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.GetSchemaAsync(slug, id);
+            var result = await _powerBIService.GetSchemaAsync(slug, User.GetUserId(), id);
             return Ok(Result<PowerBIDatasetSchemaInfo>.Success(result, "Schema obtido com sucesso"));
         }
         catch (Exception ex)
@@ -199,7 +200,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.UpdateSchemaDescriptionsAsync(slug, id, info);
+            var result = await _powerBIService.UpdateSchemaDescriptionsAsync(slug, User.GetUserId(), id, info);
             return Ok(Result<PowerBIDatasetSchemaInfo>.Success(result, "Descricoes salvas com sucesso"));
         }
         catch (Exception ex)
@@ -214,7 +215,7 @@ public class PowerBIController : ControllerBase
     {
         try
         {
-            var result = await _powerBIService.GetQueryLogsAsync(slug, page, pageSize);
+            var result = await _powerBIService.GetQueryLogsAsync(slug, User.GetUserId(), page, pageSize);
             return Ok(Result<PowerBIQueryLogPageInfo>.Success(result, "Historico obtido com sucesso"));
         }
         catch (Exception ex)
@@ -229,6 +230,7 @@ public class PowerBIController : ControllerBase
             string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)),
             validation.Errors.Select(e => e.ErrorMessage).ToArray())),
         KeyNotFoundException => NotFound(Result<object>.Failure("Agente nao encontrado")),
+        UnauthorizedAccessException => Unauthorized(Result<object>.Failure("Credenciais invalidas")),
         PowerBIApiException apiException => BadRequest(Result<object>.Failure(apiException.Message)),
         ArgumentException argument => BadRequest(Result<object>.Failure(argument.Message)),
         InvalidOperationException invalid => BadRequest(Result<object>.Failure(invalid.Message)),

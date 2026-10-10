@@ -43,7 +43,7 @@ data/
 !.env.prod.example
 
 # Integration test settings (contains credentials)
-Avachat.Tests.API/appsettings.json
+AvaBot.Tests.API/appsettings.json
 
 # SSL certificates
 nginx/certs/

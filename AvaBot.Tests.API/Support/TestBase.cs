@@ -27,10 +27,11 @@ public abstract class TestBase : IAsyncLifetime
 
     public virtual async Task InitializeAsync()
     {
+        // Feature 016: login por e-mail/senha, token no envelope Result (dados.token).
         var loginResponse = await Client.Request("auth/login")
-            .PostJsonAsync(new { username = Settings.Username, password = Settings.Password });
+            .PostJsonAsync(new { email = Settings.Email, password = Settings.Password });
         var loginJson = await loginResponse.GetJsonAsync<JsonElement>();
-        var token = loginJson.GetProperty("token").GetString();
+        var token = loginJson.GetProperty("dados").GetProperty("token").GetString();
         Client.WithHeader("Authorization", $"Bearer {token}");
     }
 
