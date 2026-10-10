@@ -35,10 +35,10 @@ public class WhatsappService
         _webhookBaseUrl = configuration["WppConnect:WebhookBaseUrl"] ?? "http://localhost:5000";
     }
 
-    public async Task<WhatsappStatusInfo> StartSessionAsync(string slug)
+    public async Task<WhatsappStatusInfo> StartSessionAsync(string slug, long ownerUserId)
     {
-        var agent = await _agentService.GetBySlugAsync(slug)
-            ?? throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
+        var agent = await _agentService.GetOwnedBySlugAsync(slug, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         var sessionName = slug;
         var webhookUrl = $"{_webhookBaseUrl}/whatsapp/{slug}/webhook";
@@ -78,9 +78,9 @@ public class WhatsappService
         };
     }
 
-    public async Task<WhatsappQrCodeInfo> GetQrCodeAsync(string slug)
+    public async Task<WhatsappQrCodeInfo> GetQrCodeAsync(string slug, long ownerUserId)
     {
-        var agent = await ResolveAgentAsync(slug);
+        var agent = await ResolveAgentAsync(slug, ownerUserId);
         var qrCode = await _wppConnect.GetQrCodeAsync(slug);
 
         return new WhatsappQrCodeInfo
@@ -90,9 +90,9 @@ public class WhatsappService
         };
     }
 
-    public async Task<WhatsappStatusInfo> GetStatusAsync(string slug)
+    public async Task<WhatsappStatusInfo> GetStatusAsync(string slug, long ownerUserId)
     {
-        var agent = await ResolveAgentAsync(slug);
+        var agent = await ResolveAgentAsync(slug, ownerUserId);
         var status = await _wppConnect.GetStatusAsync(slug);
 
         return new WhatsappStatusInfo
@@ -103,9 +103,9 @@ public class WhatsappService
         };
     }
 
-    public async Task<WhatsappStatusInfo> DisconnectAsync(string slug)
+    public async Task<WhatsappStatusInfo> DisconnectAsync(string slug, long ownerUserId)
     {
-        var agent = await ResolveAgentAsync(slug);
+        var agent = await ResolveAgentAsync(slug, ownerUserId);
 
         // logout-session invalida de fato a sessao do WhatsApp (equivalente a "sair" pelo
         // celular). close-session sozinho so fecha o browser/puppeteer e mantem os dados
@@ -280,10 +280,10 @@ public class WhatsappService
         }
     }
 
-    private async Task<Agent> ResolveAgentAsync(string slug)
+    private async Task<Agent> ResolveAgentAsync(string slug, long ownerUserId)
     {
-        var agent = await _agentService.GetBySlugAsync(slug)
-            ?? throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
+        var agent = await _agentService.GetOwnedBySlugAsync(slug, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         if (string.IsNullOrEmpty(agent.WhatsappToken))
             throw new InvalidOperationException("Agente nao possui sessao WhatsApp ativa. Chame /start-session primeiro.");

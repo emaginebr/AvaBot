@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/useAuthStore'
 import AgentSelector from './AgentSelector'
 
@@ -8,6 +8,7 @@ interface AdminNavbarProps {
 
 const AdminNavbar = ({ onToggleSidebar }: AdminNavbarProps) => {
   const logout = useAuthStore((state) => state.logout)
+  const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -34,15 +35,30 @@ const AdminNavbar = ({ onToggleSidebar }: AdminNavbarProps) => {
         <AgentSelector />
       </div>
 
-      <button
-        onClick={handleLogout}
-        className="text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1.5"
-      >
+      <div className="flex items-center gap-4">
+        {user && (
+          <Link
+            to="/admin/account"
+            title="Minha conta"
+            className="hidden sm:flex items-center gap-1.5 text-sm text-gray-600 hover:text-ava-700 transition-colors max-w-[180px]"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+            </svg>
+            <span className="truncate">{user.name}</span>
+          </Link>
+        )}
+
+        <button
+          onClick={handleLogout}
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1.5"
+        >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
         </svg>
-        Sair
-      </button>
+          Sair
+        </button>
+      </div>
     </header>
   )
 }

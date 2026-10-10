@@ -149,10 +149,10 @@ public class TelegramService
         }
     }
 
-    public async Task<TelegramWebhookInfo> SetupWebhookAsync(long agentId)
+    public async Task<TelegramWebhookInfo> SetupWebhookAsync(long agentId, long ownerUserId)
     {
-        var agent = await _agentRepo.GetByIdAsync(agentId)
-            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+        var agent = await _agentRepo.GetByIdAsync(agentId, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         if (string.IsNullOrEmpty(agent.TelegramBotToken))
             throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
@@ -176,10 +176,10 @@ public class TelegramService
         };
     }
 
-    public async Task<TelegramWebhookInfo> GetWebhookInfoAsync(long agentId)
+    public async Task<TelegramWebhookInfo> GetWebhookInfoAsync(long agentId, long ownerUserId)
     {
-        var agent = await _agentRepo.GetByIdAsync(agentId)
-            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+        var agent = await _agentRepo.GetByIdAsync(agentId, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         if (string.IsNullOrEmpty(agent.TelegramBotToken))
             throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
@@ -196,10 +196,10 @@ public class TelegramService
         };
     }
 
-    public async Task<TelegramWebhookInfo> RegenerateWebhookSecretAsync(long agentId)
+    public async Task<TelegramWebhookInfo> RegenerateWebhookSecretAsync(long agentId, long ownerUserId)
     {
-        var agent = await _agentRepo.GetByIdAsync(agentId)
-            ?? throw new KeyNotFoundException($"Agente {agentId} nao encontrado");
+        var agent = await _agentRepo.GetByIdAsync(agentId, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         if (string.IsNullOrEmpty(agent.TelegramBotToken))
             throw new InvalidOperationException("Agente nao possui TelegramBotToken configurado");
@@ -207,7 +207,7 @@ public class TelegramService
         agent.TelegramWebhookSecret = GenerateWebhookSecret();
         await _agentRepo.UpdateAsync(agent);
 
-        return await SetupWebhookAsync(agentId);
+        return await SetupWebhookAsync(agentId, ownerUserId);
     }
 
     public static string GenerateWebhookSecret()

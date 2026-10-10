@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AvaBot.DTO;
 using AvaBot.Domain.Models;
+using AvaBot.API.Auth;
 using AvaBot.Application.Services;
 using AvaBot.Infra.Interfaces.Repository;
 
@@ -75,6 +76,10 @@ public class SessionController : ControllerBase
     {
         try
         {
+            // Agente de outro dono responde como inexistente (FR-011).
+            if (await _agentService.GetOwnedByIdAsync(agentId, User.GetUserId()) == null)
+                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+
             maxPage = Math.Min(maxPage, 100);
             var sessions = await _sessionRepo.GetByAgentIdAsync(agentId, page, maxPage);
             var total = await _sessionRepo.CountByAgentIdAsync(agentId);
@@ -96,6 +101,10 @@ public class SessionController : ControllerBase
             };
 
             return Ok(Result<PaginatedResult<ChatSessionInfo>>.Success(paginated, "Sessoes listadas com sucesso"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (Exception ex)
         {
@@ -142,6 +151,11 @@ public class SessionController : ControllerBase
     {
         try
         {
+            // A sessao so e visivel se o agente dela for do usuario do token (FR-010).
+            var session = await _sessionRepo.GetByIdAsync(sessionId);
+            if (session?.AgentId == null || await _agentService.GetOwnedByIdAsync(session.AgentId.Value, User.GetUserId()) == null)
+                return NotFound(Result<object>.Failure("Sessao nao encontrada"));
+
             maxPage = Math.Min(maxPage, 200);
             var messages = await _messageRepo.GetBySessionIdAsync(sessionId, page, maxPage);
             var total = await _messageRepo.CountBySessionIdAsync(sessionId);
@@ -157,6 +171,10 @@ public class SessionController : ControllerBase
             };
 
             return Ok(Result<PaginatedResult<ChatMessageInfo>>.Success(paginated, "Mensagens listadas com sucesso"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (Exception ex)
         {

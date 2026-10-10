@@ -16,10 +16,27 @@ public class AvaBotContext : DbContext
     public DbSet<AgentPowerBIConfig> AgentPowerBIConfigs { get; set; }
     public DbSet<PowerBIDataset> PowerBIDatasets { get; set; }
     public DbSet<PowerBIQueryLog> PowerBIQueryLogs { get; set; }
+    public DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // User
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.ToTable("avabot_users");
+            entity.HasKey(e => e.UserId).HasName("avabot_users_pkey");
+            entity.Property(e => e.UserId).HasColumnName("user_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(260).IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(260).IsRequired();
+            entity.HasIndex(e => e.Email).IsUnique().HasDatabaseName("avabot_users_email_key");
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Ignore(e => e.IsActive);
+        });
 
         // Agent
         modelBuilder.Entity<Agent>(entity =>
@@ -53,6 +70,14 @@ public class AvaBotContext : DbContext
                 .HasDatabaseName("ix_avabot_agents_whatsapp_token")
                 .HasFilter("whatsapp_token IS NOT NULL");
             entity.Property(e => e.PowerBIEnabled).HasColumnName("powerbi_enabled").HasDefaultValue(false).IsRequired();
+            entity.Property(e => e.OwnerUserId).HasColumnName("owner_user_id");
+            entity.HasIndex(e => e.OwnerUserId).HasDatabaseName("ix_avabot_agents_owner_user_id");
+
+            entity.HasOne(e => e.Owner)
+                .WithMany(u => u.Agents)
+                .HasForeignKey(e => e.OwnerUserId)
+                .HasConstraintName("avabot_fk_users_agents")
+                .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         // KnowledgeFile

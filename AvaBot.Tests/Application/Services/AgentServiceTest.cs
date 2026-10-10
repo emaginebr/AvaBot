@@ -14,6 +14,7 @@ public class AgentServiceTest
 {
     private readonly Mock<IAgentRepository<Agent>> _repositoryMock;
     private readonly IMapper _mapper;
+    private const long OwnerId = 7;
     private readonly AgentService _sut;
 
     public AgentServiceTest()
@@ -34,10 +35,10 @@ public class AgentServiceTest
             new() { AgentId = 1, Name = "Agent 1", Slug = "agent-1" },
             new() { AgentId = 2, Name = "Agent 2", Slug = "agent-2" }
         };
-        _repositoryMock.Setup(r => r.GetAllAsync()).ReturnsAsync(agents);
+        _repositoryMock.Setup(r => r.GetAllByOwnerAsync(OwnerId)).ReturnsAsync(agents);
 
         // Act
-        var result = await _sut.GetAllAsync();
+        var result = await _sut.GetAllAsync(OwnerId);
 
         // Assert
         Assert.Equal(2, result.Count);
@@ -86,12 +87,13 @@ public class AgentServiceTest
             .ReturnsAsync((Agent a) => a);
 
         // Act
-        var result = await _sut.CreateAsync(info);
+        var result = await _sut.CreateAsync(info, OwnerId);
 
         // Assert
         Assert.Equal("My Test Agent", result.Name);
         Assert.Equal("my-test-agent", result.Slug);
         Assert.Equal(1, result.Status);
+        Assert.Equal(OwnerId, result.OwnerUserId);
         Assert.True(result.CollectName);
     }
 
@@ -106,7 +108,7 @@ public class AgentServiceTest
             .ReturnsAsync((Agent a) => a);
 
         // Act
-        var result = await _sut.CreateAsync(info);
+        var result = await _sut.CreateAsync(info, OwnerId);
 
         // Assert
         Assert.Equal("duplicate-2", result.Slug);
@@ -122,7 +124,7 @@ public class AgentServiceTest
             .ReturnsAsync((Agent a) => a);
 
         // Act
-        var result = await _sut.CreateAsync(info);
+        var result = await _sut.CreateAsync(info, OwnerId);
 
         // Assert
         Assert.Equal("agente-de-atencao", result.Slug);
@@ -132,10 +134,10 @@ public class AgentServiceTest
     public async Task UpdateAsync_ShouldReturnNull_WhenAgentNotFound()
     {
         // Arrange
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
 
         // Act
-        var result = await _sut.UpdateAsync(999, new AgentInsertInfo { Name = "X" });
+        var result = await _sut.UpdateAsync(999, new AgentInsertInfo { Name = "X" }, OwnerId);
 
         // Assert
         Assert.Null(result);
@@ -147,7 +149,7 @@ public class AgentServiceTest
     {
         // Arrange
         var existing = new Agent { AgentId = 1, Name = "Old Name", Slug = "old-name" };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(existing);
         _repositoryMock.Setup(r => r.SlugExistsAsync("new-name", 1L)).ReturnsAsync(false);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>()))
             .ReturnsAsync((Agent a) => a);
@@ -155,7 +157,7 @@ public class AgentServiceTest
         var info = new AgentInsertInfo { Name = "New Name", SystemPrompt = "P" };
 
         // Act
-        var result = await _sut.UpdateAsync(1, info);
+        var result = await _sut.UpdateAsync(1, info, OwnerId);
 
         // Assert
         Assert.NotNull(result);
@@ -168,14 +170,14 @@ public class AgentServiceTest
     {
         // Arrange
         var existing = new Agent { AgentId = 1, Name = "Same", Slug = "same" };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(existing);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>()))
             .ReturnsAsync((Agent a) => a);
 
         var info = new AgentInsertInfo { Name = "Same", SystemPrompt = "Updated prompt" };
 
         // Act
-        var result = await _sut.UpdateAsync(1, info);
+        var result = await _sut.UpdateAsync(1, info, OwnerId);
 
         // Assert
         Assert.Equal("same", result!.Slug);
@@ -185,33 +187,33 @@ public class AgentServiceTest
     [Fact]
     public async Task DeleteAsync_ShouldReturnFalse_WhenAgentNotFound()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
-        Assert.False(await _sut.DeleteAsync(999));
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
+        Assert.False(await _sut.DeleteAsync(999, OwnerId));
     }
 
     [Fact]
     public async Task DeleteAsync_ShouldReturnTrue_WhenAgentExists()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Agent { AgentId = 1 });
-        Assert.True(await _sut.DeleteAsync(1));
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1 });
+        Assert.True(await _sut.DeleteAsync(1, OwnerId));
         _repositoryMock.Verify(r => r.DeleteAsync(1), Times.Once);
     }
 
     [Fact]
     public async Task ToggleStatusAsync_ShouldReturnNull_WhenAgentNotFound()
     {
-        _repositoryMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Agent?)null);
-        Assert.Null(await _sut.ToggleStatusAsync(999));
+        _repositoryMock.Setup(r => r.GetByIdAsync(999, OwnerId)).ReturnsAsync((Agent?)null);
+        Assert.Null(await _sut.ToggleStatusAsync(999, OwnerId));
     }
 
     [Fact]
     public async Task ToggleStatusAsync_ShouldToggleFromActiveToInactive()
     {
         var agent = new Agent { AgentId = 1, Status = 1 };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(agent);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
-        var result = await _sut.ToggleStatusAsync(1);
+        var result = await _sut.ToggleStatusAsync(1, OwnerId);
         Assert.Equal(0, result!.Status);
     }
 
@@ -219,11 +221,61 @@ public class AgentServiceTest
     public async Task ToggleStatusAsync_ShouldToggleFromInactiveToActive()
     {
         var agent = new Agent { AgentId = 1, Status = 0 };
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(agent);
         _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
-        var result = await _sut.ToggleStatusAsync(1);
+        var result = await _sut.ToggleStatusAsync(1, OwnerId);
         Assert.Equal(1, result!.Status);
+    }
+
+    // --- Isolamento por dono (feature 016) ---
+
+    [Fact]
+    public async Task UpdateAsync_ShouldReturnNull_WhenAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync((Agent?)null);
+
+        var result = await _sut.UpdateAsync(1, new AgentInsertInfo { Name = "X", SystemPrompt = "P" }, OwnerId);
+
+        Assert.Null(result);
+        _repositoryMock.Verify(r => r.UpdateAsync(It.IsAny<Agent>()), Times.Never);
+        _repositoryMock.Verify(r => r.GetByIdAsync(1), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldReturnFalse_WhenAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync((Agent?)null);
+
+        Assert.False(await _sut.DeleteAsync(1, OwnerId));
+        _repositoryMock.Verify(r => r.DeleteAsync(It.IsAny<long>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ToggleStatusAsync_ShouldReturnNull_WhenAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync((Agent?)null);
+
+        Assert.Null(await _sut.ToggleStatusAsync(1, OwnerId));
+    }
+
+    [Fact]
+    public async Task GetOpenAIApiKeyAsync_ShouldThrowNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync((Agent?)null);
+
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.GetOpenAIApiKeyAsync(1, OwnerId));
+        Assert.Equal("Agente nao encontrado", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetOwnedBySlugAsync_ShouldUseTheOwnerFilter()
+    {
+        _repositoryMock.Setup(r => r.GetBySlugAsync("meu", OwnerId)).ReturnsAsync(new Agent { AgentId = 1, Slug = "meu", OwnerUserId = OwnerId });
+        _repositoryMock.Setup(r => r.GetBySlugAsync("alheio", OwnerId)).ReturnsAsync((Agent?)null);
+
+        Assert.NotNull(await _sut.GetOwnedBySlugAsync("meu", OwnerId));
+        Assert.Null(await _sut.GetOwnedBySlugAsync("alheio", OwnerId));
     }
 
     // --- Slugify static method tests ---

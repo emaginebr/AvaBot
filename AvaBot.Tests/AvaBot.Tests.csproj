@@ -28,6 +28,7 @@
     <ProjectReference Include="..\AvaBot.Infra\AvaBot.Infra.csproj" />
     <ProjectReference Include="..\AvaBot.Application\AvaBot.Application.csproj" />
     <ProjectReference Include="..\AvaBot.API\AvaBot.API.csproj" />
+    <ProjectReference Include="..\AvaBot.Calibration\AvaBot.Calibration.csproj" />
   </ItemGroup>
 
 </Project>

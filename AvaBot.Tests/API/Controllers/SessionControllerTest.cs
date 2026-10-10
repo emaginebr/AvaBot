@@ -21,6 +21,7 @@ public class SessionControllerTest
     private readonly Mock<IChatMessageRepository<ChatMessage>> _messageRepoMock;
     private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
     private readonly IMapper _mapper;
+    private const long OwnerId = 7;
     private readonly SessionController _sut;
 
     public SessionControllerTest()
@@ -51,7 +52,16 @@ public class SessionControllerTest
             NullLogger<PowerBIToolProvider>.Instance);
         var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, _agentRepoMock.Object, powerBIToolProvider, config, NullLogger<ChatService>.Instance);
 
-        _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper);
+        _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper).WithUser(OwnerId);
+
+        // Por padrao os agentes 1 e 10 sao do usuario do token; o 99 nao e.
+        _agentRepoMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1, OwnerUserId = OwnerId });
+        _agentRepoMock.Setup(r => r.GetByIdAsync(10, OwnerId)).ReturnsAsync(new Agent { AgentId = 10, OwnerUserId = OwnerId });
+        _agentRepoMock.Setup(r => r.GetByIdAsync(99, OwnerId)).ReturnsAsync((Agent?)null);
+        // Sessoes 1 e 10 pertencem a agentes do usuario; a 50 pertence ao agente 99.
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new ChatSession { ChatSessionId = 1, AgentId = 1 });
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(new ChatSession { ChatSessionId = 10, AgentId = 10 });
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(new ChatSession { ChatSessionId = 50, AgentId = 99 });
     }
 
     [Fact]
@@ -125,5 +135,32 @@ public class SessionControllerTest
 
         // Assert
         _messageRepoMock.Verify(r => r.GetBySessionIdAsync(1, 1, 200), Times.Once);
+    }
+    [Fact]
+    public async Task GetSessions_ShouldReturnNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        var result = await _sut.GetSessions(99);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Agente nao encontrado", Assert.IsType<Result<object>>(notFound.Value).Mensagem);
+        _sessionRepoMock.Verify(r => r.GetByAgentIdAsync(It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMessages_ShouldReturnNotFound_WhenTheSessionBelongsToAnotherOwnersAgent()
+    {
+        var result = await _sut.GetMessages(50);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Sessao nao encontrada", Assert.IsType<Result<object>>(notFound.Value).Mensagem);
+        _messageRepoMock.Verify(r => r.GetBySessionIdAsync(It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMessages_ShouldReturnNotFound_WhenTheSessionDoesNotExist()
+    {
+        _sessionRepoMock.Setup(r => r.GetByIdAsync(404)).ReturnsAsync((ChatSession?)null);
+
+        Assert.IsType<NotFoundObjectResult>(await _sut.GetMessages(404));
     }
 }

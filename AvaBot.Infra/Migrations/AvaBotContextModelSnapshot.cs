@@ -17,7 +17,7 @@ namespace AvaBot.Infra.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.19")
+                .HasAnnotation("ProductVersion", "9.0.20")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -76,6 +76,10 @@ namespace AvaBot.Infra.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("openai_api_key_encrypted");
 
+                    b.Property<long?>("OwnerUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("owner_user_id");
+
                     b.Property<bool>("PowerBIEnabled")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -125,6 +129,9 @@ namespace AvaBot.Infra.Migrations
 
                     b.HasKey("AgentId")
                         .HasName("avabot_agents_pkey");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_avabot_agents_owner_user_id");
 
                     b.HasIndex("Slug")
                         .IsUnique()
@@ -558,6 +565,67 @@ namespace AvaBot.Infra.Migrations
                     b.ToTable("avabot_telegram_chats", (string)null);
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.User", b =>
+                {
+                    b.Property<long>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("UserId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId")
+                        .HasName("avabot_users_pkey");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_users_email_key");
+
+                    b.ToTable("avabot_users", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.Agent", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.User", "Owner")
+                        .WithMany("Agents")
+                        .HasForeignKey("OwnerUserId")
+                        .HasConstraintName("avabot_fk_users_agents");
+
+                    b.Navigation("Owner");
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.AgentPowerBIConfig", b =>
                 {
                     b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
@@ -673,6 +741,11 @@ namespace AvaBot.Infra.Migrations
             modelBuilder.Entity("AvaBot.Domain.Models.ChatSession", b =>
                 {
                     b.Navigation("ChatMessages");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.User", b =>
+                {
+                    b.Navigation("Agents");
                 });
 #pragma warning restore 612, 618
         }

@@ -15,6 +15,7 @@ public class PowerBIServiceTest
 {
     private const long AgentId = 1;
     private const string Slug = "agente-teste";
+    private const long OwnerId = 7;
     private const string SchemaJson = """
         {"tables":[{"name":"Exportacoes","columns":[{"name":"Data","dataType":"DateTime"}],"measures":[]}]}
         """;
@@ -42,7 +43,7 @@ public class PowerBIServiceTest
             schemaBuilder,
             NullLogger<PowerBIService>.Instance);
 
-        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug))
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, OwnerId))
             .ReturnsAsync(new Agent { AgentId = AgentId, Slug = Slug, Name = "Agente" });
 
         _protectorMock.Setup(p => p.Protect(It.IsAny<string>())).Returns((string plain) => $"cipher:{plain}");
@@ -87,7 +88,7 @@ public class PowerBIServiceTest
             .ReturnsAsync((AgentPowerBIConfig c) => c);
 
         // Act
-        await _sut.SaveConfigAsync(Slug, new PowerBIConfigUpdateInfo
+        await _sut.SaveConfigAsync(Slug, OwnerId, new PowerBIConfigUpdateInfo
         {
             TenantId = "11111111-1111-1111-1111-111111111111",
             ClientId = "22222222-2222-2222-2222-222222222222",
@@ -108,7 +109,7 @@ public class PowerBIServiceTest
         ArrangeConfig(null);
 
         // Act & Assert (FR-003: criacao exige segredo)
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SaveConfigAsync(Slug,
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SaveConfigAsync(Slug, OwnerId,
             new PowerBIConfigUpdateInfo { TenantId = "t", ClientId = "c", ClientSecret = null }));
     }
 
@@ -123,7 +124,7 @@ public class PowerBIServiceTest
             .ReturnsAsync((AgentPowerBIConfig c) => c);
 
         // Act (FR-003)
-        await _sut.SaveConfigAsync(Slug, new PowerBIConfigUpdateInfo
+        await _sut.SaveConfigAsync(Slug, OwnerId, new PowerBIConfigUpdateInfo
         {
             TenantId = "11111111-1111-1111-1111-111111111111",
             ClientId = "22222222-2222-2222-2222-222222222222",
@@ -149,7 +150,7 @@ public class PowerBIServiceTest
             .ReturnsAsync((AgentPowerBIConfig c) => c);
 
         // Act
-        var result = await _sut.SaveConfigAsync(Slug, new PowerBIConfigUpdateInfo
+        var result = await _sut.SaveConfigAsync(Slug, OwnerId, new PowerBIConfigUpdateInfo
         {
             TenantId = "11111111-1111-1111-1111-111111111111",
             ClientId = "22222222-2222-2222-2222-222222222222",
@@ -170,7 +171,7 @@ public class PowerBIServiceTest
         ArrangeConfig(ConfigWithSecret());
 
         // Act
-        var info = await _sut.GetConfigAsync(Slug);
+        var info = await _sut.GetConfigAsync(Slug, OwnerId);
         var json = JsonSerializer.Serialize(info);
 
         // Assert (FR-005 / SC-007)
@@ -187,7 +188,7 @@ public class PowerBIServiceTest
         ArrangeConfig(null);
 
         // Act
-        var info = await _sut.GetConfigAsync(Slug);
+        var info = await _sut.GetConfigAsync(Slug, OwnerId);
 
         // Assert
         Assert.False(info.IsConfigured);
@@ -200,10 +201,31 @@ public class PowerBIServiceTest
     public async Task GetConfigAsync_ShouldThrowNotFound_ForAnUnknownAgent()
     {
         // Arrange
-        _agentRepoMock.Setup(r => r.GetBySlugAsync("ninguem")).ReturnsAsync((Agent?)null);
+        _agentRepoMock.Setup(r => r.GetBySlugAsync("ninguem", OwnerId)).ReturnsAsync((Agent?)null);
 
         // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.GetConfigAsync("ninguem"));
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.GetConfigAsync("ninguem", OwnerId));
+    }
+
+    [Fact]
+    public async Task GetConfigAsync_ShouldThrowNotFound_WhenTheAgentBelongsToAnotherOwner()
+    {
+        // Arrange (FR-011): o repositorio filtrado nao devolve o agente alheio
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, 99)).ReturnsAsync((Agent?)null);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.GetConfigAsync(Slug, 99));
+        Assert.Equal("Agente nao encontrado", ex.Message);
+        _agentRepoMock.Verify(r => r.GetBySlugAsync(Slug), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetDatasetsAsync_ShouldThrowNotFound_WhenTheAgentBelongsToAnotherOwner()
+    {
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, 99)).ReturnsAsync((Agent?)null);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.GetDatasetsAsync(Slug, 99));
+        _datasetRepoMock.Verify(r => r.GetByAgentIdAsync(It.IsAny<long>()), Times.Never);
     }
 
     [Fact]
@@ -215,7 +237,7 @@ public class PowerBIServiceTest
             .ReturnsAsync(new List<PowerBIDataset> { new() { AgentId = AgentId, Name = "Sem schema", ToolKey = "sem_schema" } });
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SetEnabledAsync(Slug, true));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SetEnabledAsync(Slug, OwnerId, true));
         Assert.Contains("schema", exception.Message);
     }
 
@@ -226,7 +248,7 @@ public class PowerBIServiceTest
         ArrangeConfig(null);
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SetEnabledAsync(Slug, true));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.SetEnabledAsync(Slug, OwnerId, true));
         Assert.Contains("credenciais", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -235,14 +257,14 @@ public class PowerBIServiceTest
     {
         // Arrange
         var agent = new Agent { AgentId = AgentId, Slug = Slug };
-        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug)).ReturnsAsync(agent);
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, OwnerId)).ReturnsAsync(agent);
         ArrangeConfig(ConfigWithSecret());
         _datasetRepoMock.Setup(r => r.GetByAgentIdAsync(AgentId))
             .ReturnsAsync(new List<PowerBIDataset> { UsableDataset() });
         _agentRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
         // Act
-        var result = await _sut.SetEnabledAsync(Slug, true);
+        var result = await _sut.SetEnabledAsync(Slug, OwnerId, true);
 
         // Assert
         Assert.True(agent.PowerBIEnabled);
@@ -254,7 +276,7 @@ public class PowerBIServiceTest
     {
         // Arrange
         var agent = new Agent { AgentId = AgentId, Slug = Slug, PowerBIEnabled = true };
-        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug)).ReturnsAsync(agent);
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, OwnerId)).ReturnsAsync(agent);
         _agentRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
 
         var dataset = UsableDataset();
@@ -264,7 +286,7 @@ public class PowerBIServiceTest
         _datasetRepoMock.Setup(r => r.GetByAgentIdAsync(AgentId)).ReturnsAsync(new List<PowerBIDataset>());
 
         // Act
-        var message = await _sut.DeleteDatasetAsync(Slug, dataset.PowerBIDatasetId);
+        var message = await _sut.DeleteDatasetAsync(Slug, OwnerId, dataset.PowerBIDatasetId);
 
         // Assert (FR-015)
         Assert.False(agent.PowerBIEnabled);
@@ -277,7 +299,7 @@ public class PowerBIServiceTest
     {
         // Arrange
         var agent = new Agent { AgentId = AgentId, Slug = Slug, PowerBIEnabled = true };
-        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug)).ReturnsAsync(agent);
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, OwnerId)).ReturnsAsync(agent);
 
         var dataset = UsableDataset(10);
         _datasetRepoMock.Setup(r => r.GetByIdAsync(AgentId, 10)).ReturnsAsync(dataset);
@@ -285,7 +307,7 @@ public class PowerBIServiceTest
             .ReturnsAsync(new List<PowerBIDataset> { UsableDataset(11) });
 
         // Act
-        var message = await _sut.DeleteDatasetAsync(Slug, 10);
+        var message = await _sut.DeleteDatasetAsync(Slug, OwnerId, 10);
 
         // Assert
         Assert.True(agent.PowerBIEnabled);
@@ -301,7 +323,7 @@ public class PowerBIServiceTest
             .ReturnsAsync(true);
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.CreateDatasetAsync(Slug,
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.CreateDatasetAsync(Slug, OwnerId,
             new PowerBIDatasetInsertInfo
             {
                 WorkspaceId = "33333333-3333-3333-3333-333333333333",
@@ -320,7 +342,7 @@ public class PowerBIServiceTest
             .ReturnsAsync((PowerBIDataset d) => d);
 
         // Act
-        var result = await _sut.CreateDatasetAsync(Slug, new PowerBIDatasetInsertInfo
+        var result = await _sut.CreateDatasetAsync(Slug, OwnerId, new PowerBIDatasetInsertInfo
         {
             WorkspaceId = "33333333-3333-3333-3333-333333333333",
             DatasetId = "44444444-4444-4444-4444-444444444444",
@@ -343,7 +365,7 @@ public class PowerBIServiceTest
         _datasetRepoMock.Setup(r => r.UpdateAsync(It.IsAny<PowerBIDataset>())).ReturnsAsync((PowerBIDataset d) => d);
 
         // Act
-        var result = await _sut.UpdateDatasetAsync(Slug, dataset.PowerBIDatasetId, new PowerBIDatasetInsertInfo
+        var result = await _sut.UpdateDatasetAsync(Slug, OwnerId, dataset.PowerBIDatasetId, new PowerBIDatasetInsertInfo
         {
             WorkspaceId = dataset.WorkspaceId,
             DatasetId = "55555555-5555-5555-5555-555555555555",
@@ -376,7 +398,7 @@ public class PowerBIServiceTest
             .ThrowsAsync(new PowerBIApiException(404, "PowerBIEntityNotFound", "no query permission"));
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.GenerateSchemaAsync(Slug, dataset.PowerBIDatasetId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.GenerateSchemaAsync(Slug, OwnerId, dataset.PowerBIDatasetId));
 
         Assert.Equal(PowerBISchemaStatus.Error, dataset.SchemaStatus);
         Assert.NotNull(dataset.SchemaError);
@@ -429,7 +451,7 @@ public class PowerBIServiceTest
             .ReturnsAsync(new PowerBIQueryResult());
 
         // Act
-        var result = await _sut.GenerateSchemaAsync(Slug, dataset.PowerBIDatasetId);
+        var result = await _sut.GenerateSchemaAsync(Slug, OwnerId, dataset.PowerBIDatasetId);
 
         // Assert (FR-012)
         Assert.Equal(PowerBISchemaStatus.Generated, (PowerBISchemaStatus)result.SchemaStatus);
@@ -447,7 +469,7 @@ public class PowerBIServiceTest
         _datasetRepoMock.Setup(r => r.GetByIdAsync(AgentId, dataset.PowerBIDatasetId)).ReturnsAsync(dataset);
 
         // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(() => _sut.UpdateSchemaDescriptionsAsync(Slug, dataset.PowerBIDatasetId,
+        await Assert.ThrowsAsync<ArgumentException>(() => _sut.UpdateSchemaDescriptionsAsync(Slug, OwnerId, dataset.PowerBIDatasetId,
             new PowerBISchemaDescriptionUpdateInfo
             {
                 Items = new List<PowerBISchemaDescriptionItemInfo>
@@ -469,7 +491,7 @@ public class PowerBIServiceTest
         _datasetRepoMock.Setup(r => r.UpdateAsync(It.IsAny<PowerBIDataset>())).ReturnsAsync((PowerBIDataset d) => d);
 
         // Act
-        var result = await _sut.UpdateSchemaDescriptionsAsync(Slug, dataset.PowerBIDatasetId,
+        var result = await _sut.UpdateSchemaDescriptionsAsync(Slug, OwnerId, dataset.PowerBIDatasetId,
             new PowerBISchemaDescriptionUpdateInfo
             {
                 Items = new List<PowerBISchemaDescriptionItemInfo>
@@ -490,7 +512,7 @@ public class PowerBIServiceTest
             .ReturnsAsync((new List<PowerBIQueryLog>(), 0));
 
         // Act
-        var result = await _sut.GetQueryLogsAsync(Slug, 1, 5000);
+        var result = await _sut.GetQueryLogsAsync(Slug, OwnerId, 1, 5000);
 
         // Assert
         Assert.Equal(100, result.PageSize);
@@ -517,7 +539,7 @@ public class PowerBIServiceTest
             .ThrowsAsync(new PowerBIApiException(404, "PowerBIEntityNotFound", "no query permission"));
 
         // Act
-        var result = await _sut.TestConnectionAsync(Slug);
+        var result = await _sut.TestConnectionAsync(Slug, OwnerId);
 
         // Assert
         Assert.False(result.Success);

@@ -70,37 +70,108 @@ public class ChatService
         return await _messageRepository.CreateAsync(message);
     }
 
-    public async Task<AgentTestResultInfo> TestMessageAsync(long agentId, string chatModel, string systemPrompt, string userMessage)
+    public async Task<AgentTestResultInfo> TestMessageAsync(
+        long agentId,
+        string chatModel,
+        string systemPrompt,
+        string userMessage,
+        IReadOnlyList<AgentTestMessageInfo>? history = null)
     {
         var agent = await _agentRepository.GetByIdAsync(agentId);
         var toolset = agent != null
             ? await _powerBIToolProvider.GetToolsetAsync(agent, null, userMessage)
             : null;
 
+        // Mesmo corte de historico do chat real (Chat:MaxHistoryMessages): ficam as mais recentes.
+        var allHistory = (history ?? Array.Empty<AgentTestMessageInfo>())
+            .Select(m => new ChatMessage
+            {
+                SenderType = m.Role == "assistant" ? SenderType.Assistant : SenderType.User,
+                Content = m.Content
+            })
+            .ToList();
+        var historyOmittedCount = Math.Max(0, allHistory.Count - _maxHistoryMessages);
+        var recentHistory = allHistory.Skip(historyOmittedCount).ToList();
+
         var chunks = await _searchService.SearchAsync(agentId, userMessage);
         var fullSystemPrompt = BuildFullSystemPrompt(systemPrompt, null, toolset != null);
-        var messages = BuildMessages(new List<ChatMessage>(), chunks, userMessage);
+        var messages = BuildMessages(recentHistory, chunks, userMessage);
 
         var toolCallBudget = toolset == null
             ? _maxToolCallsPerMessage
             : Math.Max(_maxToolCallsPerMessage, toolset.ModelToolCallBudget);
 
-        var response = toolset == null
-            ? await _openAIService.ChatCompletionAsync(agentId, chatModel, fullSystemPrompt, messages)
-            : await _openAIService.ChatCompletionWithToolsAsync(
-                agentId, chatModel, fullSystemPrompt, messages,
-                toolset.Definitions, toolset.ExecuteAsync, toolCallBudget);
+        // Rastreamento por rodada: base do relatorio de calibracao (feature 015).
+        var trace = new ChatCompletionTrace();
 
-        return new AgentTestResultInfo
+        AgentTestResultInfo BuildResult(string response) => new()
         {
             SearchQuery = userMessage,
             SearchResults = chunks,
             SystemPrompt = fullSystemPrompt,
             Messages = messages.Select(m => new AgentTestMessageInfo { Role = m.Role, Content = m.Content }).ToList(),
             AssistantResponse = response,
-            PowerBIQueries = toolset?.ExecutedQueries ?? new List<AgentTestPowerBIQueryInfo>()
+            PowerBIQueries = toolset?.ExecutedQueries ?? new List<AgentTestPowerBIQueryInfo>(),
+            ChatModel = chatModel,
+            PowerBIAvailable = toolset != null,
+            PowerBIDatasets = toolset?.DatasetNames.ToList() ?? new List<string>(),
+            MaxQueryAttempts = toolset?.MaxQueryAttempts,
+            HistoryOmittedCount = historyOmittedCount,
+            Trace = MapTrace(trace)
         };
+
+        string response;
+
+        try
+        {
+            response = toolset == null
+                ? await _openAIService.ChatCompletionAsync(agentId, chatModel, fullSystemPrompt, messages, trace: trace)
+                : await _openAIService.ChatCompletionWithToolsAsync(
+                    agentId, chatModel, fullSystemPrompt, messages,
+                    toolset.Definitions, toolset.ExecuteAsync, toolCallBudget, trace: trace);
+        }
+        catch (Exception ex) when (trace.Rounds.Count > 0 && ex is not OperationCanceledException)
+        {
+            // Com ao menos uma rodada registrada, o parcial vale para o diagnostico (research R5).
+            trace.Error ??= ex.Message;
+            throw new AgentTestFailedException(ex.Message, BuildResult(string.Empty), ex);
+        }
+
+        return BuildResult(response);
     }
+
+    private static AgentTestTraceInfo MapTrace(ChatCompletionTrace trace) => new()
+    {
+        Error = trace.Error,
+        Rounds = trace.Rounds.Select(r => new AgentTestTraceRoundInfo
+        {
+            Number = r.Number,
+            Messages = r.Messages.Select(m => new AgentTestTraceMessageInfo
+            {
+                Role = m.Role,
+                Content = m.Content,
+                ToolCalls = m.ToolCalls?.Select(MapToolCall).ToList(),
+                ToolCallId = m.ToolCallId
+            }).ToList(),
+            ToolsOffered = r.ToolsOffered,
+            ToolChoiceNone = r.ToolChoiceNone,
+            FinishReason = r.FinishReason,
+            ResponseText = r.ResponseText,
+            ToolCalls = r.ToolCalls.Select(MapToolCall).ToList(),
+            InputTokens = r.InputTokens,
+            OutputTokens = r.OutputTokens,
+            DurationMs = r.DurationMs
+        }).ToList()
+    };
+
+    private static AgentTestTraceToolCallInfo MapToolCall(ChatTraceToolCall call) => new()
+    {
+        Id = call.Id,
+        Name = call.Name,
+        ArgumentsJson = call.ArgumentsJson,
+        Result = call.Result,
+        DurationMs = call.DurationMs
+    };
 
     public async IAsyncEnumerable<string> ProcessMessageAsync(
         long agentId,
@@ -172,6 +243,10 @@ public class ChatService
             : "\n\nFORMATACAO: Responda usando Markdown. Use **negrito** para termos importantes, listas com - ou 1. para enumerar itens, e paragrafos bem estruturados. NAO use titulos ou cabecalhos (nada de # ou ##). Mantenha a resposta clara, objetiva e bem formatada.";
 
         var fullSystemPrompt = systemPrompt + contextRule + formattingRule;
+
+        // O modelo nao sabe a data: sem ela, "ultimos 5 anos", "desde 2022" e "ate o mes atual"
+        // sao calculados a partir do ano do treinamento (calibracao 015).
+        fullSystemPrompt += $"\n\nDATA DE HOJE: {DateTime.Now:yyyy-MM-dd} (ano corrente: {DateTime.Now:yyyy}).";
 
         if (hasDataTools)
             fullSystemPrompt += "\n\n" + PowerBIToolset.PromptAddendum;

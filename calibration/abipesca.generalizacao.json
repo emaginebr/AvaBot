@@ -1,0 +1,14 @@
+{
+  "conversations": [
+    { "name": "importacao-salmao-2024", "messages": ["Quanto o Brasil importou de salmão em 2024, em toneladas?"] },
+    { "name": "destinos-tilapia-2024", "messages": ["Quais foram os 5 principais países de destino das exportações brasileiras de tilápia em 2024?"] },
+    { "name": "valor-camarao-2023", "messages": ["Qual foi o valor em dólares das exportações de camarão do Brasil em 2023?"] },
+    { "name": "mensal-tilapia-2024", "messages": ["Como evoluiu mês a mês a exportação de tilápia em 2024?"] },
+    { "name": "bacalhau-comparacao", "messages": [
+      "Quanto o Brasil importou de bacalhau em 2024?",
+      "E em 2023, foi maior ou menor?"
+    ]},
+    { "name": "sem-ano", "messages": ["Quanto o Brasil exporta de tilápia?"] },
+    { "name": "outro-dataset-producao", "messages": ["Qual foi a produção brasileira de tilápia em 2023?"] }
+  ]
+}

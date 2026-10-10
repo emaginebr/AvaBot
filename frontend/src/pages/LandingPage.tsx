@@ -21,12 +21,20 @@ const LandingPage = () => {
             </div>
             <span className="text-xl font-bold tracking-tight text-gray-900">AvaBot</span>
           </a>
-          <Link
-            to="/admin/agents"
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-ava-200 hover:bg-ava-50 hover:text-ava-700"
-          >
-            Admin
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/login"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-all hover:border-ava-200 hover:bg-ava-50 hover:text-ava-700"
+            >
+              Entrar
+            </Link>
+            <Link
+              to="/register"
+              className="rounded-lg bg-ava-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-ava-600/25 transition-all hover:bg-ava-700"
+            >
+              Criar conta
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -87,10 +95,10 @@ const LandingPage = () => {
                   </svg>
                 </a>
                 <Link
-                  to="/admin/agents"
+                  to="/register"
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-7 py-3.5 text-sm font-semibold text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
                 >
-                  Acessar painel
+                  Criar minha conta
                 </Link>
               </div>
             </div>

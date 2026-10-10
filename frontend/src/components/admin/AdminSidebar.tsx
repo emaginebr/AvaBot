@@ -10,6 +10,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { label: 'Dashboard', path: '/admin', requiresAgent: false },
   { label: 'Agentes', path: '/admin/agents', requiresAgent: false },
+  { label: 'Minha conta', path: '/admin/account', requiresAgent: false },
   { label: 'Configurações', path: '/admin/settings', requiresAgent: true },
   { label: 'Bot Telegram', path: '/admin/telegram', requiresAgent: true },
   { label: 'WhatsApp', path: '/admin/whatsapp', requiresAgent: true },

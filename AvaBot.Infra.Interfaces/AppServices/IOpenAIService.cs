@@ -3,10 +3,10 @@ namespace AvaBot.Infra.Interfaces.AppServices;
 public interface IOpenAIService
 {
     Task<float[]> GenerateEmbeddingAsync(long agentId, string text);
-    Task<string> ChatCompletionAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, CancellationToken cancellationToken = default);
+    Task<string> ChatCompletionAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, CancellationToken cancellationToken = default, ChatCompletionTrace? trace = null);
     IAsyncEnumerable<string> StreamChatCompletionAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, CancellationToken cancellationToken = default);
     IAsyncEnumerable<string> StreamChatCompletionWithToolsAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, IReadOnlyList<ChatToolDefinition> tools, Func<ChatToolCall, CancellationToken, Task<string>> toolExecutor, int maxToolCalls, CancellationToken cancellationToken = default);
-    Task<string> ChatCompletionWithToolsAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, IReadOnlyList<ChatToolDefinition> tools, Func<ChatToolCall, CancellationToken, Task<string>> toolExecutor, int maxToolCalls, CancellationToken cancellationToken = default);
+    Task<string> ChatCompletionWithToolsAsync(long agentId, string model, string systemPrompt, List<ChatCompletionMessage> messages, IReadOnlyList<ChatToolDefinition> tools, Func<ChatToolCall, CancellationToken, Task<string>> toolExecutor, int maxToolCalls, CancellationToken cancellationToken = default, ChatCompletionTrace? trace = null);
     Task<OpenAIAuthCheckResult> TestApiKeyAsync(string apiKey, CancellationToken cancellationToken = default);
 }
 

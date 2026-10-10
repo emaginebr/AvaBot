@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AvaBot.DTO;
 using AvaBot.Domain.Models;
+using AvaBot.API.Auth;
 using AvaBot.Application.Services;
 using AvaBot.Infra.Interfaces.Repository;
 using AvaBot.Infra.Interfaces.AppServices;
@@ -17,28 +18,45 @@ public class FileController : ControllerBase
     private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
     private readonly IElasticsearchService _esService;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly AgentService _agentService;
     private readonly IMapper _mapper;
 
     public FileController(
         IKnowledgeFileRepository<KnowledgeFile> fileRepository,
         IElasticsearchService esService,
         IServiceScopeFactory scopeFactory,
+        AgentService agentService,
         IMapper mapper)
     {
         _fileRepository = fileRepository;
         _esService = esService;
         _scopeFactory = scopeFactory;
+        _agentService = agentService;
         _mapper = mapper;
     }
+
+    // Agente de outro dono responde como inexistente (FR-011).
+    private async Task<bool> OwnsAgentAsync(long agentId)
+        => await _agentService.GetOwnedByIdAsync(agentId, User.GetUserId()) != null;
+
+    private static IActionResult AgentNotFound()
+        => new NotFoundObjectResult(Result<object>.Failure("Agente nao encontrado"));
 
     [HttpGet]
     public async Task<IActionResult> GetByAgent(long agentId)
     {
         try
         {
+            if (!await OwnsAgentAsync(agentId))
+                return AgentNotFound();
+
             var files = await _fileRepository.GetByAgentIdAsync(agentId);
             var result = _mapper.Map<List<KnowledgeFileInfo>>(files);
             return Ok(Result<List<KnowledgeFileInfo>>.Success(result, "Arquivos listados com sucesso"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (Exception ex)
         {
@@ -60,6 +78,9 @@ public class FileController : ControllerBase
 
             if (file.Length > 10 * 1024 * 1024)
                 return BadRequest(Result<object>.Failure("Arquivo excede o limite de 10MB"));
+
+            if (!await OwnsAgentAsync(agentId))
+                return AgentNotFound();
 
             using var reader = new StreamReader(file.OpenReadStream());
             var content = await reader.ReadToEndAsync();
@@ -87,6 +108,10 @@ public class FileController : ControllerBase
             return Created($"/files/{agentId}/{knowledgeFile.KnowledgeFileId}",
                 Result<KnowledgeFileInfo>.Success(_mapper.Map<KnowledgeFileInfo>(knowledgeFile), "Arquivo enviado e em processamento"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
+        }
         catch (Exception ex)
         {
             return StatusCode(500, Result<object>.Failure(ex.Message));
@@ -98,6 +123,9 @@ public class FileController : ControllerBase
     {
         try
         {
+            if (!await OwnsAgentAsync(agentId))
+                return AgentNotFound();
+
             var file = await _fileRepository.GetByIdAsync(fileId);
             if (file == null || file.AgentId != agentId)
                 return NotFound(Result<object>.Failure("Arquivo nao encontrado"));
@@ -106,6 +134,10 @@ public class FileController : ControllerBase
             await _fileRepository.DeleteAsync(fileId);
 
             return Ok(Result<object>.Success(null!, "Arquivo removido com sucesso"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (Exception ex)
         {
@@ -118,6 +150,9 @@ public class FileController : ControllerBase
     {
         try
         {
+            if (!await OwnsAgentAsync(agentId))
+                return AgentNotFound();
+
             var file = await _fileRepository.GetByIdAsync(fileId);
             if (file == null || file.AgentId != agentId)
                 return NotFound(Result<object>.Failure("Arquivo nao encontrado"));
@@ -130,6 +165,10 @@ public class FileController : ControllerBase
             });
 
             return Ok(Result<object>.Success(null!, "Reprocessamento iniciado"));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (Exception ex)
         {

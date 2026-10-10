@@ -134,6 +134,10 @@ public class AgentTestQuestionInfo
 {
     [JsonPropertyName("query")]
     public string Query { get; set; } = string.Empty;
+
+    // Mensagens anteriores da conversa (calibracao de conversas, feature 015); opcional.
+    [JsonPropertyName("history")]
+    public List<AgentTestMessageInfo>? History { get; set; }
 }
 
 public class AgentTestResultInfo
@@ -155,6 +159,24 @@ public class AgentTestResultInfo
 
     [JsonPropertyName("powerBIQueries")]
     public List<AgentTestPowerBIQueryInfo> PowerBIQueries { get; set; } = new();
+
+    [JsonPropertyName("chatModel")]
+    public string ChatModel { get; set; } = string.Empty;
+
+    [JsonPropertyName("powerBIAvailable")]
+    public bool PowerBIAvailable { get; set; }
+
+    [JsonPropertyName("powerBIDatasets")]
+    public List<string> PowerBIDatasets { get; set; } = new();
+
+    [JsonPropertyName("maxQueryAttempts")]
+    public int? MaxQueryAttempts { get; set; }
+
+    [JsonPropertyName("historyOmittedCount")]
+    public int HistoryOmittedCount { get; set; }
+
+    [JsonPropertyName("trace")]
+    public AgentTestTraceInfo Trace { get; set; } = new();
 }
 
 public class AgentTestMessageInfo
@@ -164,6 +186,82 @@ public class AgentTestMessageInfo
 
     [JsonPropertyName("content")]
     public string Content { get; set; } = string.Empty;
+}
+
+// Rastreamento por rodada do modelo no teste de agente (relatorio de calibracao, feature 015).
+public class AgentTestTraceInfo
+{
+    [JsonPropertyName("rounds")]
+    public List<AgentTestTraceRoundInfo> Rounds { get; set; } = new();
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public class AgentTestTraceRoundInfo
+{
+    [JsonPropertyName("number")]
+    public int Number { get; set; }
+
+    [JsonPropertyName("messages")]
+    public List<AgentTestTraceMessageInfo> Messages { get; set; } = new();
+
+    [JsonPropertyName("toolsOffered")]
+    public bool ToolsOffered { get; set; }
+
+    [JsonPropertyName("toolChoiceNone")]
+    public bool ToolChoiceNone { get; set; }
+
+    [JsonPropertyName("finishReason")]
+    public string FinishReason { get; set; } = string.Empty;
+
+    [JsonPropertyName("responseText")]
+    public string? ResponseText { get; set; }
+
+    [JsonPropertyName("toolCalls")]
+    public List<AgentTestTraceToolCallInfo> ToolCalls { get; set; } = new();
+
+    [JsonPropertyName("inputTokens")]
+    public int? InputTokens { get; set; }
+
+    [JsonPropertyName("outputTokens")]
+    public int? OutputTokens { get; set; }
+
+    [JsonPropertyName("durationMs")]
+    public long DurationMs { get; set; }
+}
+
+public class AgentTestTraceMessageInfo
+{
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = string.Empty;
+
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = string.Empty;
+
+    [JsonPropertyName("toolCalls")]
+    public List<AgentTestTraceToolCallInfo>? ToolCalls { get; set; }
+
+    [JsonPropertyName("toolCallId")]
+    public string? ToolCallId { get; set; }
+}
+
+public class AgentTestTraceToolCallInfo
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("argumentsJson")]
+    public string ArgumentsJson { get; set; } = string.Empty;
+
+    [JsonPropertyName("result")]
+    public string? Result { get; set; }
+
+    [JsonPropertyName("durationMs")]
+    public long? DurationMs { get; set; }
 }
 
 public class WhatsappQrCodeInfo

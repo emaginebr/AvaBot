@@ -142,6 +142,14 @@ Ligar sem credenciais ou sem schema e bloqueado com a explicacao do que falta.
 
 ## Como o agente usa as ferramentas
 
+### Guardas do executor (calibracao 015)
+
+Antes de enviar uma consulta ao Power BI, `consultar_bi` aplica tres verificacoes locais. Nenhuma delas consome o limite de tentativas; todas devolvem um erro com `queryMayBeCorrected: true` para o modelo corrigir.
+
+- **Schema obrigatorio**: `consultar_bi` so roda depois de `listar_schema` do mesmo dataset na mesma mensagem. Sem isso o modelo inventa nomes de tabela.
+- **Literais validados**: filtros `'Tabela'[Coluna] = "x"` ou `IN {...}` (inclusive via `VAR`) sao conferidos contra a lista de valores da coluna, quando o schema a traz (colunas de texto com ate 30 valores). Um valor inexistente volta com a lista correta e, se o valor existir em outra coluna, a sugestao dela.
+- **Linhas identicas**: um resultado com 2+ linhas em que todas as medidas repetem o mesmo numero recebe um campo `warning`, porque quase sempre e um filtro na coluna agrupada dentro do `CALCULATE`, que anula o agrupamento.
+
 - `listar_schema(dataset)` devolve o schema salvo em texto compacto, sem chamar o Power BI.
 - `consultar_bi(dataset, dax)` executa DAX **somente leitura** (precisa comecar com `EVALUATE` ou `DEFINE`, mesmo depois de comentarios) e devolve `{columns, rows, rowCount, truncated}`.
 - O `dataset` e um enum com as chaves dos datasets **daquele agente**; uma chave de outro agente devolve erro, e o executor valida de novo.

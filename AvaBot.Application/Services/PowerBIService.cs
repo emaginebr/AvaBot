@@ -51,11 +51,12 @@ public class PowerBIService
         _logger = logger;
     }
 
-    private async Task<Agent> GetAgentBySlugOrThrowAsync(string slug)
+    // Filtrado pelo dono: agente de outro usuario responde como inexistente (FR-011).
+    private async Task<Agent> GetAgentBySlugOrThrowAsync(string slug, long ownerUserId)
     {
-        var agent = await _agentRepository.GetBySlugAsync(slug);
+        var agent = await _agentRepository.GetBySlugAsync(slug, ownerUserId);
         if (agent == null)
-            throw new KeyNotFoundException($"Agente '{slug}' nao encontrado");
+            throw new KeyNotFoundException("Agente nao encontrado");
 
         return agent;
     }
@@ -81,9 +82,9 @@ public class PowerBIService
 
     // ---------- Credenciais e flag ----------
 
-    public async Task<PowerBIConfigInfo> GetConfigAsync(string slug)
+    public async Task<PowerBIConfigInfo> GetConfigAsync(string slug, long ownerUserId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var config = await _configRepository.GetByAgentIdAsync(agent.AgentId);
 
         if (config == null)
@@ -100,9 +101,9 @@ public class PowerBIService
         return MapConfigInfo(agent, config);
     }
 
-    public async Task<PowerBIConfigInfo> SaveConfigAsync(string slug, PowerBIConfigUpdateInfo info)
+    public async Task<PowerBIConfigInfo> SaveConfigAsync(string slug, long ownerUserId, PowerBIConfigUpdateInfo info)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var existing = await _configRepository.GetByAgentIdAsync(agent.AgentId);
 
         var plainSecret = info.ClientSecret?.Trim();
@@ -157,9 +158,9 @@ public class PowerBIService
         return MapConfigInfo(agent, config);
     }
 
-    public async Task<PowerBIConnectionTestInfo> TestConnectionAsync(string slug)
+    public async Task<PowerBIConnectionTestInfo> TestConnectionAsync(string slug, long ownerUserId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var config = await RequireConfigAsync(agent);
         var credentials = GetCredentials(config);
 
@@ -230,9 +231,9 @@ public class PowerBIService
         return new PowerBIConnectionTestInfo { Success = success, Steps = steps };
     }
 
-    public async Task<PowerBIConfigInfo> SetEnabledAsync(string slug, bool enabled)
+    public async Task<PowerBIConfigInfo> SetEnabledAsync(string slug, long ownerUserId, bool enabled)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
 
         if (enabled)
         {
@@ -251,14 +252,14 @@ public class PowerBIService
         _logger.LogInformation("Power BI {State} para o agente {AgentId}",
             enabled ? "ativado" : "desativado", agent.AgentId);
 
-        return await GetConfigAsync(slug);
+        return await GetConfigAsync(slug, ownerUserId);
     }
 
     // ---------- Descoberta ----------
 
-    public async Task<List<PowerBIWorkspaceInfo>> ListWorkspacesAsync(string slug)
+    public async Task<List<PowerBIWorkspaceInfo>> ListWorkspacesAsync(string slug, long ownerUserId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var config = await RequireConfigAsync(agent);
         var credentials = GetCredentials(config);
 
@@ -278,17 +279,17 @@ public class PowerBIService
 
     // ---------- Datasets ----------
 
-    public async Task<List<PowerBIDatasetInfo>> GetDatasetsAsync(string slug)
+    public async Task<List<PowerBIDatasetInfo>> GetDatasetsAsync(string slug, long ownerUserId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var datasets = await _datasetRepository.GetByAgentIdAsync(agent.AgentId);
 
         return datasets.Select(MapDatasetInfo).ToList();
     }
 
-    public async Task<PowerBIDatasetInfo> CreateDatasetAsync(string slug, PowerBIDatasetInsertInfo info)
+    public async Task<PowerBIDatasetInfo> CreateDatasetAsync(string slug, long ownerUserId, PowerBIDatasetInsertInfo info)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
 
         if (await _datasetRepository.ExistsAsync(agent.AgentId, info.DatasetId.Trim()))
             throw new InvalidOperationException("Este dataset ja esta vinculado a este agente");
@@ -309,9 +310,9 @@ public class PowerBIService
         return MapDatasetInfo(dataset);
     }
 
-    public async Task<PowerBIDatasetInfo> UpdateDatasetAsync(string slug, long datasetId, PowerBIDatasetInsertInfo info)
+    public async Task<PowerBIDatasetInfo> UpdateDatasetAsync(string slug, long ownerUserId, long datasetId, PowerBIDatasetInsertInfo info)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var dataset = await _datasetRepository.GetByIdAsync(agent.AgentId, datasetId)
             ?? throw new KeyNotFoundException("Dataset nao encontrado");
 
@@ -348,9 +349,9 @@ public class PowerBIService
         return MapDatasetInfo(dataset);
     }
 
-    public async Task<string> DeleteDatasetAsync(string slug, long datasetId)
+    public async Task<string> DeleteDatasetAsync(string slug, long ownerUserId, long datasetId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var dataset = await _datasetRepository.GetByIdAsync(agent.AgentId, datasetId)
             ?? throw new KeyNotFoundException("Dataset nao encontrado");
 
@@ -374,9 +375,9 @@ public class PowerBIService
 
     // ---------- Schema ----------
 
-    public async Task<PowerBIDatasetSchemaInfo> GenerateSchemaAsync(string slug, long datasetId)
+    public async Task<PowerBIDatasetSchemaInfo> GenerateSchemaAsync(string slug, long ownerUserId, long datasetId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var dataset = await _datasetRepository.GetByIdAsync(agent.AgentId, datasetId)
             ?? throw new KeyNotFoundException("Dataset nao encontrado");
 
@@ -426,18 +427,18 @@ public class PowerBIService
         }
     }
 
-    public async Task<PowerBIDatasetSchemaInfo> GetSchemaAsync(string slug, long datasetId)
+    public async Task<PowerBIDatasetSchemaInfo> GetSchemaAsync(string slug, long ownerUserId, long datasetId)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var dataset = await _datasetRepository.GetByIdAsync(agent.AgentId, datasetId)
             ?? throw new KeyNotFoundException("Dataset nao encontrado");
 
         return MapSchemaInfo(dataset, PowerBISchema.Deserialize(dataset.SchemaJson) ?? new PowerBISchema());
     }
 
-    public async Task<PowerBIDatasetSchemaInfo> UpdateSchemaDescriptionsAsync(string slug, long datasetId, PowerBISchemaDescriptionUpdateInfo info)
+    public async Task<PowerBIDatasetSchemaInfo> UpdateSchemaDescriptionsAsync(string slug, long ownerUserId, long datasetId, PowerBISchemaDescriptionUpdateInfo info)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
         var dataset = await _datasetRepository.GetByIdAsync(agent.AgentId, datasetId)
             ?? throw new KeyNotFoundException("Dataset nao encontrado");
 
@@ -491,9 +492,9 @@ public class PowerBIService
 
     // ---------- Histórico ----------
 
-    public async Task<PowerBIQueryLogPageInfo> GetQueryLogsAsync(string slug, int page, int pageSize)
+    public async Task<PowerBIQueryLogPageInfo> GetQueryLogsAsync(string slug, long ownerUserId, int page, int pageSize)
     {
-        var agent = await GetAgentBySlugOrThrowAsync(slug);
+        var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
 
         if (page < 1) page = 1;
         if (pageSize < 1) pageSize = 20;
