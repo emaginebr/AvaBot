@@ -108,4 +108,34 @@ public class AgentRepository : IAgentRepository<Agent>
         return await _context.Agents.FirstOrDefaultAsync(a =>
             a.WhatsappToken == token && (excludeId == null || a.AgentId != excludeId));
     }
+
+    public async Task<List<Agent>> GetAllByOwnerAsync(long ownerUserId)
+    {
+        return await _context.Agents
+            .Where(a => a.OwnerUserId == ownerUserId)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task<Agent?> GetByIdAsync(long id, long ownerUserId)
+    {
+        return await _context.Agents.FirstOrDefaultAsync(a => a.AgentId == id && a.OwnerUserId == ownerUserId);
+    }
+
+    public async Task<Agent?> GetBySlugAsync(string slug, long ownerUserId)
+    {
+        return await _context.Agents.FirstOrDefaultAsync(a => a.Slug == slug && a.OwnerUserId == ownerUserId);
+    }
+
+    public async Task<int> CountWithoutOwnerAsync()
+    {
+        return await _context.Agents.CountAsync(a => a.OwnerUserId == null);
+    }
+
+    public async Task<int> AssignOwnerToOrphansAsync(long ownerUserId)
+    {
+        return await _context.Agents
+            .Where(a => a.OwnerUserId == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.OwnerUserId, ownerUserId));
+    }
 }

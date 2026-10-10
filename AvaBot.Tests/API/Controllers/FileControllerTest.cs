@@ -19,6 +19,8 @@ public class FileControllerTest
 {
     private readonly Mock<IKnowledgeFileRepository<KnowledgeFile>> _fileRepoMock;
     private readonly Mock<IElasticsearchService> _esServiceMock;
+    private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
+    private const long OwnerId = 7;
     private readonly IMapper _mapper;
     private readonly FileController _sut;
 
@@ -26,17 +28,26 @@ public class FileControllerTest
     {
         _fileRepoMock = new Mock<IKnowledgeFileRepository<KnowledgeFile>>();
         _esServiceMock = new Mock<IElasticsearchService>();
+        _agentRepoMock = new Mock<IAgentRepository<Agent>>();
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<KnowledgeFileProfile>();
+        expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
 
         var scopeFactoryMock = new Mock<IServiceScopeFactory>();
+        var agentService = new AgentService(_agentRepoMock.Object, _esServiceMock.Object, new Mock<ISecretProtector>().Object, _mapper);
+
+        // Por padrao os agentes 1 e 10 sao do usuario do token; o 99 nao e.
+        _agentRepoMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1, OwnerUserId = OwnerId });
+        _agentRepoMock.Setup(r => r.GetByIdAsync(10, OwnerId)).ReturnsAsync(new Agent { AgentId = 10, OwnerUserId = OwnerId });
+        _agentRepoMock.Setup(r => r.GetByIdAsync(99, OwnerId)).ReturnsAsync((Agent?)null);
 
         _sut = new FileController(
             _fileRepoMock.Object,
             _esServiceMock.Object,
             scopeFactoryMock.Object,
-            _mapper);
+            agentService,
+            _mapper).WithUser(OwnerId);
     }
 
     [Fact]
@@ -171,5 +182,26 @@ public class FileControllerTest
 
         // Assert
         Assert.IsType<OkObjectResult>(result);
+    }
+    [Fact]
+    public async Task GetByAgent_ShouldReturnNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        // FR-011: mesma resposta de agente inexistente; o repositorio de arquivos nem e consultado
+        var result = await _sut.GetByAgent(99);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("Agente nao encontrado", Assert.IsType<Result<object>>(notFound.Value).Mensagem);
+        _fileRepoMock.Verify(r => r.GetByAgentIdAsync(It.IsAny<long>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Delete_ShouldReturnNotFound_WhenAgentBelongsToAnotherOwner()
+    {
+        _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new KnowledgeFile { KnowledgeFileId = 1, AgentId = 99 });
+
+        var result = await _sut.Delete(99, 1);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        _fileRepoMock.Verify(r => r.DeleteAsync(It.IsAny<long>()), Times.Never);
     }
 }

@@ -43,7 +43,7 @@ data/
 !.env.prod.example
 
 # Integration test settings (contains credentials)
-Avachat.Tests.API/appsettings.json
+AvaBot.Tests.API/appsettings.json
 
 # SSL certificates
 nginx/certs/
@@ -51,3 +51,7 @@ nginx/certs/
 *.key
 *.pfx
 *.crt
+
+# Calibracao de perguntas: configuracao local (chaves OpenAI e Power BI) e schemas gerados
+AvaBot.Calibration/appsettings.json
+calibration/schemas/

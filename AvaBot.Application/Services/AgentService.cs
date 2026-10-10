@@ -28,11 +28,23 @@ public class AgentService
         _mapper = mapper;
     }
 
-    public async Task<List<Agent>> GetAllAsync()
+    // Painel: tudo filtrado pelo dono do token (feature 016, contracts/ownership.md).
+    public async Task<List<Agent>> GetAllAsync(long ownerUserId)
     {
-        return await _repository.GetAllAsync();
+        return await _repository.GetAllByOwnerAsync(ownerUserId);
     }
 
+    public async Task<Agent?> GetOwnedByIdAsync(long id, long ownerUserId)
+    {
+        return await _repository.GetByIdAsync(id, ownerUserId);
+    }
+
+    public async Task<Agent?> GetOwnedBySlugAsync(string slug, long ownerUserId)
+    {
+        return await _repository.GetBySlugAsync(slug, ownerUserId);
+    }
+
+    // Publico/interno (chat, widget, webhooks, ChatService): sem dono.
     public async Task<Agent?> GetBySlugAsync(string slug)
     {
         return await _repository.GetBySlugAsync(slug);
@@ -43,12 +55,13 @@ public class AgentService
         return await _repository.GetByIdAsync(id);
     }
 
-    public async Task<Agent> CreateAsync(AgentInsertInfo info)
+    public async Task<Agent> CreateAsync(AgentInsertInfo info, long ownerUserId)
     {
         await ValidateTelegramBotTokenAsync(info.TelegramBotToken);
 
         var agent = _mapper.Map<Agent>(info);
         agent.Status = 1;
+        agent.OwnerUserId = ownerUserId;
         agent.Slug = await GenerateUniqueSlugAsync(info.Name);
 
         if (!string.IsNullOrEmpty(info.TelegramBotToken))
@@ -59,9 +72,9 @@ public class AgentService
         return await _repository.CreateAsync(agent);
     }
 
-    public async Task<Agent?> UpdateAsync(long id, AgentInsertInfo info)
+    public async Task<Agent?> UpdateAsync(long id, AgentInsertInfo info, long ownerUserId)
     {
-        var agent = await _repository.GetByIdAsync(id);
+        var agent = await _repository.GetByIdAsync(id, ownerUserId);
         if (agent == null) return null;
 
         await ValidateTelegramBotTokenAsync(info.TelegramBotToken, id);
@@ -101,10 +114,10 @@ public class AgentService
     }
 
     /// <summary>Resolve a credencial salva do agente em texto claro. Somente para uso interno (diagnostico).</summary>
-    public async Task<string> GetOpenAIApiKeyAsync(long agentId)
+    public async Task<string> GetOpenAIApiKeyAsync(long agentId, long ownerUserId)
     {
-        var agent = await _repository.GetByIdAsync(agentId)
-            ?? throw new KeyNotFoundException($"Agente com ID {agentId} nao encontrado");
+        var agent = await _repository.GetByIdAsync(agentId, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
 
         if (string.IsNullOrEmpty(agent.OpenAIApiKeyEncrypted))
             throw new InvalidOperationException("Este agente ainda nao tem uma chave OpenAI salva");
@@ -130,18 +143,18 @@ public class AgentService
             throw new InvalidOperationException("Este WhatsappToken ja esta em uso por outro agente");
     }
 
-    public async Task<bool> DeleteAsync(long id)
+    public async Task<bool> DeleteAsync(long id, long ownerUserId)
     {
-        var agent = await _repository.GetByIdAsync(id);
+        var agent = await _repository.GetByIdAsync(id, ownerUserId);
         if (agent == null) return false;
         await _esService.DeleteChunksByAgentIdAsync(id);
         await _repository.DeleteAsync(id);
         return true;
     }
 
-    public async Task<Agent?> ToggleStatusAsync(long id)
+    public async Task<Agent?> ToggleStatusAsync(long id, long ownerUserId)
     {
-        var agent = await _repository.GetByIdAsync(id);
+        var agent = await _repository.GetByIdAsync(id, ownerUserId);
         if (agent == null) return null;
 
         agent.Status = agent.Status == 1 ? 0 : 1;

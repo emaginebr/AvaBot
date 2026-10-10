@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AvaBot.API.Auth;
 using AvaBot.Application.Services;
 using AvaBot.DTO;
 
@@ -22,12 +23,17 @@ public class WhatsappController : ControllerBase
     {
         try
         {
-            var result = await _whatsappService.StartSessionAsync(slug);
+            var result = await _whatsappService.StartSessionAsync(slug, User.GetUserId());
             return Ok(Result<WhatsappStatusInfo>.Success(result, "Sessao iniciada com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {
@@ -45,12 +51,17 @@ public class WhatsappController : ControllerBase
     {
         try
         {
-            var result = await _whatsappService.GetQrCodeAsync(slug);
+            var result = await _whatsappService.GetQrCodeAsync(slug, User.GetUserId());
             return Ok(Result<WhatsappQrCodeInfo>.Success(result, "QR code obtido com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {
@@ -68,12 +79,17 @@ public class WhatsappController : ControllerBase
     {
         try
         {
-            var result = await _whatsappService.GetStatusAsync(slug);
+            var result = await _whatsappService.GetStatusAsync(slug, User.GetUserId());
             return Ok(Result<WhatsappStatusInfo>.Success(result, "Status obtido com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {
@@ -91,12 +107,17 @@ public class WhatsappController : ControllerBase
     {
         try
         {
-            var result = await _whatsappService.DisconnectAsync(slug);
+            var result = await _whatsappService.DisconnectAsync(slug, User.GetUserId());
             return Ok(Result<WhatsappStatusInfo>.Success(result, "Sessao encerrada com sucesso"));
         }
         catch (KeyNotFoundException)
         {
             return NotFound(Result<object>.Failure("Agente nao encontrado"));
+        }
+
+        catch (UnauthorizedAccessException)
+        {
+            return Unauthorized(Result<object>.Failure("Credenciais invalidas"));
         }
         catch (InvalidOperationException ex)
         {

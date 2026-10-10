@@ -1,0 +1,15 @@
+{
+  "conversations": [
+    {
+      "name": "tilapia-2024",
+      "messages": ["Qual foi o volume de exportação da tilápia em 2024?"]
+    },
+    {
+      "name": "tilapia-esclarecimento",
+      "messages": [
+        "Qual foi o volume de exportação da tilápia em 2024?",
+        "Considere todos os produtos de tilápia"
+      ]
+    }
+  ]
+}

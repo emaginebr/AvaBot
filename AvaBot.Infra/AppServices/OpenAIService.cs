@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -68,13 +69,28 @@ public class OpenAIService : IOpenAIService
         string model,
         string systemPrompt,
         List<ChatCompletionMessage> messages,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ChatCompletionTrace? trace = null)
     {
         var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
 
-        var result = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
-        return result.Value.Content[0].Text;
+        var round = StartRound(trace, chatMessages, toolsOffered: false, toolChoiceNone: false);
+
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await chatClient.CompleteChatAsync(chatMessages, cancellationToken: cancellationToken);
+            stopwatch.Stop();
+
+            CompleteRound(round, result.Value, stopwatch.ElapsedMilliseconds);
+            return result.Value.Content[0].Text;
+        }
+        catch (Exception ex) when (trace != null && !cancellationToken.IsCancellationRequested)
+        {
+            trace.Error = ex.Message;
+            throw;
+        }
     }
 
     public async IAsyncEnumerable<string> StreamChatCompletionAsync(
@@ -176,31 +192,135 @@ public class OpenAIService : IOpenAIService
         IReadOnlyList<ChatToolDefinition> tools,
         Func<AvaChatToolCall, CancellationToken, Task<string>> toolExecutor,
         int maxToolCalls,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ChatCompletionTrace? trace = null)
     {
         var chatClient = await ResolveChatClientAsync(agentId, model);
         var chatMessages = BuildChatMessages(systemPrompt, messages);
         var executedToolCalls = 0;
 
-        while (true)
+        try
         {
-            var options = BuildToolOptions(tools, executedToolCalls >= maxToolCalls);
-            var result = await chatClient.CompleteChatAsync(chatMessages, options, cancellationToken);
-            var completion = result.Value;
-
-            if (completion.FinishReason != ChatFinishReason.ToolCalls || completion.ToolCalls.Count == 0)
-                return completion.Content[0].Text;
-
-            chatMessages.Add(new AssistantChatMessage(completion.ToolCalls));
-
-            foreach (var toolCall in completion.ToolCalls)
+            while (true)
             {
-                executedToolCalls++;
-                var toolResult = await ExecuteToolAsync(toolExecutor, toolCall, cancellationToken);
-                chatMessages.Add(new ToolChatMessage(toolCall.Id, toolResult));
+                var forceFinalAnswer = executedToolCalls >= maxToolCalls;
+                var options = BuildToolOptions(tools, forceFinalAnswer);
+                var round = StartRound(trace, chatMessages, toolsOffered: tools.Count > 0, toolChoiceNone: forceFinalAnswer);
+
+                var stopwatch = Stopwatch.StartNew();
+                var result = await chatClient.CompleteChatAsync(chatMessages, options, cancellationToken);
+                stopwatch.Stop();
+
+                var completion = result.Value;
+                CompleteRound(round, completion, stopwatch.ElapsedMilliseconds);
+
+                if (completion.FinishReason != ChatFinishReason.ToolCalls || completion.ToolCalls.Count == 0)
+                    return completion.Content[0].Text;
+
+                chatMessages.Add(new AssistantChatMessage(completion.ToolCalls));
+
+                foreach (var toolCall in completion.ToolCalls)
+                {
+                    executedToolCalls++;
+
+                    var toolStopwatch = Stopwatch.StartNew();
+                    var toolResult = await ExecuteToolAsync(toolExecutor, toolCall, cancellationToken);
+                    toolStopwatch.Stop();
+
+                    var traced = round?.ToolCalls.Find(c => c.Id == toolCall.Id);
+                    if (traced != null)
+                    {
+                        traced.Result = toolResult;
+                        traced.DurationMs = toolStopwatch.ElapsedMilliseconds;
+                    }
+
+                    chatMessages.Add(new ToolChatMessage(toolCall.Id, toolResult));
+                }
             }
         }
+        catch (Exception ex) when (trace != null && !cancellationToken.IsCancellationRequested)
+        {
+            trace.Error = ex.Message;
+            throw;
+        }
     }
+
+    // ---------- Rastreamento (teste de agente / calibracao) ----------
+
+    // A rodada guarda uma copia das mensagens: a lista do loop continua crescendo depois.
+    private static ChatTraceRound? StartRound(
+        ChatCompletionTrace? trace, List<OpenAI.Chat.ChatMessage> chatMessages, bool toolsOffered, bool toolChoiceNone)
+    {
+        if (trace == null)
+            return null;
+
+        var round = new ChatTraceRound
+        {
+            Number = trace.Rounds.Count + 1,
+            Messages = chatMessages.Select(ToTraceMessage).ToList(),
+            ToolsOffered = toolsOffered,
+            ToolChoiceNone = toolChoiceNone
+        };
+
+        trace.Rounds.Add(round);
+        return round;
+    }
+
+    private static void CompleteRound(ChatTraceRound? round, ChatCompletion completion, long durationMs)
+    {
+        if (round == null)
+            return;
+
+        round.DurationMs = durationMs;
+        round.FinishReason = FinishReasonText(completion.FinishReason);
+
+        var text = ContentText(completion.Content);
+        round.ResponseText = string.IsNullOrEmpty(text) ? null : text;
+        round.ToolCalls = completion.ToolCalls.Select(ToTraceToolCall).ToList();
+        round.InputTokens = completion.Usage?.InputTokenCount;
+        round.OutputTokens = completion.Usage?.OutputTokenCount;
+    }
+
+    private static ChatTraceMessage ToTraceMessage(OpenAI.Chat.ChatMessage message) => message switch
+    {
+        SystemChatMessage system => new ChatTraceMessage { Role = "system", Content = ContentText(system.Content) },
+        UserChatMessage user => new ChatTraceMessage { Role = "user", Content = ContentText(user.Content) },
+        AssistantChatMessage assistant => new ChatTraceMessage
+        {
+            Role = "assistant",
+            Content = ContentText(assistant.Content),
+            ToolCalls = assistant.ToolCalls.Count > 0 ? assistant.ToolCalls.Select(ToTraceToolCall).ToList() : null
+        },
+        ToolChatMessage tool => new ChatTraceMessage
+        {
+            Role = "tool",
+            Content = ContentText(tool.Content),
+            ToolCallId = tool.ToolCallId
+        },
+        _ => new ChatTraceMessage { Role = "unknown", Content = ContentText(message.Content) }
+    };
+
+    private static ChatTraceToolCall ToTraceToolCall(OpenAI.Chat.ChatToolCall toolCall) => new()
+    {
+        Id = toolCall.Id,
+        Name = toolCall.FunctionName,
+        ArgumentsJson = toolCall.FunctionArguments?.ToString() ?? "{}"
+    };
+
+    private static string ContentText(ChatMessageContent? content) =>
+        content == null
+            ? string.Empty
+            : string.Concat(content.Where(p => p.Kind == ChatMessageContentPartKind.Text).Select(p => p.Text));
+
+    private static string FinishReasonText(ChatFinishReason reason) => reason switch
+    {
+        ChatFinishReason.Stop => "stop",
+        ChatFinishReason.Length => "length",
+        ChatFinishReason.ContentFilter => "content_filter",
+        ChatFinishReason.ToolCalls => "tool_calls",
+        ChatFinishReason.FunctionCall => "function_call",
+        _ => reason.ToString().ToLowerInvariant()
+    };
 
     // D4: listar modelos e uma operacao autenticada sem geracao de conteudo,
     // entao o diagnostico confirma a chave sem gastar tokens.

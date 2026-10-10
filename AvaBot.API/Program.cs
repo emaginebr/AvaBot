@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using AvaBot.Application;
+using AvaBot.Application.Services;
+using AvaBot.API.Auth;
 using AvaBot.API.WebSocket;
 using AvaBot.Infra.Interfaces.AppServices;
 
@@ -67,7 +69,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
         };
+        // O "sub" do token vira ClaimTypes.NameIdentifier (mapeamento padrao); User.GetUserId() le os dois.
+        options.MapInboundClaims = true;
     });
+builder.Services.AddSingleton<JwtTokenIssuer>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -86,6 +91,14 @@ var app = builder.Build();
 // Elasticsearch - create index on startup
 var esService = app.Services.GetRequiredService<IElasticsearchService>();
 await esService.CreateIndexAsync();
+
+// Contas de usuario (feature 016): cria a conta do administrador na primeira subida e
+// atribui os agentes existentes. Lanca (e a API nao sobe) se restar agente sem dono.
+using (var scope = app.Services.CreateScope())
+{
+    var bootstrap = scope.ServiceProvider.GetRequiredService<UserBootstrapService>();
+    await bootstrap.EnsureAdminAccountAsync();
+}
 
 // Swagger
 if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docker")

@@ -1,0 +1,19 @@
+{
+  "conversations": [
+    { "name": "01-share-mundial", "messages": ["quando a exportação de pescados do Brasil representa em porcentagem em relação as exportações mundiais?"] },
+    { "name": "02-tilapia-2026-ate-mes-atual", "messages": ["quanto exportamos em 2026 de tilápia fresca, refrigerada e congelada até o mes atual?"] },
+    { "name": "03-queda-eua", "messages": ["qual período do ano tivemos queda no valor de exportação para os Estados Unidos?"] },
+    { "name": "04-eua-5-anos", "messages": ["quanto exportamos nos últimos 5 anos para os Estados Unidos?"] },
+    { "name": "05-tilapia-mundo", "messages": ["quanto exportamos de tilápia para o mundo?"] },
+    { "name": "06-paises-qtd-5-anos", "messages": ["quais são os países que mais exportamos em quantidade nos últimos 5 anos?"] },
+    { "name": "07-importacao-2026", "messages": ["quanto importamos em 2026?"] },
+    { "name": "08-pais-mais-exportamos", "messages": ["qual é o país que mais exportamos pescado?"] },
+    { "name": "09-pescado-mais-importado-2026", "messages": ["qual é o pescado que mais importamos em 2026?"] },
+    { "name": "10-ue-2010-2017", "messages": ["o que a União Europeia mais importava de pescado brasileiro no período de 2010 a 2017?"] },
+    { "name": "11-porto-tilapia", "messages": ["Qual é o Porto que mais exportamos tilápia?"] },
+    { "name": "12-porto-pargo", "messages": ["qual é o Porto que mais exportamos pargo?"] },
+    { "name": "13-lagosta-pais", "messages": ["qual país mais exportamos lagosta em valor e em quilograma?"] },
+    { "name": "14-analise-anual-2022", "messages": ["faça uma análise de volume anual que exportamos desde de 2022 e quais foram os produtos que mais exportamos."] },
+    { "name": "15-top5-parceiros", "messages": ["quais são os 5 maiores parceiros comerciais do Brasil em questão de exportação?"] }
+  ]
+}

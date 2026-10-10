@@ -110,6 +110,13 @@ public class PowerBIToolset
     public const string CategoryAttemptLimit = "attempt_limit";
 
     public const int DefaultMaxQueryAttempts = 5;
+
+    // O JSON das ferramentas e lido pelo modelo, nao por um navegador: sem escapar acentos e
+    // aspas ("Tilápia", """), que custam tokens e atrapalham ler o diagnostico.
+    private static readonly JsonSerializerOptions ModelJson = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
     private static readonly TimeSpan BackoffBase = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan BackoffCeiling = TimeSpan.FromSeconds(30);
 
@@ -121,24 +128,42 @@ public class PowerBIToolset
     // Bloco de contracts/llm-tools.md, acrescentado ao system prompt quando ha tools (FR-022).
     public const string PromptAddendum =
         "DADOS DO POWER BI: Você tem acesso a ferramentas que consultam dados reais no Power BI.\n" +
+        "QUANDO CONSULTAR\n" +
         "- Use as ferramentas quando a pergunta exigir números/dados; para outras perguntas use a base de conhecimento.\n" +
         "- Para perguntas que exigem dados do BI, consulte o dataset apropriado; não responda usando apenas conhecimento geral ou a base de conhecimento.\n" +
-        "- Se a pergunta do usuário não informar algo necessário (ex.: período, produto, indicador, unidade ou escopo geográfico), PERGUNTE antes de consultar. Não invente nem assuma valores padrão, inclusive o ano mais recente.\n" +
-        "- Antes da primeira consulta a um dataset, chame listar_schema.\n" +
-        "- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como LIMIT, OFFSET, FETCH, SELECT ou FROM.\n" +
+        "- Escolha o dataset pela descrição do catálogo. Antes da primeira consulta a um dataset, chame listar_schema.\n" +
+        "- PERÍODO: se a pergunta não tiver nenhuma referência de tempo ('quanto exportamos de tilápia?', 'qual país mais exportamos?'), use o ÚLTIMO ANO COMPLETO (ano corrente menos 1), diga isso logo no início da resposta e ofereça outros períodos ao final. NÃO pergunte o período, NÃO some todos os anos e NÃO use o ano corrente parcial como padrão. Um ano citado ('em 2024') é período completo: use o ano inteiro sem perguntar se é o ano todo. Só pergunte quando a pergunta for de fato ambígua por outro motivo.\n" +
+        "- Períodos relativos usam a DATA DE HOJE informada no prompt, nunca o ano do seu treinamento: 'últimos N anos' = os N anos completos anteriores ao ano corrente (ex.: em 2026, últimos 5 anos = 2021 a 2025); 'desde X' = de X até o ano corrente; 'este ano', 'até o mês atual' ou um ano citado igual ao corrente = ano corrente até o último mês com dados. O ano corrente é incompleto: diga até que mês os dados vão. Nada disso exige pergunta ao usuário.\n" +
+        "- NÃO pergunte unidade, escopo geográfico nem nível de detalhe: use os padrões indicados nas descrições do schema (ex.: peso líquido em kg/toneladas quando a pergunta fala em volume ou quantidade; o país indicado como padrão) e declare essas premissas na resposta. Primeira pessoa do plural ('exportamos', 'importamos', 'nossas vendas') refere-se ao país padrão do schema: não pergunte de que país se trata. Participação, percentual e 'maior parceiro' se medem em valor (US$), salvo pedido explícito de quantidade.\n" +
+        "- Antes de escolher o dataset, confira na descrição do catálogo e nos valores de ano do schema se ele cobre o período da pergunta; se não cobrir, use outro dataset que cubra.\n" +
+        "COMO ESCREVER A DAX\n" +
+        "- Escreva consultas exclusivamente em DAX válido para Power BI. Não use sintaxe SQL, como SELECT, FROM, WHERE, LIMIT, OFFSET ou FETCH.\n" +
         "- A consulta deve começar com EVALUATE ou DEFINE. Para limitar linhas, use TOPN dentro da expressão DAX; nunca acrescente LIMIT ao final.\n" +
         "- Use apenas tabelas, colunas e medidas existentes no schema retornado por listar_schema, copiando os nomes exatamente como aparecem (ex.: 'Nome da Tabela'[Coluna], [Medida]); não encurte nem remova prefixos.\n" +
-        "- Estrutura DAX: 'DEFINE' (opcional) aceita apenas VAR/MEASURE/TABLE/COLUMN e é seguido de EVALUATE; não existe RETURN no nível do DEFINE. Exemplo: DEFINE VAR _ano = \"2025\" EVALUATE TOPN(10, SUMMARIZECOLUMNS('T'[Col], \"Total\", SUM('T'[Valor])), [Total], DESC).\n" +
+        "- Estrutura DAX: 'DEFINE' (opcional) aceita apenas VAR/MEASURE/TABLE/COLUMN e é seguido de EVALUATE; não existe RETURN no nível do DEFINE. Exemplo: DEFINE VAR _ano = 2025 EVALUATE TOPN(10, SUMMARIZECOLUMNS('T'[Col], \"Total\", SUM('T'[Valor])), [Total], DESC).\n" +
+        "- Nomes de VAR e de colunas calculadas só com letras ASCII sem acento, dígitos e _ (ex.: _produto, Valor_USD); acentos em identificadores quebram a consulta.\n" +
+        "- Peça o resultado já no formato da resposta: um total vem de ROW/CALCULATE, uma lista vem de SUMMARIZECOLUMNS/TOPN. NUNCA some, subtraia ou calcule de cabeça a partir de linhas devolvidas; se precisar do total e do detalhe, peça os dois na consulta.\n" +
+        "- Filtros entram SEMPRE como argumentos de CALCULATE ou de SUMMARIZECOLUMNS ('Dim'[Col] = \"x\", 'Calendar'[Year] = 2024, FILTER(VALUES('Dim'[Col]), ...)). Depois de fechar a expressão do EVALUATE só pode vir ORDER BY: não existe WHERE nem FILTER solto depois de SUMMARIZECOLUMNS ou ROW.\n" +
+        "- Para filtrar a tabela de fatos por uma dimensão, filtre a coluna da dimensão (como acima). Nunca compare coluna de outra tabela dentro de um FILTER sobre a tabela de fatos: isso gera o erro 'a single value for column ... cannot be determined'.\n" +
+        "- NUNCA use FILTER('Tabela de fatos', condição) como filtro de CALCULATE ou SUMMARIZECOLUMNS, mesmo com várias condições ou lista de anos: não dá erro, mas anula o agrupamento e todas as linhas saem iguais. Intervalo de anos entra como argumento direto: 'T'[Ano] IN {2021, 2022, 2023} ou 'T'[Ano] >= 2021 && 'T'[Ano] <= 2025 (uma única coluna por condição).\n" +
+        "- Ao agrupar por uma coluna em SUMMARIZECOLUMNS (ex.: 'Calendar'[Year]), NÃO filtre essa mesma coluna dentro do CALCULATE da medida: o filtro substitui o agrupamento e todas as linhas saem com o mesmo total. O intervalo entra como argumento de filtro do próprio SUMMARIZECOLUMNS, ex.: SUMMARIZECOLUMNS('Calendar'[Year], FILTER(VALUES('Calendar'[Year]), 'Calendar'[Year] IN {2023, 2024}), \"kg\", CALCULATE(...sem filtro de ano...)).\n" +
+        "- Para COMPARAR períodos ou categorias (ex.: 2023 x 2024), use o padrão mais seguro: EVALUATE ROW(\"kg_2023\", CALCULATE(SUM(...), <filtros>, 'Calendar'[Year] = 2023), \"kg_2024\", CALCULATE(SUM(...), <filtros>, 'Calendar'[Year] = 2024)). Errado: SUMMARIZECOLUMNS('T'[Ano], \"kg\", CALCULATE(SUM(...), 'T'[Ano] IN {2023, 2024})) ou com 'T'[Ano] = 2023 || 'T'[Ano] = 2024 dentro do CALCULATE.\n" +
+        "- Linhas com valores idênticos num agrupamento (ex.: todos os anos com o mesmo total) indicam que um filtro dentro do CALCULATE anulou o agrupamento: reescreva com o padrão ROW acima (ou tire o filtro da coluna agrupada de dentro do CALCULATE) e consulte de novo. Não conclua que 'os dados não estão disponíveis'.\n" +
         "- Em TOPN, ordene por uma coluna ou medida e use DESC ou ASC; nunca ordene por constante (empates devolvem todas as linhas). Respeite o tipo da coluna no schema (Text compara com texto entre aspas).\n" +
         "- Medidas são expressões, nunca colunas de agrupamento. Para um valor único: EVALUATE ROW(\"Valor\", CALCULATE([Medida], 'Dim'[Col] = \"x\", 'Calendar'[Year] = 2024)). Por categoria: SUMMARIZECOLUMNS('Dim'[Col], \"Valor\", [Medida]).\n" +
+        "- As descrições do schema (filtros obrigatórios, chaves, valores padrão) prevalecem sobre o seu conhecimento geral: siga-as à risca.\n" +
+        "- Antes de enviar a consulta, confira item por item que ela contém um filtro para CADA elemento da pergunta: período, país, fluxo (exportação/importação), produto e os filtros obrigatórios do schema. Uma VAR declarada e não usada não filtra nada.\n" +
         "- Leia a fórmula de cada medida no schema para saber que filtros ela já aplica, e use os relacionamentos do schema para filtrar a tabela de fatos pelas dimensões.\n" +
-        "- Quando a coluna lista seus valores no schema, filtre pelo valor exato listado. Para achar um produto, país ou categoria pelo nome, não liste a tabela inteira: filtre com CONTAINSSTRING, ex.: FILTER(VALUES('Dim'[Col]), CONTAINSSTRING('Dim'[Col], \"termo\")), tentando também sem acento ou em inglês.\n" +
+        "- NUNCA escreva códigos de produto, país ou categoria de memória (ex.: códigos SH/NCM, códigos de país): filtre países, estados, portos e categorias pelo NOME na coluna de nome da tabela de dimensão (ex.: 'Países'[NO_PAIS] = \"Estados Unidos\"), e produtos pelos valores listados no schema ou pela descrição com CONTAINSSTRING, ex.: FILTER(VALUES('Dim'[Descrição]), CONTAINSSTRING('Dim'[Descrição], \"radical\")), tentando também sem acento ou em inglês. Não liste a tabela inteira. Diga na resposta quais códigos ou categorias entraram.\n" +
         "- Se a dúvida for sobre como o dado está modelado (qual coluna, código ou valor representa algo), investigue com as ferramentas usando as tentativas restantes; só pergunte ao usuário o que depende da intenção dele.\n" +
-        "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números.\n" +
-        "- Se consultar_bi devolver erro com queryMayBeCorrected true, use message, errorCode e responseBody do diagnóstico para corrigir a DAX e tentar de novo, usando apenas tabelas, colunas e medidas do schema. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
+        "DEPOIS DA CONSULTA\n" +
+        "- Se consultar_bi devolver erro com queryMayBeCorrected true, corrija a DAX com base em message, errorCode e responseBody do diagnóstico e tente de novo, usando apenas tabelas, colunas e medidas do schema. Enquanto attemptNumber for menor que maxAttempts é PROIBIDO desistir ou devolver uma pergunta ao usuário por causa do erro. Não troque a pergunta nem invente correção fora do diagnóstico.\n" +
         "- Se queryMayBeCorrected for false (autenticação, permissão ou limite de tentativas esgotado), NÃO reenvie a consulta: informe que não foi possível obter os dados no momento.\n" +
+        "- Se o resultado vier com um campo 'warning', trate-o como erro a corrigir: siga a instrução do aviso, reescreva a consulta e consulte de novo antes de responder.\n" +
         "- Falhas temporárias já foram repetidas automaticamente; você não precisa insistir nelas.\n" +
-        "- Responda em texto; pode usar listas destacando os principais valores. NÃO use tabelas. Se houver muitas linhas, resuma (totais, maiores e menores valores).";
+        "- Antes de responder, confira a ordem de grandeza: se o número parecer implausível para o escopo (ex.: milhões de toneladas de um produto para um único país), revise os filtros (cenário, parceiro, país, fluxo, produto) e consulte de novo.\n" +
+        "- Use SOMENTE valores retornados pelas ferramentas. NUNCA invente ou estime números. Numa conversa, mantenha as mesmas premissas, filtros e códigos das respostas anteriores.\n" +
+        "- Responda em texto; pode usar listas destacando os principais valores. NÃO use tabelas. Diga as premissas adotadas (país, unidade, códigos). Se houver muitas linhas, resuma (totais, maiores e menores valores).";
 
     private readonly Agent _agent;
     private readonly PowerBICredentials _credentials;
@@ -154,6 +179,11 @@ public class PowerBIToolset
 
     // Orcamento por mensagem: execucoes reais de consultar_bi (inicial + replays + DAX corrigida).
     private int _queryAttempts;
+
+    // Calibracao 015: datasets cujo schema o modelo ja leu nesta mensagem, e o schema em si,
+    // para validar a DAX antes de gastar uma tentativa no Power BI.
+    private readonly HashSet<long> _listedSchemas = new();
+    private readonly Dictionary<long, PowerBISchema> _schemaCache = new();
 
     internal PowerBIToolset(
         Agent agent,
@@ -207,6 +237,9 @@ public class PowerBIToolset
 
     public IReadOnlyList<ChatToolDefinition> Definitions { get; }
 
+    /// <summary>Nomes dos datasets oferecidos ao modelo, na ordem do catalogo.</summary>
+    public IReadOnlyList<string> DatasetNames => _datasets.Select(d => d.Name).ToList();
+
     /// <summary>Limite de execucoes de consultar_bi por mensagem; ChatService usa isso para dimensionar o loop de tools.</summary>
     public int MaxQueryAttempts { get; }
 
@@ -256,6 +289,9 @@ public class PowerBIToolset
 
         var text = RenderSchemaText(dataset, schema);
 
+        _listedSchemas.Add(dataset.PowerBIDatasetId);
+        _schemaCache[dataset.PowerBIDatasetId] = schema;
+
         // Regra 5 de contracts/llm-tools.md: listar_schema tambem e registrado, com duracao ~0.
         await WriteLogAsync(dataset, ListSchemaToolName, null, 0, PowerBIQueryStatus.Success,
             null, schema.Tables.Count, false);
@@ -282,12 +318,25 @@ public class PowerBIToolset
 
         var dax = ReadDaxArgument(argumentsJson);
 
+        // Guarda 1: sem o schema o modelo inventa nomes de tabela; a rejeicao e local e nao conta no limite.
+        if (!_listedSchemas.Contains(dataset.PowerBIDatasetId))
+        {
+            return await FailLocalQueryAsync(dataset, dax,
+                $"Chame listar_schema para o dataset '{dataset.ToolKey}' antes de consultar_bi: a consulta precisa usar " +
+                "os nomes exatos de tabelas, colunas e valores do schema. Esta tentativa não contou no limite.");
+        }
+
         if (string.IsNullOrWhiteSpace(dax) || !StartsWithQueryKeyword(dax))
         {
             return await FailLocalQueryAsync(dataset, dax,
                 "A consulta DAX deve começar com EVALUATE ou DEFINE. Não use sintaxe SQL (SELECT, FROM, LIMIT); " +
                 "para limitar linhas use TOPN dentro da expressão DAX.");
         }
+
+        // Guarda 2: literal que nao existe na coluna (ex.: apresentacao do produto filtrada na coluna de fluxo).
+        var literalProblem = ValidateLiterals(dax, _schemaCache.GetValueOrDefault(dataset.PowerBIDatasetId));
+        if (literalProblem != null)
+            return await FailLocalQueryAsync(dataset, dax, literalProblem);
 
         QueryFailure? lastFailure = null;
 
@@ -354,13 +403,21 @@ public class PowerBIToolset
         if (truncated)
             rows = rows.GetRange(0, _maxRows);
 
-        var json = JsonSerializer.Serialize(new
+        var payload = new Dictionary<string, object?>
         {
-            columns = queryResult.Columns,
-            rows,
-            rowCount = rows.Count,
-            truncated
-        });
+            ["columns"] = queryResult.Columns,
+            ["rows"] = rows,
+            ["rowCount"] = rows.Count,
+            ["truncated"] = truncated
+        };
+
+        // Calibracao 015: agrupar por uma coluna e filtra-la dentro do CALCULATE anula o
+        // agrupamento sem dar erro; o aviso vira diagnostico concreto para o modelo corrigir.
+        var warning = DetectIdenticalRows(queryResult.Columns, rows);
+        if (warning != null)
+            payload["warning"] = warning;
+
+        var json = JsonSerializer.Serialize(payload, ModelJson);
 
         await WriteLogAsync(dataset, QueryToolName, dax, durationMs,
             PowerBIQueryStatus.Success, null, rows.Count, truncated);
@@ -378,6 +435,115 @@ public class PowerBIToolset
         });
 
         return json;
+    }
+
+    /// <summary>
+    /// Duas ou mais linhas em que todas as colunas de medida ("[nome]", sem tabela) repetem os
+    /// mesmos numeros enquanto ha coluna de agrupamento ("Tabela[Coluna]"): quase sempre um filtro
+    /// na coluna agrupada dentro do CALCULATE (ex.: agrupar por ano e filtrar 'T'[Ano] IN {...}
+    /// na medida), que substitui o agrupamento e repete o total em todas as linhas.
+    /// </summary>
+    public static string? DetectIdenticalRows(IReadOnlyList<string> columns, List<List<object?>> rows)
+    {
+        if (rows.Count < 2 || columns.Count == 0)
+            return null;
+
+        var measureColumns = Enumerable.Range(0, columns.Count).Where(i => columns[i].StartsWith('[')).ToList();
+        if (measureColumns.Count == 0 || measureColumns.Count == columns.Count)
+            return null;
+
+        foreach (var column in measureColumns)
+        {
+            var values = rows.Select(r => column < r.Count ? r[column] : null).ToList();
+
+            if (!values.All(v => v is long or double or int or decimal))
+                return null;
+
+            var first = Convert.ToDouble(values[0]);
+            if (values.Any(v => Convert.ToDouble(v) != first))
+                return null;
+        }
+
+        return $"ATENÇÃO: as {rows.Count} linhas têm exatamente os mesmos valores nas medidas. Isso quase sempre " +
+               "significa que a coluna usada no agrupamento foi filtrada dentro do CALCULATE da medida (ex.: agrupar por " +
+               "'T'[Ano] e usar 'T'[Ano] IN {...} ou >= / <= dentro do CALCULATE), o que anula o agrupamento. Corrija: " +
+               "mova esse filtro para argumento do SUMMARIZECOLUMNS, ex.: FILTER(VALUES('T'[Ano]), 'T'[Ano] IN {...}), " +
+               "ou use ROW com um CALCULATE por valor, e consulte de novo antes de responder. Não interprete este " +
+               "resultado como 'valores estáveis' nem como 'dados indisponíveis'.";
+    }
+    private static readonly System.Text.RegularExpressions.Regex VarListPattern = new(
+        @"\bVAR\s+(\w+)\s*=\s*(\{[^}]*\}|""(?:[^""]|"""")*"")",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex LiteralFilterPattern = new(
+        @"'((?:[^']|'')+)'\s*\[([^\]]+)\]\s*(=|\bIN\b)\s*(\{[^}]*\}|""(?:[^""]|"""")*""|\w+)",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex StringLiteralPattern = new(
+        @"""((?:[^""]|"""")*)""", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Confere os filtros 'Tabela'[Coluna] = "x" / IN {...} contra os valores conhecidos da coluna
+    /// (lista completa quando o schema a traz). Devolve a mensagem do problema, ou null.
+    /// Erro tipico da calibracao: filtrar a apresentacao do produto na coluna de fluxo com o mesmo nome.
+    /// </summary>
+    public static string? ValidateLiterals(string dax, PowerBISchema? schema)
+    {
+        if (schema == null)
+            return null;
+
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Text.RegularExpressions.Match variable in VarListPattern.Matches(dax))
+            variables[variable.Groups[1].Value] = variable.Groups[2].Value;
+
+        foreach (System.Text.RegularExpressions.Match filter in LiteralFilterPattern.Matches(dax))
+        {
+            var tableName = filter.Groups[1].Value.Replace("''", "'");
+            var columnName = filter.Groups[2].Value;
+            var operand = filter.Groups[4].Value;
+
+            if (!operand.StartsWith('{') && !operand.StartsWith('"'))
+            {
+                if (!variables.TryGetValue(operand, out var resolved))
+                    continue;
+                operand = resolved;
+            }
+
+            var literals = StringLiteralPattern.Matches(operand)
+                .Select(m => m.Groups[1].Value.Replace("\"\"", "\""))
+                .ToList();
+
+            if (literals.Count == 0)
+                continue;
+
+            var table = schema.Tables.FirstOrDefault(t => string.Equals(t.Name, tableName, StringComparison.OrdinalIgnoreCase));
+            var column = table?.Columns.FirstOrDefault(c => string.Equals(c.Name, columnName, StringComparison.OrdinalIgnoreCase));
+
+            if (column?.SampleValues is not { Count: > 0 } known)
+                continue;
+
+            var missing = literals.Where(l => !known.Contains(l, StringComparer.OrdinalIgnoreCase)).Distinct().ToList();
+            if (missing.Count == 0)
+                continue;
+
+            var message = $"Valor(es) {string.Join(", ", missing.Select(m => $"\"{m}\""))} não existe(m) na coluna " +
+                          $"{QuoteTable(table!.Name)}{QuoteMember(column.Name)}. Valores existentes: " +
+                          $"{string.Join(", ", known.Select(v => $"\"{v}\""))}.";
+
+            var elsewhere = schema.Tables
+                .SelectMany(t => t.Columns.Select(c => (Table: t, Column: c)))
+                .Where(x => x.Column != column && x.Column.SampleValues != null
+                    && missing.All(m => x.Column.SampleValues.Contains(m, StringComparer.OrdinalIgnoreCase)))
+                .Select(x => QuoteTable(x.Table.Name) + QuoteMember(x.Column.Name))
+                .ToList();
+
+            if (elsewhere.Count > 0)
+                message += $" Esses valores existem em {string.Join(" e ", elsewhere)}: filtre essa coluna no lugar.";
+
+            return message + " Esta tentativa não contou no limite.";
+        }
+
+        return null;
     }
 
     private static QueryFailure Classify(PowerBIApiException ex, int durationMs)
@@ -422,7 +588,7 @@ public class PowerBIToolset
         var diagnostic = BuildDiagnostic(failure, queryMayBeCorrected: CanModelCorrect(failure));
 
         await WriteLogAsync(dataset, QueryToolName, dax, failure.DurationMs,
-            failure.Status, JsonSerializer.Serialize(diagnostic), null, false);
+            failure.Status, JsonSerializer.Serialize(diagnostic, ModelJson), null, false);
 
         ExecutedQueries.Add(new AgentTestPowerBIQueryInfo
         {
@@ -450,7 +616,7 @@ public class PowerBIToolset
     };
 
     private string QueryErrorJson(QueryFailure failure, bool queryMayBeCorrected) =>
-        JsonSerializer.Serialize(new { error = BuildDiagnostic(failure, queryMayBeCorrected) });
+        JsonSerializer.Serialize(new { error = BuildDiagnostic(failure, queryMayBeCorrected) }, ModelJson);
 
     private TimeSpan NextDelay(TimeSpan? retryAfter)
     {
@@ -675,7 +841,7 @@ public class PowerBIToolset
         JsonSerializer.Serialize(_datasets.Select(d => d.ToolKey).ToList());
 
     private static string ErrorJson(string message) =>
-        JsonSerializer.Serialize(new Dictionary<string, string> { ["error"] = message });
+        JsonSerializer.Serialize(new Dictionary<string, string> { ["error"] = message }, ModelJson);
 
     private string Sanitize(string message)
     {
