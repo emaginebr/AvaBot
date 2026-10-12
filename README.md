@@ -159,12 +159,15 @@ new attempts are refused for 15 minutes.
 
 **First deploy of this version (migration of the current admin login):**
 
-1. Apply the schema migration (creates `avabot_users` and `avabot_agents.owner_user_id`):
+1. Register the migration baseline once (see [Database migrations](#4-database-migrations)):
    ```bash
-   dotnet ef database update --project AvaBot.Infra --startup-project AvaBot.API
+   docker exec -i avabot-db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < scripts/seed-ef-migrations-history.sql
    ```
-2. Keep `AVABOT_USERNAME` / `AVABOT_PASSWORD` in `.env` for this first start. On startup the API
-   creates the admin account from them (the username becomes the login e-mail, lower-cased) and
+   The API then creates `avabot_users` and `avabot_agents.owner_user_id` by itself on the next start.
+2. Keep `AVABOT_USERNAME` / `AVABOT_PASSWORD` in `.env` for this first start, with
+   `AVABOT_USERNAME` set to the administrator's **e-mail address** (in production these come from
+   the GitHub secrets of the same name). On startup the API creates the admin account from them
+   (the username becomes the login e-mail, lower-cased) and
    assigns every existing agent to it. The log shows
    `Conta do administrador criada (email=...) e N agente(s) atribuído(s)`.
 3. If there are agents without an owner and no credentials configured, **the API refuses to
@@ -175,6 +178,32 @@ new attempts are refused for 15 minutes.
 **API contract change:** `POST /auth/login` now takes `{ "email", "password" }` and answers the
 standard envelope `{ "sucesso", "mensagem", "dados": { "token", "expiresAt", "user" } }` instead
 of `{ "sucesso", "token" }`. The frontend, `AvaBot.Tests.API` and the Bruno collection were updated.
+
+### 4. Database migrations
+
+Starting with the users table (`AddUsersAndAgentOwner`), **the API applies pending EF Core
+migrations on startup**, before anything else touches the database
+(`AvaBot.API/Database/StartupMigrator.cs`). The log shows which migrations were applied, or
+`Banco de dados atualizado; nenhuma migracao pendente`. New schema changes only need
+`dotnet ef migrations add <Name> --project AvaBot.Infra --startup-project AvaBot.API` and a deploy;
+no manual SQL script.
+
+Databases created before this version got their schema from `avabot.sql` plus the scripts in
+`scripts/` and have no `__EFMigrationsHistory` table. The API refuses to start on such a database
+(`Nenhuma migracao registrada em __EFMigrationsHistory...`) instead of re-applying every migration
+from the beginning. Run the baseline **once**:
+
+```bash
+docker exec -i avabot-db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < scripts/seed-ef-migrations-history.sql
+```
+
+The script checks that each earlier migration is really present (and names the missing script if
+not), records them as applied, and records `AddUsersAndAgentOwner` only if
+`scripts/add-users-and-agent-owner.sql` was already run by hand. It is idempotent.
+
+- **Empty database**: run `avabot.sql`, then the baseline script, then start the API.
+- `Database__MigrateOnStartup=false` starts the API without touching the schema (the log warns).
+- Do not run `dotnet ef database update` against production anymore; the API does it.
 
 ---
 

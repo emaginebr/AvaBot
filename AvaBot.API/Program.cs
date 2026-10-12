@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using AvaBot.Application;
 using AvaBot.Application.Services;
 using AvaBot.API.Auth;
+using AvaBot.API.Database;
 using AvaBot.API.WebSocket;
 using AvaBot.Infra.Interfaces.AppServices;
 
@@ -87,6 +88,11 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Banco de dados: aplica as migracoes EF pendentes antes de qualquer outro acesso (a partir de
+// AddUsersAndAgentOwner). Bancos anteriores precisam de scripts/seed-ef-migrations-history.sql
+// uma vez; sem ele a API nao sobe e o erro explica. Desliga-se com Database:MigrateOnStartup=false.
+await StartupMigrator.MigrateAsync(app.Services, app.Configuration);
 
 // Elasticsearch - create index on startup
 var esService = app.Services.GetRequiredService<IElasticsearchService>();
