@@ -492,7 +492,8 @@ public class PowerBIService
 
     // ---------- Histórico ----------
 
-    public async Task<PowerBIQueryLogPageInfo> GetQueryLogsAsync(string slug, long ownerUserId, int page, int pageSize)
+    // status filtra por situacao (success, error, timeout); nulo traz tudo (feature 017, FR-012).
+    public async Task<PowerBIQueryLogPageInfo> GetQueryLogsAsync(string slug, long ownerUserId, int page, int pageSize, PowerBIQueryStatus? status = null)
     {
         var agent = await GetAgentBySlugOrThrowAsync(slug, ownerUserId);
 
@@ -500,7 +501,7 @@ public class PowerBIService
         if (pageSize < 1) pageSize = 20;
         if (pageSize > MaxQueryLogPageSize) pageSize = MaxQueryLogPageSize;
 
-        var (items, total) = await _queryLogRepository.GetPagedByAgentAsync(agent.AgentId, page, pageSize);
+        var (items, total) = await _queryLogRepository.GetPagedByAgentAsync(agent.AgentId, page, pageSize, (int?)status);
 
         return new PowerBIQueryLogPageInfo
         {

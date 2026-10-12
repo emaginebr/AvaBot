@@ -94,6 +94,59 @@ public class AgentService
         return await _repository.UpdateAsync(agent);
     }
 
+    /// <summary>
+    /// Atualizacao parcial usada pelo MCP (feature 017): so nome, descricao, prompt, modelo, coleta e nome do bot;
+    /// campo nulo mantem o valor. Nunca toca credenciais, tokens, Power BI, status ou dono.
+    /// </summary>
+    public async Task<Agent> UpdateProfileAsync(long id, AgentProfileUpdateInfo info, long ownerUserId)
+    {
+        var agent = await _repository.GetByIdAsync(id, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
+
+        if (info.Name != null)
+        {
+            if (string.IsNullOrWhiteSpace(info.Name))
+                throw new ArgumentException("Nome e obrigatorio");
+            if (info.Name.Trim().Length > 260)
+                throw new ArgumentException("Nome deve ter no maximo 260 caracteres");
+        }
+
+        if (info.SystemPrompt != null && string.IsNullOrWhiteSpace(info.SystemPrompt))
+            throw new ArgumentException("Prompt de sistema e obrigatorio");
+
+        if (info.Name != null && !string.Equals(agent.Name, info.Name.Trim(), StringComparison.Ordinal))
+        {
+            agent.Name = info.Name.Trim();
+            agent.Slug = await GenerateUniqueSlugAsync(agent.Name, id);
+        }
+
+        if (info.Description != null) agent.Description = info.Description;
+        if (info.SystemPrompt != null) agent.SystemPrompt = info.SystemPrompt;
+        if (!string.IsNullOrWhiteSpace(info.ChatModel)) agent.ChatModel = info.ChatModel.Trim();
+        if (info.CollectName.HasValue) agent.CollectName = info.CollectName.Value;
+        if (info.CollectEmail.HasValue) agent.CollectEmail = info.CollectEmail.Value;
+        if (info.CollectPhone.HasValue) agent.CollectPhone = info.CollectPhone.Value;
+        if (info.TelegramBotName != null) agent.TelegramBotName = info.TelegramBotName;
+
+        agent.UpdatedAt = DateTime.UtcNow;
+        return await _repository.UpdateAsync(agent);
+    }
+
+    /// <summary>Ativa ou desativa o agente (idempotente); agente de outro dono responde como inexistente.</summary>
+    public async Task<Agent> SetActiveAsync(long id, bool active, long ownerUserId)
+    {
+        var agent = await _repository.GetByIdAsync(id, ownerUserId)
+            ?? throw new KeyNotFoundException("Agente nao encontrado");
+
+        var status = active ? 1 : 0;
+        if (agent.Status == status)
+            return agent;
+
+        agent.Status = status;
+        agent.UpdatedAt = DateTime.UtcNow;
+        return await _repository.UpdateAsync(agent);
+    }
+
     // FR: campo em branco preserva a credencial salva; remocao e sempre explicita (D2).
     private void ApplyOpenAIApiKey(Agent agent, AgentInsertInfo info)
     {

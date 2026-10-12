@@ -2,11 +2,8 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AvaBot.DTO;
-using AvaBot.Domain.Models;
 using AvaBot.API.Auth;
 using AvaBot.Application.Services;
-using AvaBot.Infra.Interfaces.Repository;
-using AvaBot.Infra.Interfaces.AppServices;
 
 namespace AvaBot.API.Controllers;
 
@@ -15,44 +12,28 @@ namespace AvaBot.API.Controllers;
 [Route("files/{agentId:long}")]
 public class FileController : ControllerBase
 {
-    private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
-    private readonly IElasticsearchService _esService;
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly AgentService _agentService;
+    private readonly KnowledgeFileService _fileService;
     private readonly IMapper _mapper;
 
-    public FileController(
-        IKnowledgeFileRepository<KnowledgeFile> fileRepository,
-        IElasticsearchService esService,
-        IServiceScopeFactory scopeFactory,
-        AgentService agentService,
-        IMapper mapper)
+    public FileController(KnowledgeFileService fileService, IMapper mapper)
     {
-        _fileRepository = fileRepository;
-        _esService = esService;
-        _scopeFactory = scopeFactory;
-        _agentService = agentService;
+        _fileService = fileService;
         _mapper = mapper;
     }
-
-    // Agente de outro dono responde como inexistente (FR-011).
-    private async Task<bool> OwnsAgentAsync(long agentId)
-        => await _agentService.GetOwnedByIdAsync(agentId, User.GetUserId()) != null;
-
-    private static IActionResult AgentNotFound()
-        => new NotFoundObjectResult(Result<object>.Failure("Agente nao encontrado"));
 
     [HttpGet]
     public async Task<IActionResult> GetByAgent(long agentId)
     {
         try
         {
-            if (!await OwnsAgentAsync(agentId))
-                return AgentNotFound();
-
-            var files = await _fileRepository.GetByAgentIdAsync(agentId);
+            var files = await _fileService.ListAsync(agentId, User.GetUserId());
             var result = _mapper.Map<List<KnowledgeFileInfo>>(files);
             return Ok(Result<List<KnowledgeFileInfo>>.Success(result, "Arquivos listados com sucesso"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // Agente de outro dono responde como inexistente (FR-011).
+            return NotFound(Result<object>.Failure(ex.Message));
         }
         catch (UnauthorizedAccessException)
         {
@@ -76,37 +57,29 @@ public class FileController : ControllerBase
             if (!file.FileName.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(Result<object>.Failure("Apenas arquivos .md sao aceitos"));
 
-            if (file.Length > 10 * 1024 * 1024)
+            if (file.Length > KnowledgeFileService.MaxFileSizeBytes)
                 return BadRequest(Result<object>.Failure("Arquivo excede o limite de 10MB"));
-
-            if (!await OwnsAgentAsync(agentId))
-                return AgentNotFound();
 
             using var reader = new StreamReader(file.OpenReadStream());
             var content = await reader.ReadToEndAsync();
 
-            var knowledgeFile = new KnowledgeFile
-            {
-                AgentId = agentId,
-                FileName = file.FileName,
-                FileContent = content,
-                FileSize = file.Length,
-                ProcessingStatus = Domain.Enums.ProcessingStatus.Processing
-            };
-
-            knowledgeFile = await _fileRepository.CreateAsync(knowledgeFile);
-
-            // Process in background with its own scope
-            var fileId = knowledgeFile.KnowledgeFileId;
-            _ = Task.Run(async () =>
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var ingestionService = scope.ServiceProvider.GetRequiredService<IngestionService>();
-                await ingestionService.ProcessFileAsync(fileId);
-            });
+            // Dono, criacao e ingestao em segundo plano ficam no KnowledgeFileService (compartilhado com o MCP).
+            var knowledgeFile = await _fileService.AddTextAsync(agentId, User.GetUserId(), file.FileName, content);
 
             return Created($"/files/{agentId}/{knowledgeFile.KnowledgeFileId}",
                 Result<KnowledgeFileInfo>.Success(_mapper.Map<KnowledgeFileInfo>(knowledgeFile), "Arquivo enviado e em processamento"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(Result<object>.Failure(ex.Message));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(Result<object>.Failure(ex.Message));
+        }
+        catch (InvalidOperationException)
+        {
+            return BadRequest(Result<object>.Failure("Arquivo excede o limite de 10MB"));
         }
         catch (UnauthorizedAccessException)
         {
@@ -123,17 +96,12 @@ public class FileController : ControllerBase
     {
         try
         {
-            if (!await OwnsAgentAsync(agentId))
-                return AgentNotFound();
-
-            var file = await _fileRepository.GetByIdAsync(fileId);
-            if (file == null || file.AgentId != agentId)
-                return NotFound(Result<object>.Failure("Arquivo nao encontrado"));
-
-            await _esService.DeleteChunksByFileIdAsync(fileId);
-            await _fileRepository.DeleteAsync(fileId);
-
+            await _fileService.DeleteAsync(agentId, User.GetUserId(), fileId);
             return Ok(Result<object>.Success(null!, "Arquivo removido com sucesso"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(Result<object>.Failure(ex.Message));
         }
         catch (UnauthorizedAccessException)
         {
@@ -150,21 +118,12 @@ public class FileController : ControllerBase
     {
         try
         {
-            if (!await OwnsAgentAsync(agentId))
-                return AgentNotFound();
-
-            var file = await _fileRepository.GetByIdAsync(fileId);
-            if (file == null || file.AgentId != agentId)
-                return NotFound(Result<object>.Failure("Arquivo nao encontrado"));
-
-            _ = Task.Run(async () =>
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var ingestionService = scope.ServiceProvider.GetRequiredService<IngestionService>();
-                await ingestionService.ProcessFileAsync(fileId);
-            });
-
+            await _fileService.ReprocessAsync(agentId, User.GetUserId(), fileId);
             return Ok(Result<object>.Success(null!, "Reprocessamento iniciado"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(Result<object>.Failure(ex.Message));
         }
         catch (UnauthorizedAccessException)
         {

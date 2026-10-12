@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using AvaBot.Domain.Enums;
 using AvaBot.Domain.Models;
 using AvaBot.Infra.Context;
 using AvaBot.Infra.Interfaces.Repository;
@@ -22,9 +23,11 @@ public class PowerBIQueryLogRepository : IPowerBIQueryLogRepository<PowerBIQuery
         return log;
     }
 
-    public async Task<(List<PowerBIQueryLog> Items, int Total)> GetPagedByAgentAsync(long agentId, int page, int pageSize)
+    public async Task<(List<PowerBIQueryLog> Items, int Total)> GetPagedByAgentAsync(long agentId, int page, int pageSize, int? status = null)
     {
         var query = _context.PowerBIQueryLogs.Where(l => l.AgentId == agentId);
+        if (status.HasValue)
+            query = query.Where(l => l.Status == (PowerBIQueryStatus)status.Value);
         var total = await query.CountAsync();
 
         var items = await query

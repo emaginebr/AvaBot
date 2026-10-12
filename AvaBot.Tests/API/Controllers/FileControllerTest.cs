@@ -42,12 +42,11 @@ public class FileControllerTest
         _agentRepoMock.Setup(r => r.GetByIdAsync(10, OwnerId)).ReturnsAsync(new Agent { AgentId = 10, OwnerUserId = OwnerId });
         _agentRepoMock.Setup(r => r.GetByIdAsync(99, OwnerId)).ReturnsAsync((Agent?)null);
 
-        _sut = new FileController(
-            _fileRepoMock.Object,
-            _esServiceMock.Object,
-            scopeFactoryMock.Object,
-            agentService,
-            _mapper).WithUser(OwnerId);
+        // A logica de dono, limites e ingestao vive no KnowledgeFileService (feature 017); o controller so delega.
+        var fileService = new KnowledgeFileService(_agentRepoMock.Object, _fileRepoMock.Object, _esServiceMock.Object, scopeFactoryMock.Object);
+        _ = agentService;
+
+        _sut = new FileController(fileService, _mapper).WithUser(OwnerId);
     }
 
     [Fact]

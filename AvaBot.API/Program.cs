@@ -1,12 +1,16 @@
 using System.Text;
 using FluentValidation;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using ModelContextProtocol.Protocol;
 using AvaBot.Application;
 using AvaBot.Application.Services;
 using AvaBot.API.Auth;
 using AvaBot.API.Database;
+using AvaBot.API.Mcp;
+using AvaBot.API.Mcp.Tools;
 using AvaBot.API.WebSocket;
 using AvaBot.Infra.Interfaces.AppServices;
 
@@ -72,8 +76,40 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
         // O "sub" do token vira ClaimTypes.NameIdentifier (mapeamento padrao); User.GetUserId() le os dois.
         options.MapInboundClaims = true;
-    });
+    })
+    // Chave de acesso dos assistentes (feature 017): so vale em /mcp; o JWT do painel nao vale la.
+    .AddScheme<AuthenticationSchemeOptions, McpAccessKeyAuthenticationHandler>(McpAccessKeyAuthenticationHandler.SchemeName, null);
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(McpAccessKeyAuthenticationHandler.PolicyName, policy =>
+        policy.AddAuthenticationSchemes(McpAccessKeyAuthenticationHandler.SchemeName).RequireAuthenticatedUser());
+});
 builder.Services.AddSingleton<JwtTokenIssuer>();
+
+// Servidor MCP (feature 017): Streamable HTTP sem estado em /mcp; uma classe de ferramentas por grupo.
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new Implementation
+        {
+            Name = "avabot",
+            Title = "AvaBot",
+            Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "1.0.0"
+        };
+        options.ServerInstructions = McpServerInstructions.Text;
+    })
+    .WithHttpTransport()
+    .WithTools<AccountTools>(McpJson.Options)
+    .WithTools<AgentTools>(McpJson.Options)
+    .WithTools<ConversationTools>(McpJson.Options)
+    .WithTools<PowerBITools>(McpJson.Options)
+    .WithTools<ChannelTools>(McpJson.Options)
+    .WithTools<KnowledgeTools>(McpJson.Options)
+    .WithRequestFilters(filters =>
+    {
+        filters.AddCallToolFilter(McpSecretGuardFilter.Create());
+        filters.AddCallToolFilter(McpToolExecutionFilter.Create());
+    })
+    .AddAuthorizationFilters();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -124,5 +160,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapChatWebSocket();
+
+app.MapMcp("/mcp").RequireAuthorization(McpAccessKeyAuthenticationHandler.PolicyName);
 
 app.Run();

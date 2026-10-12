@@ -31,10 +31,14 @@ public static class DependencyInjection
         services.AddScoped<IPowerBIDatasetRepository<PowerBIDataset>, PowerBIDatasetRepository>();
         services.AddScoped<IPowerBIQueryLogRepository<PowerBIQueryLog>, PowerBIQueryLogRepository>();
         services.AddScoped<IUserRepository<User>, UserRepository>();
+        services.AddScoped<IMcpAccessKeyRepository<McpAccessKey>, McpAccessKeyRepository>();
 
         // Domain Services
         services.AddScoped<UserService>();
         services.AddScoped<UserBootstrapService>();
+        services.AddScoped<McpAccessKeyService>();
+        services.AddScoped<SessionQueryService>();
+        services.AddScoped<KnowledgeFileService>();
         services.AddScoped<AgentService>();
         services.AddScoped<IngestionService>();
         services.AddScoped<SearchService>();

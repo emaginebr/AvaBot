@@ -52,7 +52,10 @@ public class SessionControllerTest
             NullLogger<PowerBIToolProvider>.Instance);
         var chatService = new ChatService(searchService, openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, _agentRepoMock.Object, powerBIToolProvider, config, NullLogger<ChatService>.Instance);
 
-        _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, _mapper).WithUser(OwnerId);
+        var sessionQuery = new SessionQueryService(_agentRepoMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object,
+            new Mock<ITelegramChatRepository<TelegramChat>>().Object, _mapper);
+
+        _sut = new SessionController(_sessionRepoMock.Object, _messageRepoMock.Object, agentService, chatService, sessionQuery, _mapper).WithUser(OwnerId);
 
         // Por padrao os agentes 1 e 10 sao do usuario do token; o 99 nao e.
         _agentRepoMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1, OwnerUserId = OwnerId });
