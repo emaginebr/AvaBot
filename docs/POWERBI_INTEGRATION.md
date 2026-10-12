@@ -68,9 +68,7 @@ O `docker-compose.yml` e o `docker-compose-prod.yml` ja repassam a variavel como
 
 ### Aplicar a migração
 
-```bash
-dotnet ef database update --project AvaBot.Infra --startup-project AvaBot.API
-```
+Em bancos que já têm o baseline de migrações (`scripts/seed-ef-migrations-history.sql`, veja o README, seção "Database migrations"), a API aplica as migrações pendentes sozinha na subida. Em bancos anteriores, aplique a mão com `scripts/add-powerbi-integration.sql` antes de rodar o baseline.
 
 A migração `AddPowerBIIntegration` cria `avabot_agent_powerbi_configs`, `avabot_powerbi_datasets` e `avabot_powerbi_query_logs` e a coluna `powerbi_enabled` em `avabot_agents` (default `false`).
 

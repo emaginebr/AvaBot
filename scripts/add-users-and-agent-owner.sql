@@ -11,15 +11,15 @@
 -- Auth:Username/Auth:Password, e todos os agentes sem dono sao atribuidos a ela.
 -- Se depois disso restar agente sem dono, a API nao sobe e o log explica o motivo.
 --
+-- Normalmente NAO e preciso rodar este script: a partir desta versao a API aplica a
+-- migracao sozinha na subida, depois do baseline scripts/seed-ef-migrations-history.sql.
+-- Ele fica aqui como equivalente manual (por exemplo, para aplicar antes do baseline);
+-- o baseline detecta a tabela avabot_users e registra a migracao como aplicada.
+--
 -- Executar com:
 --   psql "$DATABASE_URL" -f scripts/add-users-and-agent-owner.sql
 -- ou, no container do banco (ajuste usuario e banco conforme o .env):
 --   docker compose exec -T postgres psql -U postgres -d avabot < scripts/add-users-and-agent-owner.sql
---
--- Escolha UM caminho: este script OU `dotnet ef database update`. Rodando o script
--- a mao, a linha '20261010201105_AddUsersAndAgentOwner' nao entra em
--- __EFMigrationsHistory, e um `database update` depois vai tentar reaplicar a
--- alteracao e falhar.
 -- =============================================
 
 BEGIN;
