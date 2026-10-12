@@ -505,10 +505,22 @@ public class PowerBIServiceTest
     }
 
     [Fact]
+    public async Task GetQueryLogsAsync_ShouldPassTheStatusFilterToTheRepository()
+    {
+        _queryLogRepoMock.Setup(r => r.GetPagedByAgentAsync(AgentId, 1, 20, (int)PowerBIQueryStatus.Error))
+            .ReturnsAsync((new List<PowerBIQueryLog> { new() { PowerBIQueryLogId = 1, Status = PowerBIQueryStatus.Error, ErrorMessage = "x" } }, 1));
+
+        var result = await _sut.GetQueryLogsAsync(Slug, OwnerId, 1, 20, PowerBIQueryStatus.Error);
+
+        Assert.Single(result.Items);
+        _queryLogRepoMock.Verify(r => r.GetPagedByAgentAsync(AgentId, 1, 20, (int)PowerBIQueryStatus.Error), Times.Once);
+    }
+
+    [Fact]
     public async Task GetQueryLogsAsync_ShouldLimitThePageSizeToOneHundred()
     {
         // Arrange
-        _queryLogRepoMock.Setup(r => r.GetPagedByAgentAsync(AgentId, 1, 100))
+        _queryLogRepoMock.Setup(r => r.GetPagedByAgentAsync(AgentId, 1, 100, null))
             .ReturnsAsync((new List<PowerBIQueryLog>(), 0));
 
         // Act
@@ -516,7 +528,7 @@ public class PowerBIServiceTest
 
         // Assert
         Assert.Equal(100, result.PageSize);
-        _queryLogRepoMock.Verify(r => r.GetPagedByAgentAsync(AgentId, 1, 100), Times.Once);
+        _queryLogRepoMock.Verify(r => r.GetPagedByAgentAsync(AgentId, 1, 100, null), Times.Once);
     }
 
     [Fact]

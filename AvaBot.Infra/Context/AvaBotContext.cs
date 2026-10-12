@@ -17,10 +17,37 @@ public class AvaBotContext : DbContext
     public DbSet<PowerBIDataset> PowerBIDatasets { get; set; }
     public DbSet<PowerBIQueryLog> PowerBIQueryLogs { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<McpAccessKey> McpAccessKeys { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // McpAccessKey (feature 017)
+        modelBuilder.Entity<McpAccessKey>(entity =>
+        {
+            entity.ToTable("avabot_mcp_access_keys");
+            entity.HasKey(e => e.McpAccessKeyId).HasName("avabot_mcp_access_keys_pkey");
+            entity.Property(e => e.McpAccessKeyId).HasColumnName("mcp_access_key_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.UserId).HasColumnName("user_id").IsRequired();
+            entity.HasIndex(e => e.UserId).HasDatabaseName("ix_avabot_mcp_access_keys_user_id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.KeyHash).HasColumnName("key_hash").HasMaxLength(64).IsRequired();
+            entity.HasIndex(e => e.KeyHash).IsUnique().HasDatabaseName("avabot_mcp_access_keys_key_hash_key");
+            entity.Property(e => e.KeyPrefix).HasColumnName("key_prefix").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(1).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.LastUsedAt).HasColumnName("last_used_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.RevokedAt).HasColumnName("revoked_at").HasColumnType("timestamp without time zone");
+            entity.Ignore(e => e.IsActive);
+
+            // Uma chave sem dono nao tem significado: NOT NULL + Restrict (desvio justificado no plano).
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .HasConstraintName("avabot_fk_users_mcp_access_keys")
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         // User
         modelBuilder.Entity<User>(entity =>

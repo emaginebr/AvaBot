@@ -1,0 +1,15 @@
+meta {
+  name: List Keys
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/auth/me/mcp-keys
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

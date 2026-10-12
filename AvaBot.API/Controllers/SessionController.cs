@@ -17,6 +17,7 @@ public class SessionController : ControllerBase
     private readonly IChatMessageRepository<ChatMessage> _messageRepo;
     private readonly AgentService _agentService;
     private readonly ChatService _chatService;
+    private readonly SessionQueryService _sessionQuery;
     private readonly IMapper _mapper;
 
     public SessionController(
@@ -24,12 +25,14 @@ public class SessionController : ControllerBase
         IChatMessageRepository<ChatMessage> messageRepo,
         AgentService agentService,
         ChatService chatService,
+        SessionQueryService sessionQuery,
         IMapper mapper)
     {
         _sessionRepo = sessionRepo;
         _messageRepo = messageRepo;
         _agentService = agentService;
         _chatService = chatService;
+        _sessionQuery = sessionQuery;
         _mapper = mapper;
     }
 
@@ -76,31 +79,30 @@ public class SessionController : ControllerBase
     {
         try
         {
-            // Agente de outro dono responde como inexistente (FR-011).
-            if (await _agentService.GetOwnedByIdAsync(agentId, User.GetUserId()) == null)
-                return NotFound(Result<object>.Failure("Agente nao encontrado"));
+            // Dono, paginacao e contagem ficam no SessionQueryService (compartilhado com o MCP, feature 017).
+            var data = await _sessionQuery.GetSessionPageAsync(agentId, User.GetUserId(), page, maxPage);
 
-            maxPage = Math.Min(maxPage, 100);
-            var sessions = await _sessionRepo.GetByAgentIdAsync(agentId, page, maxPage);
-            var total = await _sessionRepo.CountByAgentIdAsync(agentId);
-
-            var items = new List<ChatSessionInfo>();
-            foreach (var s in sessions)
+            var items = data.Items.Select(s =>
             {
                 var info = _mapper.Map<ChatSessionInfo>(s);
-                info.MessageCount = await _messageRepo.CountBySessionIdAsync(s.ChatSessionId);
-                items.Add(info);
-            }
+                info.MessageCount = data.MessageCounts.TryGetValue(s.ChatSessionId, out var count) ? count : 0;
+                return info;
+            }).ToList();
 
             var paginated = new PaginatedResult<ChatSessionInfo>
             {
                 Items = items,
-                Total = total,
-                Page = page,
-                MaxPage = maxPage
+                Total = data.Total,
+                Page = data.Page,
+                MaxPage = data.PageSize
             };
 
             return Ok(Result<PaginatedResult<ChatSessionInfo>>.Success(paginated, "Sessoes listadas com sucesso"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            // Agente de outro dono responde como inexistente (FR-011).
+            return NotFound(Result<object>.Failure(ex.Message));
         }
         catch (UnauthorizedAccessException)
         {
@@ -151,26 +153,22 @@ public class SessionController : ControllerBase
     {
         try
         {
-            // A sessao so e visivel se o agente dela for do usuario do token (FR-010).
-            var session = await _sessionRepo.GetByIdAsync(sessionId);
-            if (session?.AgentId == null || await _agentService.GetOwnedByIdAsync(session.AgentId.Value, User.GetUserId()) == null)
-                return NotFound(Result<object>.Failure("Sessao nao encontrada"));
-
-            maxPage = Math.Min(maxPage, 200);
-            var messages = await _messageRepo.GetBySessionIdAsync(sessionId, page, maxPage);
-            var total = await _messageRepo.CountBySessionIdAsync(sessionId);
-
-            var items = _mapper.Map<List<ChatMessageInfo>>(messages);
+            // A sessao so e visivel se o agente dela for do usuario do token (FR-010); regra no SessionQueryService.
+            var data = await _sessionQuery.GetMessagePageAsync(sessionId, User.GetUserId(), page, maxPage);
 
             var paginated = new PaginatedResult<ChatMessageInfo>
             {
-                Items = items,
-                Total = total,
-                Page = page,
-                MaxPage = maxPage
+                Items = _mapper.Map<List<ChatMessageInfo>>(data.Items),
+                Total = data.Total,
+                Page = data.Page,
+                MaxPage = data.PageSize
             };
 
             return Ok(Result<PaginatedResult<ChatMessageInfo>>.Success(paginated, "Mensagens listadas com sucesso"));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(Result<object>.Failure(ex.Message));
         }
         catch (UnauthorizedAccessException)
         {

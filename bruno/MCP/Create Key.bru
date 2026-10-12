@@ -1,0 +1,27 @@
+meta {
+  name: Create Key
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/me/mcp-keys
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Bruno"
+  }
+}
+
+script:post-response {
+  // A chave em claro so vem nesta resposta: fica na variavel mcpKey para as demais requisicoes.
+  bru.setVar("mcpKey", res.body.dados.key);
+  bru.setVar("mcpKeyId", res.body.dados.accessKey.mcpAccessKeyId);
+}

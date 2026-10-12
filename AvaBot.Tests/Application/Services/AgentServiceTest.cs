@@ -300,4 +300,120 @@ public class AgentServiceTest
     {
         Assert.Equal("agent", AgentService.Slugify(input));
     }
+
+    // ---------- UpdateProfileAsync / SetActiveAsync (MCP, feature 017) ----------
+
+    private Agent ExistingAgentWithSecrets() => new()
+    {
+        AgentId = 12,
+        OwnerUserId = OwnerId,
+        Name = "Suporte Loja",
+        Slug = "suporte-loja",
+        SystemPrompt = "prompt antigo",
+        ChatModel = "gpt-4o",
+        Status = 1,
+        OpenAIApiKeyEncrypted = "ENC-sk-live",
+        TelegramBotToken = "123:TOKEN",
+        TelegramWebhookSecret = "WEBHOOK",
+        WhatsappToken = "WPP",
+        PowerBIEnabled = true
+    };
+
+    [Fact]
+    public async Task UpdateProfileAsync_ShouldChangeOnlyTheGivenFields_AndKeepSecrets()
+    {
+        var agent = ExistingAgentWithSecrets();
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, OwnerId)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
+
+        var updated = await _sut.UpdateProfileAsync(12, new AgentProfileUpdateInfo { SystemPrompt = "prompt novo" }, OwnerId);
+
+        Assert.Equal("prompt novo", updated.SystemPrompt);
+        Assert.Equal("Suporte Loja", updated.Name);
+        Assert.Equal("suporte-loja", updated.Slug);
+        Assert.Equal("gpt-4o", updated.ChatModel);
+        Assert.Equal("ENC-sk-live", updated.OpenAIApiKeyEncrypted);
+        Assert.Equal("123:TOKEN", updated.TelegramBotToken);
+        Assert.Equal("WEBHOOK", updated.TelegramWebhookSecret);
+        Assert.Equal("WPP", updated.WhatsappToken);
+        Assert.True(updated.PowerBIEnabled);
+        Assert.Equal(1, updated.Status);
+        Assert.Equal(OwnerId, updated.OwnerUserId);
+        _repositoryMock.Verify(r => r.SlugExistsAsync(It.IsAny<string>(), It.IsAny<long?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ShouldRegenerateTheSlug_WhenTheNameChanges()
+    {
+        var agent = ExistingAgentWithSecrets();
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, OwnerId)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.SlugExistsAsync("atendimento", 12)).ReturnsAsync(false);
+        _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
+
+        var updated = await _sut.UpdateProfileAsync(12, new AgentProfileUpdateInfo { Name = " Atendimento " }, OwnerId);
+
+        Assert.Equal("Atendimento", updated.Name);
+        Assert.Equal("atendimento", updated.Slug);
+        Assert.Equal("prompt antigo", updated.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ShouldThrow_WithoutSaving_WhenTheNameIsBlank()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, OwnerId)).ReturnsAsync(ExistingAgentWithSecrets());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.UpdateProfileAsync(12, new AgentProfileUpdateInfo { Name = "   " }, OwnerId));
+
+        Assert.Equal("Nome e obrigatorio", ex.Message);
+        _repositoryMock.Verify(r => r.UpdateAsync(It.IsAny<Agent>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ShouldThrow_WhenThePromptIsBlank()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, OwnerId)).ReturnsAsync(ExistingAgentWithSecrets());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.UpdateProfileAsync(12, new AgentProfileUpdateInfo { SystemPrompt = "" }, OwnerId));
+
+        Assert.Equal("Prompt de sistema e obrigatorio", ex.Message);
+    }
+
+    [Fact]
+    public async Task UpdateProfileAsync_ShouldThrowNotFound_WhenTheAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, 99)).ReturnsAsync((Agent?)null);
+
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            _sut.UpdateProfileAsync(12, new AgentProfileUpdateInfo { Description = "x" }, 99));
+
+        Assert.Equal("Agente nao encontrado", ex.Message);
+    }
+
+    [Fact]
+    public async Task SetActiveAsync_ShouldWriteStatusZero_AndBeIdempotentWhenReactivating()
+    {
+        var agent = ExistingAgentWithSecrets();
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, OwnerId)).ReturnsAsync(agent);
+        _repositoryMock.Setup(r => r.UpdateAsync(It.IsAny<Agent>())).ReturnsAsync((Agent a) => a);
+
+        var inactive = await _sut.SetActiveAsync(12, false, OwnerId);
+        Assert.Equal(0, inactive.Status);
+
+        var active = await _sut.SetActiveAsync(12, true, OwnerId);
+        Assert.Equal(1, active.Status);
+
+        var still = await _sut.SetActiveAsync(12, true, OwnerId);
+        Assert.Equal(1, still.Status);
+        _repositoryMock.Verify(r => r.UpdateAsync(It.IsAny<Agent>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task SetActiveAsync_ShouldThrowNotFound_WhenTheAgentBelongsToAnotherOwner()
+    {
+        _repositoryMock.Setup(r => r.GetByIdAsync(12, 99)).ReturnsAsync((Agent?)null);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _sut.SetActiveAsync(12, false, 99));
+    }
 }

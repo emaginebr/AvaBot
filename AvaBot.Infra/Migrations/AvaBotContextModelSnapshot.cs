@@ -360,6 +360,68 @@ namespace AvaBot.Infra.Migrations
                     b.ToTable("avabot_knowledge_files", (string)null);
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.McpAccessKey", b =>
+                {
+                    b.Property<long>("McpAccessKeyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("mcp_access_key_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("McpAccessKeyId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key_hash");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("key_prefix");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("status");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("McpAccessKeyId")
+                        .HasName("avabot_mcp_access_keys_pkey");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_mcp_access_keys_key_hash_key");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_avabot_mcp_access_keys_user_id");
+
+                    b.ToTable("avabot_mcp_access_keys", (string)null);
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.PowerBIDataset", b =>
                 {
                     b.Property<long>("PowerBIDatasetId")
@@ -668,6 +730,18 @@ namespace AvaBot.Infra.Migrations
                         .HasConstraintName("avabot_fk_agents_knowledge_files");
 
                     b.Navigation("Agent");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.McpAccessKey", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_users_mcp_access_keys");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.PowerBIDataset", b =>

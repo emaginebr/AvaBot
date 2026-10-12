@@ -1,0 +1,15 @@
+meta {
+  name: Revoke Key
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/auth/me/mcp-keys/{{mcpKeyId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

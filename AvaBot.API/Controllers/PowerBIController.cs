@@ -211,11 +211,15 @@ public class PowerBIController : ControllerBase
 
     [Authorize]
     [HttpGet("powerbi/{slug}/query-logs")]
-    public async Task<IActionResult> GetQueryLogs(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    public async Task<IActionResult> GetQueryLogs(string slug, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? status = null)
     {
         try
         {
-            var result = await _powerBIService.GetQueryLogsAsync(slug, User.GetUserId(), page, pageSize);
+            // Filtro opcional por situacao (feature 017): success | error | timeout.
+            if (!PowerBIQueryStatusParser.TryParse(status, out var parsedStatus))
+                return BadRequest(Result<object>.Failure(PowerBIQueryStatusParser.InvalidMessage));
+
+            var result = await _powerBIService.GetQueryLogsAsync(slug, User.GetUserId(), page, pageSize, parsedStatus);
             return Ok(Result<PowerBIQueryLogPageInfo>.Success(result, "Historico obtido com sucesso"));
         }
         catch (Exception ex)

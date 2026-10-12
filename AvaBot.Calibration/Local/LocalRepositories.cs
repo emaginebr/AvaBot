@@ -1,3 +1,4 @@
+using AvaBot.Domain.Enums;
 using AvaBot.Domain.Models;
 using AvaBot.Infra.Interfaces.AppServices;
 using AvaBot.Infra.Interfaces.Repository;
@@ -69,7 +70,7 @@ public class LocalPowerBIDatasetRepository : IPowerBIDatasetRepository<PowerBIDa
 public class DiscardQueryLogRepository : IPowerBIQueryLogRepository<PowerBIQueryLog>
 {
     public Task<PowerBIQueryLog> CreateAsync(PowerBIQueryLog log) => Task.FromResult(log);
-    public Task<(List<PowerBIQueryLog> Items, int Total)> GetPagedByAgentAsync(long agentId, int page, int pageSize) =>
+    public Task<(List<PowerBIQueryLog> Items, int Total)> GetPagedByAgentAsync(long agentId, int page, int pageSize, int? status = null) =>
         Task.FromResult((new List<PowerBIQueryLog>(), 0));
     public Task<int> DeleteOlderThanAsync(DateTime cutoff) => Task.FromResult(0);
 }

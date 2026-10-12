@@ -37,4 +37,18 @@ public class TelegramChatRepository : ITelegramChatRepository<TelegramChat>
         await _context.SaveChangesAsync();
         return chat;
     }
+
+    public async Task<HashSet<long>> GetSessionIdsAsync(IEnumerable<long> chatSessionIds)
+    {
+        var ids = chatSessionIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new HashSet<long>();
+
+        var found = await _context.TelegramChats
+            .Where(t => ids.Contains(t.ChatSessionId))
+            .Select(t => t.ChatSessionId)
+            .ToListAsync();
+
+        return found.ToHashSet();
+    }
 }

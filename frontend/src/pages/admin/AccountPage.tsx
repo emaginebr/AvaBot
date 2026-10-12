@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../stores/useAuthStore'
+import McpAccessKeysPanel from '../../components/admin/McpAccessKeysPanel'
 
 const MIN_PASSWORD = 8
 
@@ -181,6 +182,27 @@ const AccountPage = () => {
             {savingPassword ? 'Alterando...' : 'Alterar senha'}
           </button>
         </form>
+
+        <section className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-gray-900">Assistentes de IA (MCP)</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Conecte o Claude, o Cursor, o VS Code ou outro assistente compatível com MCP à sua conta para criar,
+              configurar e inspecionar os seus agentes por conversa. O assistente nunca exclui agentes nem lê ou grava
+              credenciais; isso continua sendo feito só aqui no painel. Passo a passo em{' '}
+              <a
+                href="https://github.com/emaginebr/AvaBot/blob/main/docs/MCP_SETUP.md"
+                target="_blank"
+                rel="noreferrer"
+                className="text-ava-600 hover:underline"
+              >
+                docs/MCP_SETUP.md
+              </a>
+              .
+            </p>
+          </div>
+          <McpAccessKeysPanel />
+        </section>
       </div>
     </div>
   )

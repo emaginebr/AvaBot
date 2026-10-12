@@ -1,0 +1,38 @@
+meta {
+  name: Call Tool
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/mcp
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json, text/event-stream
+}
+
+auth:bearer {
+  token: {{mcpKey}}
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "quem_sou_eu",
+      "arguments": {}
+    }
+  }
+}
+
+docs {
+  Troque "name" e "arguments" por qualquer ferramenta de docs/MCP_SETUP.md, por exemplo
+  { "name": "obter_agente", "arguments": { "agentId": 12 } }.
+  Uma chamada com campo de segredo (openAIApiKey, tenantId, token...) volta com isError: true.
+}

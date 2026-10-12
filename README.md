@@ -67,6 +67,7 @@ This repository now unifies both the backend (.NET, at the repo root) and the fr
 Avachat/
 ├── AvaBot.API/                 # REST API + WebSocket handler
 │   ├── Controllers/             # AgentController, ChatSessionController, KnowledgeFileController
+│   ├── Mcp/                     # MCP server for AI assistants: tools, filters, caller identity
 │   ├── Validators/              # FluentValidation validators
 │   └── WebSocket/               # ChatWebSocketHandler
 ├── AvaBot.Application/         # Business logic layer
@@ -349,6 +350,10 @@ AvaBot.Tests.API/                # Integration tests (HTTP + WebSocket)
 | DELETE | `/api/agents/{agentId}/files/{fileId}` | Delete knowledge file |
 | POST | `/api/agents/{agentId}/files/{fileId}/reprocess` | Reprocess file |
 | WS | `/ws/chat/{slug}?sessionId={id}` | WebSocket chat connection |
+| GET | `/api/auth/me/mcp-keys` | List the MCP access keys of the account |
+| POST | `/api/auth/me/mcp-keys` | Create an MCP access key (the value is shown once) |
+| DELETE | `/api/auth/me/mcp-keys/{id}` | Revoke an MCP access key |
+| POST | `/api/mcp` | MCP server (Streamable HTTP, `Authorization: Bearer avabot_mcp_...`) |
 
 ### WebSocket Protocol
 
@@ -364,6 +369,14 @@ AvaBot.Tests.API/                # Integration tests (HTTP + WebSocket)
 ### Bruno Collection
 
 Import the collection from `bruno/AvaBot API/` in [Bruno](https://www.usebruno.com/) for interactive API testing. Fill the `email` and `password` variables in `collection.bru` (never commit real values); `Auth/Login` stores the token in the `token` variable for the other requests.
+
+---
+
+## 🔌 MCP para assistentes de IA
+
+O AvaBot expõe um servidor **MCP** (Model Context Protocol) em `/api/mcp`. Um assistente compatível (Claude Code, Claude Desktop/claude.ai, Cursor, VS Code, ChatGPT) conectado a ele opera a sua conta: cria e edita agentes, lê conversas e logs de consulta Power BI, faz perguntas de teste, configura datasets e schema do Power BI, registra o webhook do Telegram e mantém a base de conhecimento. A autenticação é por **chave de acesso** criada em "Minha conta" (`avabot_mcp_...`), exibida uma única vez e revogável a qualquer momento.
+
+Regras de segurança, por construção: **nenhuma ferramenta exclui um agente** e **nenhuma ferramenta lê ou grava credenciais** (chave de API do modelo, Directory ID, App ID e segredo do Power BI, tokens do Telegram e do WhatsApp); uma chamada com um desses campos é recusada inteira. Em produção o proxy precisa repassar `/api/mcp` sem buffer e com timeout de leitura de 120 s. Passo a passo, lista das 28 ferramentas e depuração em [docs/MCP_SETUP.md](docs/MCP_SETUP.md).
 
 ---
 
