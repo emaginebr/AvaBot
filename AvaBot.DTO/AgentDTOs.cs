@@ -283,6 +283,10 @@ public class WhatsappStatusInfo
 
     [JsonPropertyName("isConnected")]
     public bool IsConnected { get; set; }
+
+    /// <summary>QR Code atual (data URL) enquanto a sessao aguarda o pareamento; null nos demais estados.</summary>
+    [JsonPropertyName("qrCode")]
+    public string? QrCode { get; set; }
 }
 
 public class AgentOpenAIDiagnoseInfo

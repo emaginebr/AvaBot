@@ -186,4 +186,101 @@ public class WhatsappServiceTest
         _wppMock.Verify(w => w.SendMessageAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         VerifyReachedChat(Times.Never());
     }
+
+    // ---- Inicio de sessao (pareamento por QR Code) ----
+
+    private const long OwnerId = 7;
+
+    private void ArrangeOwnedAgent() =>
+        _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug, OwnerId)).ReturnsAsync(_agent);
+
+    [Theory]
+    [InlineData("INITIALIZING")]
+    [InlineData("QRCODE")]
+    [InlineData("CLOSING")]
+    [InlineData("CONNECTED")]
+    public async Task StartSession_WhenSessionIsAlreadyRunning_ShouldNotCloseNorStartAgain(string status)
+    {
+        ArrangeOwnedAgent();
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug)).ReturnsAsync(new WppSessionState(status, status == "QRCODE" ? "data:image/png;base64,QR" : null));
+
+        var result = await _sut.StartSessionAsync(Slug, OwnerId);
+
+        Assert.Equal(status, result.Status);
+        Assert.Equal(status == "CONNECTED", result.IsConnected);
+        Assert.Equal(status == "QRCODE" ? "data:image/png;base64,QR" : null, result.QrCode);
+        _wppMock.Verify(w => w.CloseSessionAsync(It.IsAny<string>()), Times.Never);
+        _wppMock.Verify(w => w.StartSessionAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task StartSession_WhenSessionIsClosed_ShouldStartWithoutClosingFirst()
+    {
+        ArrangeOwnedAgent();
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug)).ReturnsAsync(new WppSessionState("CLOSED", null));
+        _wppMock.Setup(w => w.GenerateTokenAsync(Slug)).ReturnsAsync("novo-token");
+
+        var result = await _sut.StartSessionAsync(Slug, OwnerId);
+
+        Assert.Equal("INITIALIZING", result.Status);
+        _wppMock.Verify(w => w.CloseSessionAsync(It.IsAny<string>()), Times.Never);
+        _wppMock.Verify(w => w.StartSessionAsync(Slug, $"http://localhost:5000/whatsapp/{Slug}/webhook"), Times.Once);
+        _agentRepoMock.Verify(r => r.UpdateAsync(It.Is<Agent>(a => a.WhatsappToken == "novo-token")), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSession_WhenStatusCannotBeRead_ShouldTreatAsClosedAndStart()
+    {
+        ArrangeOwnedAgent();
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug)).ThrowsAsync(new HttpRequestException("401"));
+        _wppMock.Setup(w => w.GenerateTokenAsync(Slug)).ReturnsAsync("novo-token");
+
+        await _sut.StartSessionAsync(Slug, OwnerId);
+
+        _wppMock.Verify(w => w.StartSessionAsync(Slug, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task StartSession_WhenSessionIsInError_ShouldCleanUpBeforeStarting()
+    {
+        ArrangeOwnedAgent();
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug)).ReturnsAsync(new WppSessionState("ERROR", null));
+        _wppMock.Setup(w => w.GenerateTokenAsync(Slug)).ReturnsAsync("novo-token");
+        var calls = new List<string>();
+        _wppMock.Setup(w => w.CloseSessionAsync(Slug)).Callback(() => calls.Add("close")).Returns(Task.CompletedTask);
+        _wppMock.Setup(w => w.StartSessionAsync(Slug, It.IsAny<string>())).Callback(() => calls.Add("start")).Returns(Task.CompletedTask);
+
+        await _sut.StartSessionAsync(Slug, OwnerId);
+
+        Assert.Equal(new[] { "close", "start" }, calls);
+    }
+
+    [Fact]
+    public async Task StartSession_ConcurrentClicks_ShouldStartOnlyOnce()
+    {
+        ArrangeOwnedAgent();
+        var started = false;
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug))
+            .ReturnsAsync(() => new WppSessionState(started ? "INITIALIZING" : "CLOSED", null));
+        _wppMock.Setup(w => w.GenerateTokenAsync(Slug)).ReturnsAsync("novo-token");
+        _wppMock.Setup(w => w.StartSessionAsync(Slug, It.IsAny<string>()))
+            .Returns(async () => { await Task.Delay(50); started = true; });
+
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => _sut.StartSessionAsync(Slug, OwnerId)));
+
+        _wppMock.Verify(w => w.StartSessionAsync(Slug, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetStatus_WhilePairing_ShouldReturnTheCurrentQrCode()
+    {
+        ArrangeOwnedAgent();
+        _wppMock.Setup(w => w.GetSessionStateAsync(Slug)).ReturnsAsync(new WppSessionState("QRCODE", "data:image/png;base64,QR2"));
+
+        var result = await _sut.GetStatusAsync(Slug, OwnerId);
+
+        Assert.Equal("QRCODE", result.Status);
+        Assert.False(result.IsConnected);
+        Assert.Equal("data:image/png;base64,QR2", result.QrCode);
+    }
 }
