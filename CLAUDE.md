@@ -51,6 +51,13 @@ frontend/                    # Frontend React/Vite
 specs/                       # Specs compartilhadas (backend 001-004, frontend 005-010)
 ```
 
+## Deploy do frontend, do WPP Connect e da infra
+
+**Sempre** que o usuário pedir para subir/publicar/fazer deploy do frontend, do wppconnect ou da infra (RabbitMQ, Elasticsearch, WPP Connect), use a skill `avabot-deploy`. O deploy é feito pelo repositório irmão `C:\repos\emagine-deploy`, não por este:
+
+- Frontend: `scripts/build-avabot.ps1` → commit `chore: atualiza build do avabot` em `builds/avabot` na `main` → workflow `Deploy Production`.
+- WPP Connect / infra: `gh workflow run deploy-infra.yml -R emaginebr/emagine-deploy` (recria RabbitMQ, Elasticsearch e WPP Connect; confirmar antes).
+
 ## Commands
 
 Backend (raiz do repositório): # Add commands for C# / .NET 9.0
