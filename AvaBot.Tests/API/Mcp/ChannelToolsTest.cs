@@ -101,7 +101,7 @@ public class ChannelToolsTest
     {
         var agent = ArrangeAgent(null);
         agent.WhatsappToken = "WPP-TOKEN";
-        _wppMock.Setup(w => w.GetStatusAsync("suporte")).ReturnsAsync("CONNECTED");
+        _wppMock.Setup(w => w.GetSessionStateAsync("suporte")).ReturnsAsync(new WppSessionState("CONNECTED", null));
 
         var result = await _sut.ObterWhatsappAsync(_caller, AgentId);
 
@@ -122,7 +122,7 @@ public class ChannelToolsTest
         Assert.NotEqual(true, result.IsError);
         Assert.Contains("\"status\":\"NOT_STARTED\"", McpTestContext.Text(result));
         Assert.Contains("\"isConnected\":false", McpTestContext.Text(result));
-        _wppMock.Verify(w => w.GetStatusAsync(It.IsAny<string>()), Times.Never);
+        _wppMock.Verify(w => w.GetSessionStateAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class ChannelToolsTest
     {
         var agent = ArrangeAgent(null);
         agent.WhatsappToken = "WPP-TOKEN";
-        _wppMock.Setup(w => w.GetStatusAsync("suporte")).ThrowsAsync(new HttpRequestException("connection refused"));
+        _wppMock.Setup(w => w.GetSessionStateAsync("suporte")).ThrowsAsync(new HttpRequestException("connection refused"));
 
         var result = await _sut.ObterWhatsappAsync(_caller, AgentId);
 

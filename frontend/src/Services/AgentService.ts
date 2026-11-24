@@ -173,7 +173,7 @@ export const AgentService = {
     return handleResponse(response, 'regenerateTelegramSecret')
   },
 
-  startWhatsappSession: async (slug: string): Promise<Result<object>> => {
+  startWhatsappSession: async (slug: string): Promise<Result<WhatsappStatusInfo>> => {
     console.log(`[AgentService] startWhatsappSession — POST /whatsapp/${slug}/start-session`)
     const response = await fetch(`${getApiUrl()}/whatsapp/${slug}/start-session`, {
       method: 'POST',

@@ -57,6 +57,8 @@ export interface WhatsappStatusInfo {
   agentSlug: string;
   status: string;
   isConnected: boolean;
+  // QR Code atual (data URL) enquanto a sessao aguarda o pareamento.
+  qrCode?: string | null;
 }
 
 export interface AgentChatConfigInfo {

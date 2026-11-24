@@ -20,6 +20,7 @@ public class WhatsappService
     private readonly string _webhookBaseUrl;
     private static readonly long _startTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _botLidCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _startLocks = new();
 
     public WhatsappService(
         IWppConnectService wppConnect,
@@ -47,39 +48,99 @@ public class WhatsappService
         var sessionName = slug;
         var webhookUrl = $"{_webhookBaseUrl}/whatsapp/{slug}/webhook";
 
-        // O WPP Connect gera o QR Code uma unica vez por sessao (nao rotaciona sozinho).
-        // Chamar start-session numa sessao que ja esta no meio do pareamento (nao conectada)
-        // apenas reaproveita o client existente, preso no QR antigo -- que ja pode ter
-        // expirado de verdade do lado do WhatsApp. Fechamos antes para forcar um QR novo.
+        // Dois cliques (ou duas abas) no mesmo agente nao podem decidir ao mesmo tempo:
+        // o segundo espera o primeiro e ja encontra a sessao em andamento.
+        var gate = _startLocks.GetOrAdd(sessionName, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
         try
         {
-            var currentStatus = await _wppConnect.GetStatusAsync(sessionName);
-            if (!currentStatus.Equals("CONNECTED", StringComparison.OrdinalIgnoreCase))
-                await _wppConnect.CloseSessionAsync(sessionName);
+            var current = await TryGetSessionStateAsync(sessionName);
+
+            // Idempotente: com a sessao conectada ou ja pareando, nao se mexe nela. Fechar e
+            // reabrir uma sessao em andamento derrubava o navegador do WPP Connect no meio do
+            // caminho e o novo start falhava com "The browser is already running" (o WPP Connect
+            // marca a sessao como fechada antes de o Chromium terminar de sair). O QR Code
+            // nao precisa de sessao nova: o WPP Connect acompanha a troca do QR pelo WhatsApp
+            // e o status devolve sempre o atual.
+            if (IsConnectedStatus(current.Status) || IsInProgressStatus(current.Status))
+            {
+                _logger.LogInformation("Sessao WPP Connect ja em andamento, start ignorado. session={Session} status={Status}",
+                    sessionName, current.Status);
+                return ToStatusInfo(agent.Slug, current);
+            }
+
+            // ERROR: o WPP Connect nao conseguiu fechar o navegador de uma tentativa anterior e
+            // so libera o perfil com um close-session explicito.
+            if (current.Status.Equals("ERROR", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await _wppConnect.CloseSessionAsync(sessionName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Falha ao limpar sessao em ERROR antes de iniciar. session={Session}", sessionName);
+                }
+            }
+
+            // Gerar token no WPP Connect e salvar no agente
+            var token = await _wppConnect.GenerateTokenAsync(sessionName);
+
+            agent.WhatsappToken = token;
+            await _agentRepo.UpdateAsync(agent);
+
+            // Iniciar sessao com webhook
+            _logger.LogInformation("Iniciando sessao WPP Connect: session={Session}, webhookUrl={WebhookUrl}", sessionName, webhookUrl);
+            await _wppConnect.StartSessionAsync(sessionName, webhookUrl);
+
+            _logger.LogInformation("Sessao WhatsApp iniciada para agente {Slug}", slug);
+
+            return new WhatsappStatusInfo
+            {
+                AgentSlug = agent.Slug,
+                Status = "INITIALIZING",
+                IsConnected = false
+            };
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Estados do WPP Connect em que a sessao esta abrindo, pareando ou fechando.</summary>
+    private static readonly string[] InProgressStatuses = { "INITIALIZING", "QRCODE", "PHONECODE", "CLOSING" };
+
+    private static bool IsConnectedStatus(string status) =>
+        status.Equals("CONNECTED", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsInProgressStatus(string status) =>
+        InProgressStatuses.Contains(status, StringComparer.OrdinalIgnoreCase);
+
+    private static WhatsappStatusInfo ToStatusInfo(string slug, WppSessionState state)
+    {
+        var connected = IsConnectedStatus(state.Status);
+        return new WhatsappStatusInfo
+        {
+            AgentSlug = slug,
+            Status = state.Status,
+            IsConnected = connected,
+            QrCode = connected ? null : state.QrCode
+        };
+    }
+
+    private async Task<WppSessionState> TryGetSessionStateAsync(string session)
+    {
+        try
+        {
+            return await _wppConnect.GetSessionStateAsync(session);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Sem sessao previa para fechar antes de iniciar. session={Session}", sessionName);
+            // Sessao nunca criada (ou WPP Connect sem o client): trata como fechada.
+            _logger.LogDebug(ex, "Sem estado de sessao no WPP Connect. session={Session}", session);
+            return new WppSessionState("CLOSED", null);
         }
-
-        // Gerar token no WPP Connect e salvar no agente
-        var token = await _wppConnect.GenerateTokenAsync(sessionName);
-
-        agent.WhatsappToken = token;
-        await _agentRepo.UpdateAsync(agent);
-
-        // Iniciar sessao com webhook
-        _logger.LogInformation("Iniciando sessao WPP Connect: session={Session}, webhookUrl={WebhookUrl}", sessionName, webhookUrl);
-        await _wppConnect.StartSessionAsync(sessionName, webhookUrl);
-
-        _logger.LogInformation("Sessao WhatsApp iniciada para agente {Slug}", slug);
-
-        return new WhatsappStatusInfo
-        {
-            AgentSlug = agent.Slug,
-            Status = "STARTING",
-            IsConnected = false
-        };
     }
 
     public async Task<WhatsappQrCodeInfo> GetQrCodeAsync(string slug, long ownerUserId)
@@ -97,14 +158,9 @@ public class WhatsappService
     public async Task<WhatsappStatusInfo> GetStatusAsync(string slug, long ownerUserId)
     {
         var agent = await ResolveAgentAsync(slug, ownerUserId);
-        var status = await _wppConnect.GetStatusAsync(slug);
+        var state = await _wppConnect.GetSessionStateAsync(slug);
 
-        return new WhatsappStatusInfo
-        {
-            AgentSlug = agent.Slug,
-            Status = status,
-            IsConnected = status.Equals("CONNECTED", StringComparison.OrdinalIgnoreCase)
-        };
+        return ToStatusInfo(agent.Slug, state);
     }
 
     public async Task<WhatsappStatusInfo> DisconnectAsync(string slug, long ownerUserId)

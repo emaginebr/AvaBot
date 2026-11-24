@@ -128,17 +128,37 @@ public class WppConnectService : IWppConnectService
 
     public async Task<string> GetStatusAsync(string session)
     {
+        return (await GetSessionStateAsync(session)).Status;
+    }
+
+    public async Task<WppSessionState> GetSessionStateAsync(string session)
+    {
         var client = await CreateAuthenticatedClientAsync(session);
         var response = await client.GetAsync($"/api/{session}/status-session");
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync();
-        var doc = JsonDocument.Parse(json);
+        return ParseSessionState(json);
+    }
 
-        if (doc.RootElement.TryGetProperty("status", out var status))
-            return status.GetString() ?? "UNKNOWN";
+    /// <summary>
+    /// Le a resposta de status-session: { status, qrcode (data URL ou null), urlcode, version }.
+    /// Sem client no WPP Connect a resposta e { status: "CLOSED", qrcode: null }.
+    /// </summary>
+    public static WppSessionState ParseSessionState(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
 
-        return "UNKNOWN";
+        var status = root.TryGetProperty("status", out var statusProp) && statusProp.ValueKind == JsonValueKind.String
+            ? statusProp.GetString() ?? "UNKNOWN"
+            : "UNKNOWN";
+
+        var qrCode = root.TryGetProperty("qrcode", out var qrProp) && qrProp.ValueKind == JsonValueKind.String
+            ? qrProp.GetString()
+            : null;
+
+        return new WppSessionState(status, string.IsNullOrWhiteSpace(qrCode) ? null : qrCode);
     }
 
     public async Task CloseSessionAsync(string session)
