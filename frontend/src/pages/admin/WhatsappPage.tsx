@@ -2,12 +2,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
+import { useWhatsappAccessStore } from '../../stores/useWhatsappAccessStore'
+import WhatsappAccessSettings from '../../components/admin/whatsapp/WhatsappAccessSettings'
+import WhatsappAccessRequestList from '../../components/admin/whatsapp/WhatsappAccessRequestList'
+import WhatsappContactList from '../../components/admin/whatsapp/WhatsappContactList'
 
 // O WhatsApp Web expira/rotaciona o QR Code a cada ~20s.
 const QR_TTL_SECONDS = 20
 
 const WhatsappPage = () => {
   const { selectedAgent } = useAgentStore()
+  const resetAccess = useWhatsappAccessStore((s) => s.reset)
+  const loadAccess = useWhatsappAccessStore((s) => s.loadAll)
 
   const [status, setStatus] = useState('')
   const [isConnected, setIsConnected] = useState(false)
@@ -103,6 +109,13 @@ const WhatsappPage = () => {
       stopQrTimer()
     }
   }, [selectedAgent, checkStatus, stopPolling, stopQrTimer])
+
+  // Controle de acesso: recarrega configuracao, pedidos e contatos ao trocar de agente.
+  useEffect(() => {
+    if (!selectedAgent) return
+    resetAccess()
+    loadAccess(selectedAgent.slug)
+  }, [selectedAgent, resetAccess, loadAccess])
 
   // Pause polling when page is hidden
   useEffect(() => {
@@ -270,6 +283,15 @@ const WhatsappPage = () => {
           <p className="text-xs text-gray-400 mt-3">Clique em "Iniciar Sessão" para conectar o WhatsApp ao agente.</p>
         )}
       </div>
+
+      {/* Controle de acesso (feature 018) */}
+      <div className="mt-10 mb-4">
+        <h2 className="text-xl font-bold text-gray-900">Acesso ao agente</h2>
+        <p className="text-sm text-gray-500 mt-1">Restrinja o atendimento pelo WhatsApp a uma lista de contatos.</p>
+      </div>
+      <WhatsappAccessSettings slug={selectedAgent.slug} />
+      <WhatsappAccessRequestList slug={selectedAgent.slug} />
+      <WhatsappContactList slug={selectedAgent.slug} />
     </div>
   )
 }

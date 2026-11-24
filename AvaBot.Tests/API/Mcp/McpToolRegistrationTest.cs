@@ -22,7 +22,10 @@ public class McpToolRegistrationTest
         "vincular_dataset_powerbi", "atualizar_dataset_powerbi", "desvincular_dataset_powerbi",
         "gerar_schema_powerbi", "obter_schema_powerbi", "descrever_schema_powerbi",
         "obter_telegram", "registrar_webhook_telegram", "obter_whatsapp",
-        "listar_documentos", "adicionar_documento", "reprocessar_documento", "remover_documento"
+        "listar_documentos", "adicionar_documento", "reprocessar_documento", "remover_documento",
+        "obter_acesso_whatsapp", "atualizar_acesso_whatsapp", "listar_contatos_whatsapp", "adicionar_contato_whatsapp",
+        "atualizar_contato_whatsapp", "remover_contato_whatsapp", "listar_solicitacoes_whatsapp",
+        "aprovar_solicitacao_whatsapp", "rejeitar_solicitacao_whatsapp"
     ];
 
     private static List<McpServerTool> RegisterAll()
@@ -35,6 +38,7 @@ public class McpToolRegistrationTest
             .WithTools<ConversationTools>(McpJson.Options)
             .WithTools<PowerBITools>(McpJson.Options)
             .WithTools<ChannelTools>(McpJson.Options)
+            .WithTools<WhatsappAccessTools>(McpJson.Options)
             .WithTools<KnowledgeTools>(McpJson.Options);
 
         using var provider = services.BuildServiceProvider();
@@ -42,7 +46,7 @@ public class McpToolRegistrationTest
     }
 
     [Fact]
-    public void WithTools_ShouldRegisterExactlyTheTwentyEightTools()
+    public void WithTools_ShouldRegisterExactlyTheThirtySevenTools()
     {
         var tools = RegisterAll();
 
@@ -63,14 +67,15 @@ public class McpToolRegistrationTest
     }
 
     [Fact]
-    public void Annotations_ShouldMarkOnlyTheTwoDestructiveTools_AndReadOnlyReads()
+    public void Annotations_ShouldMarkOnlyTheDestructiveTools_AndReadOnlyReads()
     {
         var tools = RegisterAll().ToDictionary(t => t.ProtocolTool.Name);
 
         var destructive = tools.Values.Where(t => t.ProtocolTool.Annotations?.DestructiveHint == true).Select(t => t.ProtocolTool.Name).OrderBy(n => n);
-        Assert.Equal(new[] { "desvincular_dataset_powerbi", "remover_documento" }, destructive);
+        Assert.Equal(new[] { "desvincular_dataset_powerbi", "rejeitar_solicitacao_whatsapp", "remover_contato_whatsapp", "remover_documento" }, destructive);
 
-        foreach (var name in new[] { "quem_sou_eu", "listar_agentes", "obter_agente", "listar_sessoes", "obter_powerbi", "obter_telegram", "listar_documentos" })
+        foreach (var name in new[] { "quem_sou_eu", "listar_agentes", "obter_agente", "listar_sessoes", "obter_powerbi", "obter_telegram", "listar_documentos",
+                     "obter_acesso_whatsapp", "listar_contatos_whatsapp", "listar_solicitacoes_whatsapp" })
             Assert.True(tools[name].ProtocolTool.Annotations?.ReadOnlyHint, $"{name} deveria ser ReadOnly");
 
         foreach (var name in new[] { "criar_agente", "atualizar_agente", "adicionar_documento", "gerar_schema_powerbi" })

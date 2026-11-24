@@ -1,0 +1,30 @@
+meta {
+  name: Contact Add
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/contacts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Contato de teste",
+    "phone": "(11) 98765-4321"
+  }
+}
+
+vars:pre-request {
+  agentSlug: ava
+}
+
+script:post-response {
+  if (res.body && res.body.dados) bru.setVar("whatsappContactId", res.body.dados.whatsappContactId);
+}

@@ -18,10 +18,108 @@ public class AvaBotContext : DbContext
     public DbSet<PowerBIQueryLog> PowerBIQueryLogs { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<McpAccessKey> McpAccessKeys { get; set; }
+    public DbSet<WhatsappContact> WhatsappContacts { get; set; }
+    public DbSet<WhatsappAccessRequest> WhatsappAccessRequests { get; set; }
+    public DbSet<WhatsappSenderState> WhatsappSenderStates { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // WhatsappContact (feature 018)
+        modelBuilder.Entity<WhatsappContact>(entity =>
+        {
+            entity.ToTable("avabot_whatsapp_contacts");
+            entity.HasKey(e => e.WhatsappContactId).HasName("avabot_whatsapp_contacts_pkey");
+            entity.Property(e => e.WhatsappContactId).HasColumnName("whatsapp_contact_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.HasIndex(e => e.AgentId).HasDatabaseName("ix_avabot_whatsapp_contacts_agent_id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(120).IsRequired();
+            entity.Property(e => e.Phone).HasColumnName("phone").HasMaxLength(30);
+            entity.Property(e => e.PhoneNormalized).HasColumnName("phone_normalized").HasMaxLength(15);
+            entity.Property(e => e.PhoneMatchKey).HasColumnName("phone_match_key").HasMaxLength(15);
+            entity.Property(e => e.WhatsappId).HasColumnName("whatsapp_id").HasMaxLength(80);
+            entity.Property(e => e.Source).HasColumnName("source").HasDefaultValue(WhatsappContactSource.Manual).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.HasIndex(e => new { e.AgentId, e.PhoneMatchKey })
+                .IsUnique()
+                .HasDatabaseName("avabot_whatsapp_contacts_agent_phone_key")
+                .HasFilter("phone_match_key IS NOT NULL");
+            entity.HasIndex(e => new { e.AgentId, e.WhatsappId })
+                .IsUnique()
+                .HasDatabaseName("avabot_whatsapp_contacts_agent_wid_key")
+                .HasFilter("whatsapp_id IS NOT NULL");
+
+            entity.HasOne(e => e.Agent)
+                .WithMany(a => a.WhatsappContacts)
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_whatsapp_contacts")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        // WhatsappAccessRequest (feature 018)
+        modelBuilder.Entity<WhatsappAccessRequest>(entity =>
+        {
+            entity.ToTable("avabot_whatsapp_access_requests");
+            entity.HasKey(e => e.WhatsappAccessRequestId).HasName("avabot_whatsapp_access_requests_pkey");
+            entity.Property(e => e.WhatsappAccessRequestId).HasColumnName("whatsapp_access_request_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.WhatsappId).HasColumnName("whatsapp_id").HasMaxLength(80).IsRequired();
+            entity.Property(e => e.PhoneNormalized).HasColumnName("phone_normalized").HasMaxLength(15);
+            entity.Property(e => e.PhoneMatchKey).HasColumnName("phone_match_key").HasMaxLength(15);
+            entity.Property(e => e.ProfileName).HasColumnName("profile_name").HasMaxLength(120);
+            entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue(WhatsappAccessRequestStatus.Pending).IsRequired();
+            entity.Property(e => e.RequestedAt).HasColumnName("requested_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property(e => e.DecidedAt).HasColumnName("decided_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.DecidedByUserId).HasColumnName("decided_by_user_id");
+            entity.Property(e => e.WhatsappContactId).HasColumnName("whatsapp_contact_id");
+            entity.HasIndex(e => new { e.AgentId, e.Status }).HasDatabaseName("ix_avabot_whatsapp_access_requests_agent_status");
+            entity.HasIndex(e => new { e.AgentId, e.WhatsappId })
+                .IsUnique()
+                .HasDatabaseName("avabot_whatsapp_access_requests_pending_key")
+                .HasFilter("status = 1");
+
+            entity.HasOne(e => e.Agent)
+                .WithMany(a => a.WhatsappAccessRequests)
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_whatsapp_access_requests")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(e => e.DecidedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.DecidedByUserId)
+                .HasConstraintName("avabot_fk_users_whatsapp_access_requests")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+
+            entity.HasOne(e => e.WhatsappContact)
+                .WithMany()
+                .HasForeignKey(e => e.WhatsappContactId)
+                .HasConstraintName("avabot_fk_whatsapp_contacts_access_requests")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
+
+        // WhatsappSenderState (feature 018)
+        modelBuilder.Entity<WhatsappSenderState>(entity =>
+        {
+            entity.ToTable("avabot_whatsapp_sender_states");
+            entity.HasKey(e => e.WhatsappSenderStateId).HasName("avabot_whatsapp_sender_states_pkey");
+            entity.Property(e => e.WhatsappSenderStateId).HasColumnName("whatsapp_sender_state_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.WhatsappId).HasColumnName("whatsapp_id").HasMaxLength(80).IsRequired();
+            entity.Property(e => e.LastAutoReplyAt).HasColumnName("last_auto_reply_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.OfferSentAt).HasColumnName("offer_sent_at").HasColumnType("timestamp without time zone");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.HasIndex(e => new { e.AgentId, e.WhatsappId })
+                .IsUnique()
+                .HasDatabaseName("avabot_whatsapp_sender_states_agent_wid_key");
+
+            entity.HasOne(e => e.Agent)
+                .WithMany()
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_whatsapp_sender_states")
+                .OnDelete(DeleteBehavior.ClientSetNull);
+        });
 
         // McpAccessKey (feature 017)
         modelBuilder.Entity<McpAccessKey>(entity =>
@@ -96,6 +194,12 @@ public class AvaBotContext : DbContext
                 .IsUnique()
                 .HasDatabaseName("ix_avabot_agents_whatsapp_token")
                 .HasFilter("whatsapp_token IS NOT NULL");
+            // Controle de acesso do WhatsApp (feature 018)
+            entity.Property(e => e.WhatsappAccessMode).HasColumnName("whatsapp_access_mode").HasDefaultValue(WhatsappAccessMode.All).IsRequired();
+            entity.Property(e => e.WhatsappOfferMessage).HasColumnName("whatsapp_offer_message").HasMaxLength(500);
+            entity.Property(e => e.WhatsappConfirmationMessage).HasColumnName("whatsapp_confirmation_message").HasMaxLength(500);
+            entity.Property(e => e.WhatsappWaitingMessage).HasColumnName("whatsapp_waiting_message").HasMaxLength(500);
+            entity.Property(e => e.WhatsappDeclinedMessage).HasColumnName("whatsapp_declined_message").HasMaxLength(500);
             entity.Property(e => e.PowerBIEnabled).HasColumnName("powerbi_enabled").HasDefaultValue(false).IsRequired();
             entity.Property(e => e.OwnerUserId).HasColumnName("owner_user_id");
             entity.HasIndex(e => e.OwnerUserId).HasDatabaseName("ix_avabot_agents_owner_user_id");

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using AvaBot.Infra.Context;
 using AvaBot.Domain.Models;
@@ -32,6 +33,9 @@ public static class DependencyInjection
         services.AddScoped<IPowerBIQueryLogRepository<PowerBIQueryLog>, PowerBIQueryLogRepository>();
         services.AddScoped<IUserRepository<User>, UserRepository>();
         services.AddScoped<IMcpAccessKeyRepository<McpAccessKey>, McpAccessKeyRepository>();
+        services.AddScoped<IWhatsappContactRepository<WhatsappContact>, WhatsappContactRepository>();
+        services.AddScoped<IWhatsappAccessRequestRepository<WhatsappAccessRequest>, WhatsappAccessRequestRepository>();
+        services.AddScoped<IWhatsappSenderStateRepository<WhatsappSenderState>, WhatsappSenderStateRepository>();
 
         // Domain Services
         services.AddScoped<UserService>();
@@ -44,6 +48,8 @@ public static class DependencyInjection
         services.AddScoped<SearchService>();
         services.AddScoped<ChatService>();
         services.AddScoped<TelegramService>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<WhatsappAccessService>();
         services.AddScoped<WhatsappService>();
         services.AddScoped<PowerBIService>();
         services.AddScoped<PowerBISchemaBuilder>();

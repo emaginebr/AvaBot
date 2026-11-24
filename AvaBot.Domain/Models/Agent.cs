@@ -1,3 +1,5 @@
+using AvaBot.Domain.Enums;
+
 namespace AvaBot.Domain.Models;
 
 public class Agent
@@ -17,6 +19,12 @@ public class Agent
     public string? TelegramBotToken { get; set; }
     public string? TelegramWebhookSecret { get; set; }
     public string? WhatsappToken { get; set; }
+    // Controle de acesso do WhatsApp (feature 018). Frases nulas usam o texto padrao.
+    public WhatsappAccessMode WhatsappAccessMode { get; set; } = WhatsappAccessMode.All;
+    public string? WhatsappOfferMessage { get; set; }
+    public string? WhatsappConfirmationMessage { get; set; }
+    public string? WhatsappWaitingMessage { get; set; }
+    public string? WhatsappDeclinedMessage { get; set; }
     public bool PowerBIEnabled { get; set; }
     // Nulo so entre a migracao de schema e o bootstrap da conta do administrador (feature 016).
     public long? OwnerUserId { get; set; }
@@ -28,4 +36,25 @@ public class Agent
     public ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
     public ICollection<PowerBIDataset> PowerBIDatasets { get; set; } = new List<PowerBIDataset>();
     public AgentPowerBIConfig? PowerBIConfig { get; set; }
+    public ICollection<WhatsappContact> WhatsappContacts { get; set; } = new List<WhatsappContact>();
+    public ICollection<WhatsappAccessRequest> WhatsappAccessRequests { get; set; } = new List<WhatsappAccessRequest>();
+
+    /// <summary>Texto efetivo da frase pronta: o personalizado ou, se nulo, o padrao.</summary>
+    public string GetWhatsappMessage(WhatsappAccessMessage kind) => kind switch
+    {
+        WhatsappAccessMessage.Offer => WhatsappOfferMessage ?? WhatsappAccessDefaults.OfferMessage,
+        WhatsappAccessMessage.Confirmation => WhatsappConfirmationMessage ?? WhatsappAccessDefaults.ConfirmationMessage,
+        WhatsappAccessMessage.Waiting => WhatsappWaitingMessage ?? WhatsappAccessDefaults.WaitingMessage,
+        WhatsappAccessMessage.Declined => WhatsappDeclinedMessage ?? WhatsappAccessDefaults.DeclinedMessage,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    };
+
+    public static string GetDefaultWhatsappMessage(WhatsappAccessMessage kind) => kind switch
+    {
+        WhatsappAccessMessage.Offer => WhatsappAccessDefaults.OfferMessage,
+        WhatsappAccessMessage.Confirmation => WhatsappAccessDefaults.ConfirmationMessage,
+        WhatsappAccessMessage.Waiting => WhatsappAccessDefaults.WaitingMessage,
+        WhatsappAccessMessage.Declined => WhatsappAccessDefaults.DeclinedMessage,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind))
+    };
 }

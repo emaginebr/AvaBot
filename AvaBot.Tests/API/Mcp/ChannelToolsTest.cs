@@ -44,7 +44,8 @@ public class ChannelToolsTest
             messageRepoMock.Object, _agentRepoMock.Object, toolProvider, config, NullLogger<ChatService>.Instance);
         var telegramService = new TelegramService(new Mock<ITelegramChatRepository<TelegramChat>>().Object, sessionRepoMock.Object,
             _agentRepoMock.Object, chatService, agentService, NullLogger<TelegramService>.Instance);
-        var whatsappService = new WhatsappService(_wppMock.Object, _agentRepoMock.Object, agentService, chatService, config, NullLogger<WhatsappService>.Instance);
+        var whatsappService = new WhatsappService(_wppMock.Object, _agentRepoMock.Object, agentService, chatService,
+            new AvaBot.Tests.Application.Services.WhatsappAccessTestContext().Service, config, NullLogger<WhatsappService>.Instance);
 
         _sut = new ChannelTools(agentService, telegramService, whatsappService, NullLogger<ChannelTools>.Instance);
     }

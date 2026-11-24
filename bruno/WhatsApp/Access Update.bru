@@ -1,0 +1,33 @@
+meta {
+  name: Access Update
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/access
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "mode": 2,
+    "offerMessage": null,
+    "confirmationMessage": null,
+    "waitingMessage": null,
+    "declinedMessage": null
+  }
+}
+
+vars:pre-request {
+  agentSlug: ava
+}
+
+docs {
+  mode: 1 = todos, 2 = somente contatos autorizados. Frase null = texto padrao; string vazia e recusada.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Access Request Approve
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/access-requests/{{whatsappAccessRequestId}}/approve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": null
+  }
+}
+
+vars:pre-request {
+  agentSlug: ava
+}

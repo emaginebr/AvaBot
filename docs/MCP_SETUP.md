@@ -132,6 +132,15 @@ Todos os ids e listas são da conta dona da chave. Um agente de outra conta resp
 | Canais | `obter_telegram` | Nome do bot, bot configurado, webhook registrado |
 | | `registrar_webhook_telegram` | Registra o webhook com o token já informado no painel |
 | | `obter_whatsapp` | Status da conexão do WhatsApp |
+| Acesso ao WhatsApp | `obter_acesso_whatsapp` | Modo de acesso, frases prontas e contadores |
+| | `atualizar_acesso_whatsapp` | Modo (1 = todos, 2 = só autorizados) e frases; parcial, com `restoreDefaults` |
+| | `listar_contatos_whatsapp` | Contatos autorizados |
+| | `adicionar_contato_whatsapp` | Autoriza um contato (nome e telefone) |
+| | `atualizar_contato_whatsapp` | Edita nome e telefone |
+| | `remover_contato_whatsapp` | Remove um contato (destrutiva) |
+| | `listar_solicitacoes_whatsapp` | Pedidos de acesso (filtro: pendente, aprovada, rejeitada) |
+| | `aprovar_solicitacao_whatsapp` | Aprova um pedido e cria o contato |
+| | `rejeitar_solicitacao_whatsapp` | Rejeita um pedido pendente (destrutiva) |
 | Base | `listar_documentos` | Documentos da base com situação de processamento |
 | | `adicionar_documento` | Adiciona um documento de texto (Markdown, até 10 MB) |
 | | `reprocessar_documento` | Reprocessa um documento |

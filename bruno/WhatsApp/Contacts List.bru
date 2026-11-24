@@ -1,0 +1,19 @@
+meta {
+  name: Contacts List
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/contacts
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: ava
+}

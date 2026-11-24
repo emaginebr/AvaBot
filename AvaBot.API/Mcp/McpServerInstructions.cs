@@ -11,5 +11,7 @@ public static class McpServerInstructions
         "uma credencial, peca ao usuario para informa-la no painel, em Agentes > (agente) > a aba correspondente. " +
         "(3) Todos os ids e listas sao da conta do dono da chave; um agente de outra conta responde 'nao encontrado'. " +
         "(4) Listas sao paginadas; peca as proximas paginas. " +
-        "(5) testar_agente nao cria conversa publica, mas as consultas Power BI do teste entram no log de consultas.";
+        "(5) testar_agente nao cria conversa publica, mas as consultas Power BI do teste entram no log de consultas. " +
+        "(6) Controle de acesso do WhatsApp: no modo 2 so contatos autorizados usam a IA; os demais recebem frases prontas " +
+        "e podem pedir acesso, que o usuario aprova ou rejeita (ferramentas *_whatsapp).";
 }

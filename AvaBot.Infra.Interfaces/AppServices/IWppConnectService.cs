@@ -10,4 +10,6 @@ public interface IWppConnectService
     Task LogoutSessionAsync(string session);
     Task SendMessageAsync(string session, string phone, string message);
     Task<string?> GetBotLidAsync(string session, string? groupId = null);
+    /// <summary>Telefone (so digitos) de um LID do WhatsApp; null quando nao for possivel resolver.</summary>
+    Task<string?> GetPhoneByLidAsync(string session, string lid);
 }

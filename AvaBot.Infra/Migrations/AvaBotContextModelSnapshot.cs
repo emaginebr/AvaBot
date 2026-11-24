@@ -122,10 +122,36 @@ namespace AvaBot.Infra.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<int>("WhatsappAccessMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("whatsapp_access_mode");
+
+                    b.Property<string>("WhatsappConfirmationMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("whatsapp_confirmation_message");
+
+                    b.Property<string>("WhatsappDeclinedMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("whatsapp_declined_message");
+
+                    b.Property<string>("WhatsappOfferMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("whatsapp_offer_message");
+
                     b.Property<string>("WhatsappToken")
                         .HasMaxLength(260)
                         .HasColumnType("character varying(260)")
                         .HasColumnName("whatsapp_token");
+
+                    b.Property<string>("WhatsappWaitingMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("whatsapp_waiting_message");
 
                     b.HasKey("AgentId")
                         .HasName("avabot_agents_pkey");
@@ -678,6 +704,193 @@ namespace AvaBot.Infra.Migrations
                     b.ToTable("avabot_users", (string)null);
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappAccessRequest", b =>
+                {
+                    b.Property<long>("WhatsappAccessRequestId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("whatsapp_access_request_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("WhatsappAccessRequestId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<long?>("DecidedByUserId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("decided_by_user_id");
+
+                    b.Property<string>("PhoneMatchKey")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("phone_match_key");
+
+                    b.Property<string>("PhoneNormalized")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("phone_normalized");
+
+                    b.Property<string>("ProfileName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("profile_name");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("status");
+
+                    b.Property<long?>("WhatsappContactId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("whatsapp_contact_id");
+
+                    b.Property<string>("WhatsappId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("whatsapp_id");
+
+                    b.HasKey("WhatsappAccessRequestId")
+                        .HasName("avabot_whatsapp_access_requests_pkey");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("WhatsappContactId");
+
+                    b.HasIndex("AgentId", "Status")
+                        .HasDatabaseName("ix_avabot_whatsapp_access_requests_agent_status");
+
+                    b.HasIndex("AgentId", "WhatsappId")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_whatsapp_access_requests_pending_key")
+                        .HasFilter("status = 1");
+
+                    b.ToTable("avabot_whatsapp_access_requests", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappContact", b =>
+                {
+                    b.Property<long>("WhatsappContactId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("whatsapp_contact_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("WhatsappContactId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("PhoneMatchKey")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("phone_match_key");
+
+                    b.Property<string>("PhoneNormalized")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("phone_normalized");
+
+                    b.Property<int>("Source")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("source");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WhatsappId")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("whatsapp_id");
+
+                    b.HasKey("WhatsappContactId")
+                        .HasName("avabot_whatsapp_contacts_pkey");
+
+                    b.HasIndex("AgentId")
+                        .HasDatabaseName("ix_avabot_whatsapp_contacts_agent_id");
+
+                    b.HasIndex("AgentId", "PhoneMatchKey")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_whatsapp_contacts_agent_phone_key")
+                        .HasFilter("phone_match_key IS NOT NULL");
+
+                    b.HasIndex("AgentId", "WhatsappId")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_whatsapp_contacts_agent_wid_key")
+                        .HasFilter("whatsapp_id IS NOT NULL");
+
+                    b.ToTable("avabot_whatsapp_contacts", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappSenderState", b =>
+                {
+                    b.Property<long>("WhatsappSenderStateId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("whatsapp_sender_state_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("WhatsappSenderStateId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime?>("LastAutoReplyAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("last_auto_reply_at");
+
+                    b.Property<DateTime?>("OfferSentAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("offer_sent_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("WhatsappId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("whatsapp_id");
+
+                    b.HasKey("WhatsappSenderStateId")
+                        .HasName("avabot_whatsapp_sender_states_pkey");
+
+                    b.HasIndex("AgentId", "WhatsappId")
+                        .IsUnique()
+                        .HasDatabaseName("avabot_whatsapp_sender_states_agent_wid_key");
+
+                    b.ToTable("avabot_whatsapp_sender_states", (string)null);
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.Agent", b =>
                 {
                     b.HasOne("AvaBot.Domain.Models.User", "Owner")
@@ -801,6 +1014,53 @@ namespace AvaBot.Infra.Migrations
                     b.Navigation("ChatSession");
                 });
 
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappAccessRequest", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithMany("WhatsappAccessRequests")
+                        .HasForeignKey("AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_whatsapp_access_requests");
+
+                    b.HasOne("AvaBot.Domain.Models.User", "DecidedByUser")
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .HasConstraintName("avabot_fk_users_whatsapp_access_requests");
+
+                    b.HasOne("AvaBot.Domain.Models.WhatsappContact", "WhatsappContact")
+                        .WithMany()
+                        .HasForeignKey("WhatsappContactId")
+                        .HasConstraintName("avabot_fk_whatsapp_contacts_access_requests");
+
+                    b.Navigation("Agent");
+
+                    b.Navigation("DecidedByUser");
+
+                    b.Navigation("WhatsappContact");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappContact", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithMany("WhatsappContacts")
+                        .HasForeignKey("AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_whatsapp_contacts");
+
+                    b.Navigation("Agent");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.WhatsappSenderState", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", "Agent")
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_whatsapp_sender_states");
+
+                    b.Navigation("Agent");
+                });
+
             modelBuilder.Entity("AvaBot.Domain.Models.Agent", b =>
                 {
                     b.Navigation("ChatSessions");
@@ -810,6 +1070,10 @@ namespace AvaBot.Infra.Migrations
                     b.Navigation("PowerBIConfig");
 
                     b.Navigation("PowerBIDatasets");
+
+                    b.Navigation("WhatsappAccessRequests");
+
+                    b.Navigation("WhatsappContacts");
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.ChatSession", b =>
