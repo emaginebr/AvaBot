@@ -103,6 +103,7 @@ builder.Services.AddMcpServer(options =>
     .WithTools<ConversationTools>(McpJson.Options)
     .WithTools<PowerBITools>(McpJson.Options)
     .WithTools<ChannelTools>(McpJson.Options)
+    .WithTools<WhatsappAccessTools>(McpJson.Options)
     .WithTools<KnowledgeTools>(McpJson.Options)
     .WithRequestFilters(filters =>
     {

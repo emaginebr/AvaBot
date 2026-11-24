@@ -87,6 +87,22 @@ public class AgentRepository : IAgentRepository<Agent>
             if (powerBIConfig != null)
                 _context.AgentPowerBIConfigs.Remove(powerBIConfig);
 
+            // Controle de acesso do WhatsApp (feature 018): estados, pedidos e contatos.
+            var senderStates = await _context.WhatsappSenderStates
+                .Where(s => s.AgentId == id)
+                .ToListAsync();
+            _context.WhatsappSenderStates.RemoveRange(senderStates);
+
+            var accessRequests = await _context.WhatsappAccessRequests
+                .Where(r => r.AgentId == id)
+                .ToListAsync();
+            _context.WhatsappAccessRequests.RemoveRange(accessRequests);
+
+            var whatsappContacts = await _context.WhatsappContacts
+                .Where(c => c.AgentId == id)
+                .ToListAsync();
+            _context.WhatsappContacts.RemoveRange(whatsappContacts);
+
             _context.Agents.Remove(agent);
             await _context.SaveChangesAsync();
         }

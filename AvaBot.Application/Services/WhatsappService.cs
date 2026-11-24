@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AvaBot.Domain.Enums;
 using AvaBot.Domain.Models;
 using AvaBot.DTO;
 using AvaBot.Infra.Interfaces.AppServices;
@@ -14,6 +15,7 @@ public class WhatsappService
     private readonly IAgentRepository<Agent> _agentRepo;
     private readonly AgentService _agentService;
     private readonly ChatService _chatService;
+    private readonly WhatsappAccessService _accessService;
     private readonly ILogger<WhatsappService> _logger;
     private readonly string _webhookBaseUrl;
     private static readonly long _startTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -24,6 +26,7 @@ public class WhatsappService
         IAgentRepository<Agent> agentRepo,
         AgentService agentService,
         ChatService chatService,
+        WhatsappAccessService accessService,
         IConfiguration configuration,
         ILogger<WhatsappService> logger)
     {
@@ -31,6 +34,7 @@ public class WhatsappService
         _agentRepo = agentRepo;
         _agentService = agentService;
         _chatService = chatService;
+        _accessService = accessService;
         _logger = logger;
         _webhookBaseUrl = configuration["WppConnect:WebhookBaseUrl"] ?? "http://localhost:5000";
     }
@@ -186,6 +190,42 @@ public class WhatsappService
             _logger.LogInformation("[WhatsApp Webhook] Agente mencionado em grupo. agente={Slug} from={From}", slug, fromNumber);
         }
 
+        // Agente carregado antes da checagem de tipo: o modo de acesso (feature 018) fica no agente.
+        var resolvedAgent = await _agentService.GetBySlugAsync(slug);
+        if (resolvedAgent == null || resolvedAgent.Status == 0 || string.IsNullOrEmpty(resolvedAgent.WhatsappToken))
+        {
+            _logger.LogWarning("[WhatsApp Webhook] Agente invalido ou inativo: {Slug}", slug);
+            return;
+        }
+
+        // Controle de acesso (feature 018): antes de rejeicao de tipo, sessao e IA.
+        if (resolvedAgent.WhatsappAccessMode == WhatsappAccessMode.Restricted)
+        {
+            var sender = WhatsappSender.FromPayload(payload);
+            if (sender.Phone == null && sender.IsLid)
+                sender.Phone = await _wppConnect.GetPhoneByLidAsync(slug, sender.WhatsappId);
+
+            var decision = await _accessService.EvaluateIncomingAsync(resolvedAgent, sender, msgType == "chat" ? messageBody : null);
+            if (decision.Kind == WhatsappAccessDecisionKind.Ignore)
+                return;
+
+            if (decision.Kind == WhatsappAccessDecisionKind.Reply)
+            {
+                // Reply so acontece em conversa privada: responde no mesmo destino que a IA usaria.
+                var replyTarget = fromNumber.Replace("@c.us", "");
+                try
+                {
+                    if (!string.IsNullOrEmpty(replyTarget) && !string.IsNullOrEmpty(decision.Text))
+                        await _wppConnect.SendMessageAsync(slug, replyTarget, decision.Text);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[WhatsApp Acesso] Falha ao enviar frase pronta. agente={Slug} destino={Target}", slug, replyTarget);
+                }
+                return;
+            }
+        }
+
         if (msgType != "chat")
         {
             _logger.LogInformation("[WhatsApp Webhook] Tipo nao suportado={Type}, enviando rejeicao. agente={Slug} from={From}", msgType, slug, fromNumber);
@@ -205,13 +245,6 @@ public class WhatsappService
         }
 
         var phone = isGroupMsg ? fromNumber : fromNumber.Replace("@c.us", "");
-
-        var resolvedAgent = await _agentService.GetBySlugAsync(slug);
-        if (resolvedAgent == null || resolvedAgent.Status == 0 || string.IsNullOrEmpty(resolvedAgent.WhatsappToken))
-        {
-            _logger.LogWarning("[WhatsApp Webhook] Agente invalido ou inativo: {Slug}", slug);
-            return;
-        }
 
         try
         {

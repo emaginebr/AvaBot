@@ -23,7 +23,10 @@ public class McpOutputDtoTest
         [typeof(TelegramMcpInfo)], [typeof(WhatsappMcpInfo)], [typeof(KnowledgeDocumentMcpInsertInfo)], [typeof(McpMessageInfo)],
         [typeof(PowerBIDatasetInfo)], [typeof(PowerBIConnectionTestInfo)], [typeof(PowerBIWorkspaceInfo)],
         [typeof(PowerBIDatasetSchemaInfo)], [typeof(KnowledgeFileInfo)], [typeof(AgentTestResultInfo)],
-        [typeof(PowerBIQueryLogInfo)], [typeof(PowerBIQueryLogPageInfo)]
+        [typeof(PowerBIQueryLogInfo)], [typeof(PowerBIQueryLogPageInfo)],
+        // Controle de acesso do WhatsApp (feature 018)
+        [typeof(WhatsappAccessConfigInfo)], [typeof(WhatsappAccessMessageInfo)], [typeof(WhatsappContactInfo)],
+        [typeof(WhatsappAccessRequestInfo)]
     ];
 
     private static readonly string[] ForbiddenFragments = ["secret", "token", "tenant", "clientid", "password", "senha"];

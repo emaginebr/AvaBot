@@ -1,6 +1,6 @@
 # AvaBot Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-10-12 (unified 2026-10-12)
+Auto-generated from all feature plans. Last updated: 2026-11-23 (unified 2026-11-23)
 
 ## Active Technologies
 - C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, OpenAI SDK 2.10 (já instalado; usa `ChatTool`/`ToolChatMessage`), `HttpClient` nativo (Entra ID + Power BI REST), `IMemoryCache` (cache de token), `System.Security.Cryptography.AesGcm`, AutoMapper; frontend com React Router 7, Zustand 5, Tailwind 4 e sonner 2. **Nenhuma dependência nova.** (011-powerbi-agent-tools)
@@ -11,6 +11,8 @@ Auto-generated from all feature plans. Last updated: 2026-10-12 (unified 2026-10
 - PostgreSQL. Uma tabela nova (`avabot_users`) e uma coluna nova em `avabot_agents` (`owner_user_id`). Elasticsearch não é afetado. (016-user-accounts-auth)
 - C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, FluentValidation (já na API), AutoMapper, `System.Security.Cryptography` (SHA-256, `RandomNumberGenerator`, BCL), `Microsoft.AspNetCore.Authentication` (handler próprio, já na API via JwtBearer). **Dependência nova**: `ModelContextProtocol.AspNetCore` **2.2.0** na API (transitivamente `ModelContextProtocol`, `ModelContextProtocol.Core`, `Microsoft.Extensions.AI.Abstractions` 10.8.3) e `ModelContextProtocol` 2.2.0 só em `AvaBot.Tests.API` (cliente para os testes). Todos já no cache NuGet local. Frontend: React Router 7, Zustand 5, Tailwind 4, sonner 2; nada novo. (017-mcp-agent-management)
 - PostgreSQL. Uma tabela nova (`avabot_mcp_access_keys`). Nenhuma coluna nova em tabelas existentes. Elasticsearch não é afetado (os documentos adicionados pelo MCP seguem a ingestão atual). (017-mcp-agent-management)
+- C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, FluentValidation (já na API), AutoMapper, `IMemoryCache` (já registrado), `HttpClient` do `WppConnectService` existente, `ModelContextProtocol.AspNetCore` 2.2.0 (já na API, feature 017); frontend com React Router 7, Zustand 5, Tailwind 4 e sonner 2. **Nenhuma dependência nova.** (018-whatsapp-allowed-numbers)
+- PostgreSQL. 5 colunas novas em `avabot_agents` (`whatsapp_access_mode` + 4 frases) e 3 tabelas novas. Uma migração (`AddWhatsappAccessControl`). Elasticsearch não é afetado. (018-whatsapp-allowed-numbers)
 
 ### Backend (repo root)
 - C# / .NET 9.0 + ASP.NET Core, Entity Framework Core 9.x (001-knowledge-agent-chatbot)
@@ -61,9 +63,9 @@ C# / .NET 9.0: Follow standard conventions
 TypeScript 6.0.2 (frontend/): Follow standard conventions
 
 ## Recent Changes
+- 018-whatsapp-allowed-numbers: Added C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, FluentValidation (já na API), AutoMapper, `IMemoryCache` (já registrado), `HttpClient` do `WppConnectService` existente, `ModelContextProtocol.AspNetCore` 2.2.0 (já na API, feature 017); frontend com React Router 7, Zustand 5, Tailwind 4 e sonner 2. **Nenhuma dependência nova.**
 - 017-mcp-agent-management: Added C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9, EF Core 9 + Npgsql, FluentValidation (já na API), AutoMapper, `System.Security.Cryptography` (SHA-256, `RandomNumberGenerator`, BCL), `Microsoft.AspNetCore.Authentication` (handler próprio, já na API via JwtBearer). **Dependência nova**: `ModelContextProtocol.AspNetCore` **2.2.0** na API (transitivamente `ModelContextProtocol`, `ModelContextProtocol.Core`, `Microsoft.Extensions.AI.Abstractions` 10.8.3) e `ModelContextProtocol` 2.2.0 só em `AvaBot.Tests.API` (cliente para os testes). Todos já no cache NuGet local. Frontend: React Router 7, Zustand 5, Tailwind 4, sonner 2; nada novo.
 - 016-user-accounts-auth: Added C# / .NET 9.0 (backend); TypeScript 6.x + React 19 (frontend) + ASP.NET Core 9 + `Microsoft.AspNetCore.Authentication.JwtBearer` (já na API), EF Core 9 + Npgsql, FluentValidation (já na API), `System.Security.Cryptography` (PBKDF2, BCL), `IMemoryCache` (já registrado), AutoMapper; frontend com React Router 7, Zustand 5, Tailwind 4, sonner 2. **Nenhuma dependência nova.**
-- 015-question-calibration-report: Added C# / .NET 9.0 (backend e testes); PowerShell 7 (script de execução) + ASP.NET Core 9, OpenAI SDK 2.10 (`ChatCompletion.Usage`), xUnit 2.9 + Flurl.Http 4 (já no `AvaBot.Tests.API`). **Nenhuma dependência nova.**
 
 
 <!-- MANUAL ADDITIONS START -->

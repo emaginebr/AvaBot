@@ -1,0 +1,26 @@
+meta {
+  name: Contact Update
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/contacts/{{whatsappContactId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Contato de teste (editado)",
+    "phone": "+55 11 98765-4321"
+  }
+}
+
+vars:pre-request {
+  agentSlug: ava
+}

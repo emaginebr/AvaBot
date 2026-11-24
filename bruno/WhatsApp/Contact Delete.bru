@@ -1,0 +1,19 @@
+meta {
+  name: Contact Delete
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/contacts/{{whatsappContactId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: ava
+}

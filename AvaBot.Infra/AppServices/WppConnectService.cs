@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using AvaBot.Infra.Interfaces.AppServices;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
@@ -10,13 +11,18 @@ namespace AvaBot.Infra.AppServices;
 
 public class WppConnectService : IWppConnectService
 {
+    private static readonly TimeSpan LidResolvedTtl = TimeSpan.FromHours(24);
+    private static readonly TimeSpan LidUnresolvedTtl = TimeSpan.FromMinutes(10);
+
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMemoryCache _cache;
     private readonly string _secretKey;
     private readonly ILogger<WppConnectService> _logger;
 
-    public WppConnectService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<WppConnectService> logger)
+    public WppConnectService(IHttpClientFactory httpClientFactory, IMemoryCache cache, IConfiguration configuration, ILogger<WppConnectService> logger)
     {
         _httpClientFactory = httpClientFactory;
+        _cache = cache;
         _secretKey = configuration["WppConnect:SecretKey"] ?? "";
         _logger = logger;
     }
@@ -211,6 +217,74 @@ public class WppConnectService : IWppConnectService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolve o telefone de um LID pelo WPP Connect (GET contact/pn-lid). Resultado em cache: 24 h quando
+    /// resolve, 10 min quando nao. Nunca lanca: qualquer falha devolve null (feature 018, research R3).
+    /// </summary>
+    public async Task<string?> GetPhoneByLidAsync(string session, string lid)
+    {
+        if (string.IsNullOrWhiteSpace(lid))
+            return null;
+
+        var cacheKey = $"wpp:pnlid:{session}:{lid}";
+        if (_cache.TryGetValue(cacheKey, out string? cached))
+            return string.IsNullOrEmpty(cached) ? null : cached;
+
+        string? phone = null;
+        try
+        {
+            var client = await CreateAuthenticatedClientAsync(session);
+            var response = await client.GetAsync($"/api/{session}/contact/pn-lid/{Uri.EscapeDataString(lid)}");
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                phone = ExtractPhoneNumber(doc.RootElement);
+            }
+            else
+            {
+                _logger.LogWarning("Falha ao resolver LID no WPP Connect. session={Session} lid={Lid} status={Status}",
+                    session, lid, response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Erro ao resolver LID no WPP Connect. session={Session} lid={Lid}", session, lid);
+        }
+
+        _cache.Set(cacheKey, phone ?? string.Empty, phone != null ? LidResolvedTtl : LidUnresolvedTtl);
+        return phone;
+    }
+
+    /// <summary>Aceita { phoneNumber } ou { response: { phoneNumber } }, como string ou objeto Wid.</summary>
+    private static string? ExtractPhoneNumber(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("response", out var inner)
+            && inner.ValueKind == JsonValueKind.Object)
+        {
+            root = inner;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("phoneNumber", out var phoneProp))
+            return null;
+
+        string? raw = phoneProp.ValueKind switch
+        {
+            JsonValueKind.String => phoneProp.GetString(),
+            JsonValueKind.Object when phoneProp.TryGetProperty("_serialized", out var ser) && ser.ValueKind == JsonValueKind.String => ser.GetString(),
+            JsonValueKind.Object when phoneProp.TryGetProperty("user", out var user) && user.ValueKind == JsonValueKind.String => user.GetString(),
+            _ => null
+        };
+
+        if (string.IsNullOrWhiteSpace(raw))
+            return null;
+
+        var at = raw.IndexOf('@');
+        var digits = new string((at >= 0 ? raw[..at] : raw).Where(char.IsAsciiDigit).ToArray());
+        return digits.Length is >= 10 and <= 15 ? digits : null;
     }
 
     private HttpClient CreateClient()

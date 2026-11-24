@@ -1,0 +1,19 @@
+meta {
+  name: Access Get
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/whatsapp/{{agentSlug}}/access
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  agentSlug: ava
+}
