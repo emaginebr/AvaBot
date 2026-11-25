@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { PowerBIService } from '../../../Services/PowerBIService'
+import AdminIcon from '../AdminIcon'
+import Button from '../ui/Button'
+import { Card } from '../ui/Card'
+import Modal from '../ui/Modal'
+import Switch from '../ui/Switch'
 
 const EXPOSURE_WARNING = 'Os dados dos datasets vinculados ficarão acessíveis a qualquer usuário que converse com este agente, em todos os canais (web, Telegram, WhatsApp)'
 
@@ -46,61 +51,55 @@ const PowerBIEnableToggle = ({ slug, enabled, onChanged }: PowerBIEnableTogglePr
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 flex items-center justify-between gap-4">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Power BI ativo</h2>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {enabled
-            ? 'O agente pode consultar os datasets vinculados em todos os canais.'
-            : 'Com a flag desligada, o agente responde apenas com a base de conhecimento.'}
-        </p>
-      </div>
-
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        onClick={handleToggle}
-        disabled={saving}
-        className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          enabled ? 'bg-ava-600' : 'bg-gray-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-            enabled ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-
-      {showWarning && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/30"
-            onClick={() => setShowWarning(false)}
-          />
-          <div className="relative bg-white rounded-xl border border-gray-200 shadow-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Ativar o Power BI</h3>
-            <p className="text-sm text-gray-600">{EXPOSURE_WARNING}.</p>
-            <div className="flex gap-2 justify-end mt-6">
-              <button
-                onClick={() => setShowWarning(false)}
-                className="px-4 py-2 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 font-medium"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => applyEnabled(true)}
-                disabled={saving}
-                className="px-4 py-2 bg-ava-600 text-white text-sm rounded-lg hover:bg-ava-700 disabled:opacity-50 font-medium"
-              >
-                {saving ? 'Ativando...' : 'Ativar'}
-              </button>
-            </div>
+    <Card>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden="true" className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-warn-bg text-warn">
+            <AdminIcon name="chart" className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <h2 id="powerbi-ativo-rotulo" className="font-brand text-[17px] leading-[1.3] font-semibold tracking-[-0.01em] text-ink">
+              Power BI ativo
+            </h2>
+            <p id="powerbi-ativo-descricao" className="m-0 mt-[3px] text-[13px] text-ink-2">
+              {enabled
+                ? 'O agente pode consultar os datasets vinculados em todos os canais.'
+                : 'Com a flag desligada, o agente responde apenas com a base de conhecimento.'}
+            </p>
           </div>
         </div>
+
+        <Switch
+          checked={enabled}
+          onChange={handleToggle}
+          disabled={saving}
+          labelledBy="powerbi-ativo-rotulo"
+          describedBy="powerbi-ativo-descricao"
+        />
+      </div>
+
+      {showWarning && (
+        <Modal
+          role="alertdialog"
+          title="Ativar o Power BI"
+          description={`${EXPOSURE_WARNING}.`}
+          icon="alert"
+          iconTone="warn"
+          showClose={false}
+          onClose={() => setShowWarning(false)}
+          footer={
+            <>
+              <Button data-autofocus onClick={() => setShowWarning(false)}>
+                Cancelar
+              </Button>
+              <Button variant="primary" onClick={() => applyEnabled(true)} loading={saving}>
+                {saving ? 'Ativando...' : 'Ativar'}
+              </Button>
+            </>
+          }
+        />
       )}
-    </div>
+    </Card>
   )
 }
 

@@ -3,20 +3,44 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
+import AdminIcon from '../../components/admin/AdminIcon'
+import type { AdminIconName } from '../../components/admin/AdminIcon'
+import Button, { ButtonLink } from '../../components/admin/ui/Button'
+import { Card, CardHeader, CardSection } from '../../components/admin/ui/Card'
+import { CodeChip } from '../../components/admin/ui/Chip'
+import KeyValueList from '../../components/admin/ui/KeyValueList'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import Switch from '../../components/admin/ui/Switch'
+import { useConfirm } from '../../components/admin/ui/useConfirm'
+
+const ActionItem = ({ icon, title, description, to }: { icon: AdminIconName; title: string; description: string; to: string }) => (
+  <li className="flex items-center gap-3.5 border-t border-gray-100 py-3.5 first:border-t-0 first:pt-0 last:pb-0">
+    <span aria-hidden="true" className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[11px] bg-ava-50 text-ava-700">
+      <AdminIcon name={icon} className="h-[18px] w-[18px]" />
+    </span>
+    <span className="min-w-0 flex-1">
+      <b className="block font-medium text-ink">{title}</b>
+      <span className="block text-[12.5px] text-ink-3">{description}</span>
+    </span>
+    <ButtonLink size="sm" to={to} aria-label={`Abrir ${title.toLowerCase()}`}>
+      Abrir
+    </ButtonLink>
+  </li>
+)
 
 const AgentSettingsPage = () => {
   const { selectedAgent, selectAgent, loadAgents } = useAgentStore()
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const navigate = useNavigate()
+  const [confirm, confirmDialog] = useConfirm()
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para acessar as configurações.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Configurações do agente" description="Resumo do agente selecionado, situação e ações de manutenção." />
+        <NoAgentState purpose="acessar as configurações" />
       </div>
     )
   }
@@ -39,8 +63,20 @@ const AgentSettingsPage = () => {
       toast.error('Erro de rede ao excluir agente')
     } finally {
       setDeleting(false)
-      setShowDeleteConfirm(false)
     }
+  }
+
+  const askDelete = async () => {
+    const ok = await confirm({
+      title: 'Remover agente?',
+      message: (
+        <>
+          Tem certeza que deseja remover o agente <strong>{selectedAgent.name}</strong>? Esta ação não pode ser desfeita.
+        </>
+      ),
+      confirmLabel: 'Sim, remover',
+    })
+    if (ok) await handleDelete()
   }
 
   const handleToggleStatus = async () => {
@@ -61,107 +97,102 @@ const AgentSettingsPage = () => {
     }
   }
 
+  const active = selectedAgent.status === 1
+  const editPath = `/admin/agents/${selectedAgent.agentId}/edit`
+  const collected =
+    [
+      selectedAgent.collectName && 'Nome',
+      selectedAgent.collectEmail && 'E-mail',
+      selectedAgent.collectPhone && 'Telefone',
+    ]
+      .filter(Boolean)
+      .join(', ') || 'Nenhum campo'
+
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Configurações do Agente</h1>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={selectedAgent.name}
+        title="Configurações do agente"
+        description="Resumo do agente selecionado, situação e ações de manutenção."
+        actions={
+          <ButtonLink to={editPath} variant="primary" size="lg" icon="edit">
+            Editar agente
+          </ButtonLink>
+        }
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{selectedAgent.name}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{selectedAgent.description || 'Sem descrição'}</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Slug: <code className="bg-gray-100 px-1.5 py-0.5 rounded">{selectedAgent.slug}</code>
-            </p>
-          </div>
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            selectedAgent.status === 1
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-gray-500'
-          }`}>
-            {selectedAgent.status === 1 ? 'Ativo' : 'Inativo'}
-          </span>
-        </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card aria-labelledby="config-resumo-titulo">
+          <CardHeader
+            titleId="config-resumo-titulo"
+            title={selectedAgent.name}
+            subtitle={selectedAgent.description || 'Sem descrição'}
+            actions={
+              active ? <StatusBadge tone="ok" label="Ativo" /> : <StatusBadge tone="idle" icon="power" label="Inativo" />
+            }
+          />
+          <KeyValueList
+            items={[
+              { label: 'Slug', value: <CodeChip>{selectedAgent.slug}</CodeChip> },
+              { label: 'Coleta', value: collected },
+              { label: 'Criado em', value: new Date(selectedAgent.createdAt).toLocaleString('pt-BR'), numeric: true },
+            ]}
+          />
+          <CardSection className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 id="config-ativo-rotulo" className="m-0 text-sm font-semibold text-ink">
+                Agente ativo
+              </h3>
+              <p id="config-ativo-descricao" className="m-0 mt-[3px] text-[13px] text-ink-2">
+                {active
+                  ? 'Desligue para que o agente não fique disponível para novos atendimentos.'
+                  : 'Ligue para que o agente fique disponível para atendimentos.'}
+              </p>
+            </div>
+            <Switch
+              checked={active}
+              onChange={handleToggleStatus}
+              labelledBy="config-ativo-rotulo"
+              describedBy="config-ativo-descricao"
+            />
+          </CardSection>
+        </Card>
 
-        <div className="border-t border-gray-100 pt-4 space-y-2 text-sm text-gray-600">
-          <p>Coleta: {[
-            selectedAgent.collectName && 'Nome',
-            selectedAgent.collectEmail && 'Email',
-            selectedAgent.collectPhone && 'Telefone',
-          ].filter(Boolean).join(', ') || 'Nenhum campo'}</p>
-          <p>Criado em: {new Date(selectedAgent.createdAt).toLocaleString('pt-BR')}</p>
-        </div>
+        <Card aria-labelledby="config-acoes-titulo">
+          <CardHeader titleId="config-acoes-titulo" title="Ações" subtitle="Atalhos de manutenção do agente." />
+          <ul className="m-0 list-none p-0">
+            <ActionItem
+              icon="edit"
+              title="Editar agente"
+              description="Alterar nome, descrição, prompt, modelo e coleta."
+              to={editPath}
+            />
+            <ActionItem
+              icon="flask"
+              title="Teste do agente"
+              description="Envie uma pergunta e veja a resposta e as fontes."
+              to="/admin/knowledge/test"
+            />
+          </ul>
+        </Card>
       </div>
 
-      <div className="space-y-3">
-        <button
-          onClick={() => navigate(`/admin/agents/${selectedAgent.agentId}/edit`)}
-          className="w-full flex items-center justify-between px-5 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <div className="text-left">
-            <p className="font-medium text-gray-900">Editar Agente</p>
-            <p className="text-sm text-gray-500">Alterar nome, descrição, prompt e configurações de coleta</p>
-          </div>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-          </svg>
-        </button>
-
-        <button
-          onClick={handleToggleStatus}
-          className="w-full flex items-center justify-between px-5 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <div className="text-left">
-            <p className="font-medium text-gray-900">
-              {selectedAgent.status === 1 ? 'Desativar Agente' : 'Ativar Agente'}
-            </p>
-            <p className="text-sm text-gray-500">
-              {selectedAgent.status === 1
-                ? 'O agente não estará disponível para novos atendimentos'
-                : 'O agente ficará disponível para atendimentos'}
-            </p>
-          </div>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-          </svg>
-        </button>
-
-        {showDeleteConfirm ? (
-          <div className="px-5 py-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm text-red-700 mb-3">
-              Tem certeza que deseja remover o agente <strong>{selectedAgent.name}</strong>? Esta ação não pode ser desfeita.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
-              >
-                {deleting ? 'Removendo...' : 'Sim, remover'}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 font-medium"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="w-full flex items-center justify-between px-5 py-3 bg-white border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
-          >
-            <div className="text-left">
-              <p className="font-medium text-red-600">Excluir Agente</p>
-              <p className="text-sm text-red-400">Remover permanentemente este agente e todos os seus dados</p>
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-          </button>
-        )}
-      </div>
+      <Card tone="danger" aria-labelledby="config-perigo-titulo">
+        <CardHeader
+          titleId="config-perigo-titulo"
+          flush
+          icon="trash"
+          iconTone="danger"
+          title="Excluir agente"
+          subtitle="Remove permanentemente este agente e todos os seus dados. Esta ação não pode ser desfeita."
+          actions={
+            <Button variant="danger" icon="trash" onClick={askDelete} loading={deleting}>
+              {deleting ? 'Removendo...' : 'Excluir agente'}
+            </Button>
+          }
+        />
+      </Card>
+      {confirmDialog}
     </div>
   )
 }

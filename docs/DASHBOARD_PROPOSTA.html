@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AvaBot · Proposta de dashboard administrativo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   Tokens — espelham o @theme do Tailwind 4 (frontend/src/index.css).
+   Ao portar: adicionar --font-display/--font-body/--font-mono e as cores
+   semânticas no @theme; as primitivas ava-* já existem.
+   ========================================================================== */
+:root{
+  --ava-50:#eef4ff;--ava-100:#dae6ff;--ava-200:#bdd4ff;--ava-300:#90b8ff;--ava-400:#5c91ff;
+  --ava-500:#3668fc;--ava-600:#1f45f1;--ava-700:#1833de;--ava-800:#1a2ab4;--ava-900:#1b2a8d;--ava-950:#141b56;
+
+  --ink:#0f1430;          /* texto principal  (17:1 sobre branco) */
+  --ink-2:#475069;        /* texto secundário (8,1:1) */
+  --ink-3:#5d6683;        /* rótulos / meta   (5,9:1) */
+  --line:#e5e7eb;         /* gray-200 — mesmas bordas do site */
+  --line-2:#f3f4f6;       /* gray-100 */
+  --canvas:#f9fafb;       /* gray-50 — fundos internos de cartão */
+  --surface:#ffffff;
+
+  --ok:#0b7a55;   --ok-bg:#e5f6ef;
+  --warn:#9a5b00; --warn-bg:#fff4de;
+  --err:#b42318;  --err-bg:#fdeceb;
+
+  --ch-web:var(--ava-700);
+  --ch-telegram:var(--ava-400);
+  --ch-whatsapp:#12a17a;
+
+  --font-display:'Bricolage Grotesque', 'Geist', system-ui, sans-serif;
+  --font-body:'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:'Geist Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  --radius:16px;          /* rounded-2xl, como os cartões flutuantes do hero */
+  --radius-sm:12px;       /* rounded-xl, como os botões do site */
+  --shadow:0 1px 2px rgba(17,24,39,.04);
+  --shadow-hover:0 10px 25px -12px rgba(17,24,39,.15);
+  --shadow-ava:0 4px 6px -1px rgb(31 69 241 / .25), 0 2px 4px -2px rgb(31 69 241 / .25);
+  --shadow-ava-lg:0 10px 15px -3px rgb(31 69 241 / .25), 0 4px 6px -4px rgb(31 69 241 / .25);
+  --sidebar-w:224px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--font-body);
+  font-size:14px;line-height:1.5;color:var(--ink);background:#fff;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+button{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+:focus-visible{outline:2px solid var(--ava-600);outline-offset:2px;border-radius:8px}
+
+/* ---------- Shell ---------- */
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+
+/* ---------- Sidebar (azul-escura da marca, compacta, menu em sanfona) ---------- */
+.sidebar{
+  position:sticky;top:0;height:100vh;height:100dvh;
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:none;  /* cabe em 100vh; nenhuma barra visível */
+  background:linear-gradient(180deg,var(--ava-950) 0%,#161f66 60%,var(--ava-900) 140%);
+  border-right:1px solid rgba(255,255,255,.06);color:rgba(255,255,255,.74);
+  display:flex;flex-direction:column;padding:14px 10px 10px;gap:12px;
+}
+.sidebar::-webkit-scrollbar{display:none}
+.sidebar :focus-visible{outline-color:var(--ava-300)}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 6px}
+/* Logomarca idêntica à de avabot.net (LandingPage.tsx); só o texto fica branco sobre o azul */
+.brand-mark{
+  width:32px;height:32px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--ava-600);color:#fff;box-shadow:0 4px 12px -2px rgb(31 69 241 / .55);
+}
+.brand-mark svg{width:18px;height:18px}
+.brand-name{font-family:var(--font-body);font-weight:700;font-size:18px;line-height:26px;color:#fff;letter-spacing:-.025em}
+
+.agent-switch{
+  display:flex;align-items:center;gap:9px;width:100%;
+  padding:7px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);cursor:pointer;text-align:left;color:rgba(255,255,255,.74);
+  transition:background .15s, border-color .15s;
+}
+.agent-switch:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2)}
+.agent-switch .avatar{width:26px;height:26px;font-size:10.5px}
+.agent-switch small{display:block;font-size:10.5px;color:var(--ava-200);line-height:1.2}
+.agent-switch strong{display:block;font-weight:500;color:#fff;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-switch .grow{flex:1;min-width:0}
+
+/* Sanfona: um grupo aberto por vez; altura animada via grid-template-rows 0fr -> 1fr */
+.nav{display:flex;flex-direction:column;gap:2px}
+.acc-btn{
+  display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:0 8px;
+  border:0;border-radius:8px;background:transparent;cursor:pointer;text-align:left;
+  font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ava-200);
+  transition:background .15s,color .15s;
+}
+.acc-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+.acc-btn[aria-expanded="true"]{color:#fff}
+.acc-btn .chev{width:14px;height:14px;margin-left:auto;flex:none;transform:rotate(-90deg);transition:transform .22s ease;opacity:.8}
+.acc-btn[aria-expanded="true"] .chev{transform:none}
+.acc-btn .nav-badge{letter-spacing:0;text-transform:none}
+.acc-btn .nav-badge + .chev{margin-left:6px}
+.acc-btn[aria-expanded="true"] .nav-badge{display:none}
+.acc-btn[aria-expanded="true"] .nav-badge + .chev{margin-left:auto}
+.acc-panel{display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows .24s ease,visibility 0s linear .24s}
+.acc-panel.open{grid-template-rows:1fr;visibility:visible;transition:grid-template-rows .24s ease,visibility 0s}
+.acc-panel > div{overflow:hidden;min-height:0;display:flex;flex-direction:column;gap:1px}
+.acc-panel > div::after{content:"";flex:none;height:4px}
+
+.nav-item{
+  display:flex;align-items:center;gap:10px;min-height:36px;padding:0 8px 0 10px;border-radius:8px;
+  color:rgba(255,255,255,.76);font-size:13px;transition:background .15s,color .15s;position:relative;
+}
+.nav-item svg{width:16px;height:16px;flex:none;opacity:.85}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-item[aria-current="page"]{background:var(--ava-600);color:#fff;font-weight:500;box-shadow:0 4px 12px -4px rgb(31 69 241 / .7)}
+.nav-item[aria-current="page"] svg{opacity:1}
+.nav-badge{
+  margin-left:auto;font-family:var(--font-mono);font-size:10.5px;line-height:16px;
+  background:#ffd27a;color:#3a2600;border-radius:999px;padding:0 6px;font-weight:600;
+}
+.sidebar-foot{margin-top:auto;display:flex;align-items:center;gap:9px;padding:10px 6px 2px;border-top:1px solid rgba(255,255,255,.1)}
+.sidebar-foot .avatar{width:28px;height:28px;font-size:10.5px}
+.sidebar-foot p{margin:0;font-size:12.5px;color:#fff;font-weight:500;line-height:1.25}
+.sidebar-foot small{color:var(--ava-200);font-size:11px}
+
+/* ---------- Main ---------- */
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
+  padding:14px 32px;background:rgba(255,255,255,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--line-2);
+}
+.menu-btn{display:none}
+.search{
+  flex:1;max-width:420px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--ink-3);
+}
+.search input{border:0;outline:0;background:transparent;flex:1;font:inherit;color:var(--ink);min-width:0}
+.search input::placeholder{color:var(--ink-3)}
+.search:focus-within{border-color:var(--ava-400);box-shadow:0 0 0 3px var(--ava-100)}
+.kbd{font-family:var(--font-mono);font-size:11px;border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--ink-3)}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.icon-btn{
+  width:40px;height:40px;display:grid;place-items:center;border-radius:var(--radius-sm);border:1px solid var(--line);
+  background:var(--surface);cursor:pointer;color:var(--ink-2);position:relative;transition:background .15s,border-color .15s;
+}
+.icon-btn:hover{background:var(--ava-50);border-color:var(--ava-200);color:var(--ava-700)}
+.icon-btn .dot{position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--err);box-shadow:0 0 0 2px #fff}
+
+.content{padding:24px 32px 48px;display:flex;flex-direction:column;gap:20px;max-width:1440px;width:100%}
+
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.eyebrow{font-size:12.5px;color:var(--ink-3);margin:0 0 4px}
+h1{font-family:var(--font-display);font-weight:600;font-size:32px;line-height:1.1;letter-spacing:-.025em;margin:0}
+h1 em{font-style:normal;color:var(--ava-600);position:relative;display:inline-block}
+h1 em svg{position:absolute;left:0;bottom:-6px;width:100%;height:10px;overflow:visible}
+
+/* ---------- Cabeçalho de boas-vindas (decoração do hero de avabot.net) ---------- */
+.hero{position:relative;overflow:hidden;background:#fff}
+.hero-bg{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.hero-bg .blob-a{position:absolute;right:-160px;top:-260px;width:600px;height:600px;border-radius:50%;background:rgb(218 230 255 / .7);filter:blur(64px)}
+.hero-bg .blob-b{position:absolute;left:-128px;top:40px;width:400px;height:400px;border-radius:50%;background:rgb(189 212 255 / .5);filter:blur(64px)}
+.hero-bg .dots{position:absolute;inset:0;opacity:.035;background-image:radial-gradient(circle at 1px 1px,#1f45f1 1px,transparent 0);background-size:32px 32px}
+.hero-bg .rule{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:80%;height:1px;background:linear-gradient(to right,transparent,var(--line),transparent)}
+.hero-inner{position:relative;padding:36px 32px 32px;max-width:1440px}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;
+  border:1px solid var(--ava-200);background:var(--ava-50);color:var(--ava-700);
+  border-radius:999px;padding:5px 14px;font-size:12.5px;font-weight:500;
+}
+.ping{position:relative;display:flex;width:8px;height:8px}
+.ping::before{content:"";position:absolute;inset:0;border-radius:50%;background:var(--ava-400);opacity:.75;animation:ping 1s cubic-bezier(0,0,.2,1) infinite}
+.ping::after{content:"";position:relative;width:8px;height:8px;border-radius:50%;background:var(--ava-500)}
+@keyframes ping{75%,100%{transform:scale(2);opacity:0}}
+.hero-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hero .eyebrow{margin:12px 0 0;font-size:13.5px}
+h2{font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:-.01em;margin:0}
+
+.segmented{display:inline-flex;padding:3px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm)}
+.segmented button{
+  border:0;background:transparent;min-height:34px;padding:0 14px;border-radius:8px;cursor:pointer;
+  font-size:13px;color:var(--ink-2);transition:background .15s,color .15s;
+}
+.segmented button:hover{color:var(--ink)}
+.segmented button[aria-pressed="true"]{background:var(--ava-600);color:#fff;box-shadow:var(--shadow-ava)}
+
+/* ---------- Cards ---------- */
+.grid{display:grid;gap:20px}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.row-2{grid-template-columns:minmax(0,1.75fr) minmax(0,1fr)}
+.row-3{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+.row-4{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:20px;min-width:0;transition:box-shadow .2s,border-color .2s;
+}
+.card:hover{box-shadow:var(--shadow-hover);border-color:var(--ava-100)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.card-head p{margin:2px 0 0;color:var(--ink-3);font-size:12.5px}
+.link{color:var(--ava-700);font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:4px 2px}
+.link:hover{color:var(--ava-900);text-decoration:underline;text-underline-offset:3px}
+
+/* KPI */
+.kpi{display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.kpi-top{display:flex;align-items:center;justify-content:space-between}
+.kpi-label{font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.kpi-ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--ava-50);color:var(--ava-700)}
+.kpi-ico svg{width:16px;height:16px}
+.kpi-value{font-family:var(--font-display);font-size:34px;font-weight:600;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.kpi-value small{font-family:var(--font-body);font-size:14px;color:var(--ink-3);font-weight:400;letter-spacing:0;margin-left:4px}
+.kpi-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.delta{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:500;border-radius:999px;padding:2px 8px}
+.delta.up{color:var(--ok);background:var(--ok-bg)}
+.delta.down{color:var(--err);background:var(--err-bg)}
+.delta svg{width:12px;height:12px}
+.kpi-foot .meta{font-size:12px;color:var(--ink-3)}
+.spark{width:96px;height:32px}
+
+/* Chart */
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:0;padding:0;list-style:none}
+.legend li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.legend .sw{width:10px;height:10px;border-radius:3px}
+.legend strong{font-family:var(--font-mono);font-weight:500;color:var(--ink);font-size:12.5px}
+.chart-wrap{position:relative;margin-top:14px}
+.chart-wrap svg{display:block;width:100%;height:260px}
+.chart-tip{
+  position:absolute;pointer-events:none;background:var(--ava-950);color:#fff;border-radius:10px;padding:10px 12px;
+  font-size:12px;min-width:150px;box-shadow:0 10px 30px -10px rgba(20,27,86,.5);opacity:0;transform:translateY(4px);
+  transition:opacity .12s,transform .12s;z-index:5;
+}
+.chart-tip.show{opacity:1;transform:none}
+.chart-tip b{display:block;font-weight:500;margin-bottom:6px;color:#c9d3ff}
+.chart-tip div{display:flex;justify-content:space-between;gap:14px}
+.bar-col{cursor:pointer}
+.bar-col rect.hit{fill:transparent}
+.bar-col:hover rect.hit{fill:var(--ava-50)}
+
+/* Conexões */
+.conn{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.conn li{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line-2)}
+.conn li:first-child{border-top:0;padding-top:0}
+.conn-ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:none}
+.conn-ico svg{width:20px;height:20px}
+.conn-body{flex:1;min-width:0}
+.conn-body strong{display:block;font-weight:500;font-size:13.5px}
+.conn-body span{display:block;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.status svg{width:12px;height:12px}
+.status.ok{color:var(--ok);background:var(--ok-bg)}
+.status.warn{color:var(--warn);background:var(--warn-bg)}
+.status.err{color:var(--err);background:var(--err-bg)}
+.status.idle{color:var(--ink-2);background:var(--line-2)}
+
+/* Tabela */
+.table-scroll{overflow-x:auto;margin:0 -20px -20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-weight:500;color:var(--ink-3);text-align:left;font-size:12px;padding:10px 20px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--canvas)}
+td{padding:12px 20px;border-bottom:1px solid var(--line-2);white-space:nowrap;vertical-align:middle}
+tbody tr{transition:background .12s}
+tbody tr:hover{background:var(--ava-50)}
+tbody tr:last-child td{border-bottom:0}
+.user{display:flex;align-items:center;gap:10px}
+.avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:600;flex:none;background:var(--ava-100);color:var(--ava-800)}
+.user b{font-weight:500;display:block;line-height:1.2}
+.user small{color:var(--ink-3);font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:2px 9px 2px 7px}
+.chip svg{width:13px;height:13px}
+.td-num{text-align:right;font-family:var(--font-mono)}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--ok);font-size:12px;font-weight:500}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px var(--ok-bg);animation:pulse 2s infinite}
+.ended{color:var(--ink-3);font-size:12px}
+@keyframes pulse{50%{box-shadow:0 0 0 5px rgba(11,122,85,.08)}}
+
+/* Ranking agentes */
+.rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.rank-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.rank-row b{font-weight:500;font-size:13.5px}
+.rank-row span{font-size:12px;color:var(--ink-3)}
+.rank-row .num{font-size:13px;color:var(--ink)}
+.track{height:8px;border-radius:999px;background:var(--line-2);overflow:hidden}
+.fill{height:100%;border-radius:999px;background:var(--ava-600);transform-origin:left;animation:grow .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes grow{from{transform:scaleX(0)}}
+
+/* Base de conhecimento */
+.kb-top{display:flex;align-items:center;gap:18px;margin-bottom:16px}
+.donut{width:104px;height:104px;flex:none}
+.kb-legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;font-size:13px}
+.kb-legend li{display:flex;align-items:center;gap:8px;color:var(--ink-2)}
+.kb-legend .num{margin-left:auto;color:var(--ink);padding-left:12px}
+.kb-legend .sw{width:10px;height:10px;border-radius:3px}
+.files{list-style:none;margin:0;padding:0}
+.files li{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line-2);font-size:13px}
+.file-ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-family:var(--font-mono);font-size:9.5px;font-weight:500;flex:none}
+.files .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files small{color:var(--ink-3);font-size:12px;font-family:var(--font-mono)}
+
+/* Pedidos de acesso */
+.req{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.req li{border:1px solid var(--line-2);border-radius:var(--radius-sm);padding:12px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,opacity .3s,transform .3s}
+.req li:hover{border-color:var(--ava-200)}
+.req li.leaving{opacity:0;transform:translateX(12px)}
+.req .who{display:flex;align-items:center;gap:10px}
+.req .who b{font-weight:500;display:block;line-height:1.2}
+.req .who small{font-family:var(--font-mono);color:var(--ink-3);font-size:12px}
+.req .when{margin-left:auto;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.req q{font-size:12.5px;color:var(--ink-2);background:var(--canvas);border-radius:8px;padding:8px 10px;quotes:"“" "”"}
+.req .actions{display:flex;gap:8px}
+.btn{
+  min-height:36px;padding:0 14px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--surface);color:#374151;
+  font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s,color .15s;
+}
+.btn svg{width:14px;height:14px}
+.btn:hover{background:var(--canvas);border-color:#d1d5db}
+.btn.primary{background:var(--ava-600);border-color:var(--ava-600);color:#fff;box-shadow:var(--shadow-ava)}
+.btn.primary:hover{background:var(--ava-700);border-color:var(--ava-700);box-shadow:var(--shadow-ava-lg)}
+.btn.lg{min-height:42px;padding:0 18px;font-weight:600}
+.btn.ghost-danger{color:var(--err)}
+.btn.ghost-danger:hover{background:var(--err-bg);border-color:#f6c9c5}
+.empty{font-size:13px;color:var(--ink-3);text-align:center;padding:24px 8px;border:1px dashed var(--line);border-radius:var(--radius-sm)}
+
+/* Power BI */
+.bi-list{list-style:none;margin:0;padding:0}
+.bi-list li{padding:10px 0;border-top:1px solid var(--line-2);display:flex;gap:10px;align-items:flex-start}
+.bi-list li:first-child{border-top:0;padding-top:0}
+.bi-list .q{flex:1;min-width:0;font-size:13px}
+.bi-list .q span{display:block;color:var(--ink-3);font-size:12px;margin-top:2px}
+.bi-list .ms{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);white-space:nowrap}
+.bi-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.bi-stats div{background:var(--canvas);border-radius:10px;padding:10px}
+.bi-stats small{display:block;font-size:11.5px;color:var(--ink-3)}
+.bi-stats b{font-family:var(--font-display);font-size:20px;font-weight:600;letter-spacing:-.02em}
+
+/* Nota de design */
+.design-note{
+  border:1px solid var(--ava-200);background:linear-gradient(180deg,var(--ava-50),#fff);
+  border-radius:var(--radius);padding:20px 22px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;
+}
+.design-note .aa{font-family:var(--font-display);font-size:52px;font-weight:600;line-height:.9;color:var(--ava-700);letter-spacing:-.04em}
+.design-note h2{margin-bottom:6px}
+.design-note p{margin:0 0 6px;color:var(--ink-2);font-size:13.5px;max-width:880px}
+.design-note code{font-family:var(--font-mono);font-size:12px;background:#fff;border:1px solid var(--line);border-radius:5px;padding:0 5px}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;z-index:50;
+  background:var(--ava-950);color:#fff;border-radius:12px;padding:11px 16px;font-size:13px;display:flex;gap:8px;align-items:center;
+  box-shadow:0 12px 30px -10px rgba(20,27,86,.5);transition:opacity .2s,transform .2s;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+.scrim{display:none}
+
+/* ---------- Responsivo ---------- */
+@media (max-width:1200px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row-4 > :last-child{grid-column:1 / -1}
+}
+@media (max-width:1024px){
+  .row-2,.row-3{grid-template-columns:1fr}
+}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:min(82vw,var(--sidebar-w));z-index:40;transform:translateX(-100%);transition:transform .25s ease}
+  .app.nav-open .sidebar{transform:none}
+  .nav-item,.acc-btn{min-height:40px}
+  .app.nav-open .scrim{display:block;position:fixed;inset:0;background:rgba(15,20,48,.45);z-index:30}
+  .menu-btn{display:grid}
+  .topbar{padding:12px 16px}
+  .content{padding:20px 16px 40px}
+  .hero-inner{padding:28px 16px 24px}
+  .kbd{display:none}
+  h1{font-size:26px}
+}
+@media (max-width:620px){
+  .kpis,.row-4{grid-template-columns:1fr}
+  .row-4 > :last-child{grid-column:auto}
+  .search{display:none}
+  .page-head{align-items:flex-start}
+  .design-note{grid-template-columns:1fr}
+  .kpi-value{font-size:30px}
+}
+@media (min-width:861px) and (max-height:640px){
+  .sidebar{gap:8px;padding-top:10px}
+  .nav-item,.acc-btn{min-height:32px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- Sprites de ícones (SVG inline, traço 1.75 — equivalentes a lucide-react) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4"/><circle cx="12" cy="3.5" r="1"/><path d="M9 13v1.5M15 13v1.5"/><path d="M2 13v3M22 13v3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-cog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3 3 10.5l7 2.5 2.5 7z"/><path d="m10 13 4.5-4.5"/></symbol>
+    <symbol id="i-wa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 20.5 5 16a8.5 8.5 0 1 1 3.2 3.2z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/></symbol>
+    <symbol id="i-bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 9v8H9"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.01"/><circle cx="12" cy="12" r="9"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></symbol>
+    <symbol id="i-plug" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar" id="sidebar" aria-label="Navegação principal">
+    <a class="brand" href="#" aria-label="AvaBot — início">
+      <!-- Logomarca de avabot.net: quadrado ava-600 36×36, rounded-xl, sombra azul, balões de chat 20×20 -->
+      <span class="brand-mark" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M4.913 2.658c2.075-.27 4.19-.408 6.337-.408 2.147 0 4.262.139 6.337.408 1.922.25 3.291 1.861 3.405 3.727a4.403 4.403 0 00-1.032-.211 50.89 50.89 0 00-8.42 0c-2.358.196-4.04 2.19-4.04 4.434v4.286a4.47 4.47 0 002.433 3.984L7.28 21.53A.75.75 0 016 21v-4.03a48.527 48.527 0 01-1.087-.128C2.905 16.58 1.5 14.833 1.5 12.862V6.638c0-1.97 1.405-3.718 3.413-3.979z"/>
+          <path d="M15.75 7.5c-1.376 0-2.739.057-4.086.169C10.124 7.797 9 9.103 9 10.609v4.285c0 1.507 1.128 2.814 2.67 2.94 1.243.102 2.5.157 3.768.165l2.782 2.781a.75.75 0 001.28-.53v-2.39l.33-.026c1.542-.125 2.67-1.433 2.67-2.94v-4.286c0-1.505-1.125-2.811-2.664-2.94A49.392 49.392 0 0015.75 7.5z"/>
+        </svg>
+      </span>
+      <span class="brand-name">AvaBot</span>
+    </a>
+
+    <button class="agent-switch" type="button" aria-haspopup="listbox" aria-label="Trocar agente ativo: Ava — Atendimento">
+      <span class="avatar" style="background:#dae6ff;color:#1a2ab4" aria-hidden="true">AV</span>
+      <span class="grow"><small>Agente ativo</small><strong>Ava — Atendimento</strong></span>
+      <svg width="16" height="16" aria-hidden="true"><use href="#i-chev"/></svg>
+    </button>
+
+    <!-- Menu em sanfona: só um grupo aberto por vez; o grupo do item ativo começa aberto -->
+    <nav class="nav" id="navAcc" aria-label="Seções do painel">
+      <div class="acc">
+        <button class="acc-btn" type="button" id="acc-geral" aria-expanded="true" aria-controls="accp-geral">Visão geral<svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="acc-panel open" id="accp-geral" role="region" aria-labelledby="acc-geral"><div>
+          <a class="nav-item" href="#" aria-current="page"><svg aria-hidden="true"><use href="#i-home"/></svg>Painel</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-chat"/></svg>Sessões</a>
+        </div></div>
+      </div>
+      <div class="acc">
+        <button class="acc-btn" type="button" id="acc-agentes" aria-expanded="false" aria-controls="accp-agentes">Agentes<svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="acc-panel" id="accp-agentes" role="region" aria-labelledby="acc-agentes"><div>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-bot"/></svg>Meus agentes</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-cog"/></svg>Configurações</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-flask"/></svg>Teste do agente</a>
+        </div></div>
+      </div>
+      <div class="acc">
+        <button class="acc-btn" type="button" id="acc-conhecimento" aria-expanded="false" aria-controls="accp-conhecimento">Conhecimento<svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="acc-panel" id="accp-conhecimento" role="region" aria-labelledby="acc-conhecimento"><div>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-file"/></svg>Arquivos</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-search"/></svg>Busca na base</a>
+        </div></div>
+      </div>
+      <div class="acc">
+        <button class="acc-btn" type="button" id="acc-canais" aria-expanded="false" aria-controls="accp-canais">Canais e integrações<span class="nav-badge" data-badge="wa" aria-label="3 pedidos pendentes no WhatsApp">3</span><svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="acc-panel" id="accp-canais" role="region" aria-labelledby="acc-canais"><div>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-send"/></svg>Bot Telegram</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-wa"/></svg>WhatsApp<span class="nav-badge" data-badge="wa" aria-label="3 pedidos pendentes">3</span></a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-bi"/></svg>Power BI</a>
+        </div></div>
+      </div>
+      <div class="acc">
+        <button class="acc-btn" type="button" id="acc-conta" aria-expanded="false" aria-controls="accp-conta">Conta<svg class="chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="acc-panel" id="accp-conta" role="region" aria-labelledby="acc-conta"><div>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-user"/></svg>Minha conta</a>
+          <a class="nav-item" href="#"><svg aria-hidden="true"><use href="#i-key"/></svg>Chaves MCP</a>
+        </div></div>
+      </div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <span class="avatar" style="background:var(--ava-600);color:#fff" aria-hidden="true">RL</span>
+      <div><p>Rafaela Lima</p><small>Administradora</small></div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">
+        <svg width="20" height="20" aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+      <label class="search">
+        <svg width="16" height="16" aria-hidden="true"><use href="#i-search"/></svg>
+        <span class="sr-only">Buscar</span>
+        <input type="search" placeholder="Buscar sessões, arquivos ou agentes…">
+        <span class="kbd">Ctrl K</span>
+      </label>
+      <div class="topbar-actions">
+        <button class="icon-btn" type="button" aria-label="Notificações (3 novas)">
+          <svg width="18" height="18" aria-hidden="true"><use href="#i-bell"/></svg><span class="dot" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+
+    <main id="conteudo">
+    <section class="hero" aria-labelledby="t-hero">
+      <div class="hero-bg" aria-hidden="true"><div class="blob-a"></div><div class="blob-b"></div><div class="dots"></div><div class="rule"></div></div>
+      <div class="hero-inner page-head">
+        <div>
+          <div class="pill"><span class="ping" aria-hidden="true"></span>6 agentes on-line agora</div>
+          <h1 id="t-hero">Bom dia, Rafaela. <em>Tudo funcionando.<svg viewBox="0 0 200 12" fill="none" preserveAspectRatio="none" aria-hidden="true"><path d="M2 8.5C50 2.5 150 2.5 198 8.5" stroke="currentColor" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg></em></h1>
+          <p class="eyebrow">Quarta-feira, 25 de novembro de 2026</p>
+        </div>
+        <div class="hero-actions">
+          <div class="segmented" role="group" aria-label="Período">
+            <button type="button" data-period="7" aria-pressed="false">7 dias</button>
+            <button type="button" data-period="14" aria-pressed="true">14 dias</button>
+            <button type="button" data-period="30" aria-pressed="false">30 dias</button>
+          </div>
+          <a class="btn primary lg" href="#">Novo agente <svg aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+      </div>
+    </section>
+    <div class="content">
+
+      <!-- KPIs -->
+      <section class="grid kpis" aria-label="Indicadores do período">
+        <article class="card kpi">
+          <div class="kpi-top"><span class="kpi-label"><span class="kpi-ico"><svg aria-hidden="true"><use href="#i-bot"/></svg></span>Agentes ativos</span></div>
+          <div class="kpi-value"><span data-kpi="agents">6</span><small>de 8</small></div>
+          <div class="kpi-foot"><span class="meta">2 inativos · 1 com Power BI</span></div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span class="kpi-label"><span class="kpi-ico"><svg aria-hidden="true"><use href="#i-chat"/></svg></span>Sessões</span>
+            <svg class="spark" data-spark="sessions" viewBox="0 0 96 32" aria-hidden="true"></svg></div>
+          <div class="kpi-value num" data-kpi="sessions">1.284</div>
+          <div class="kpi-foot"><span class="delta up" data-delta="sessions"><svg aria-hidden="true"><use href="#i-up"/></svg>12,4%</span><span class="meta" data-meta>vs. 14 dias anteriores</span></div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span class="kpi-label"><span class="kpi-ico"><svg aria-hidden="true"><use href="#i-msg"/></svg></span>Mensagens</span>
+            <svg class="spark" data-spark="messages" viewBox="0 0 96 32" aria-hidden="true"></svg></div>
+          <div class="kpi-value num" data-kpi="messages">18.932</div>
+          <div class="kpi-foot"><span class="delta up" data-delta="messages"><svg aria-hidden="true"><use href="#i-up"/></svg>8,1%</span><span class="meta">14,7 por sessão</span></div>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top"><span class="kpi-label"><span class="kpi-ico"><svg aria-hidden="true"><use href="#i-clock"/></svg></span>Tempo médio de resposta</span>
+            <svg class="spark" data-spark="latency" viewBox="0 0 96 32" aria-hidden="true"></svg></div>
+          <div class="kpi-value num">2,4<small>s</small></div>
+          <div class="kpi-foot"><span class="delta up" aria-label="0,3 segundo mais rápido"><svg aria-hidden="true"><use href="#i-down"/></svg>−0,3 s</span><span class="meta">p95: 5,8 s</span></div>
+        </article>
+      </section>
+
+      <!-- Gráfico + conexões -->
+      <section class="grid row-2">
+        <article class="card" aria-labelledby="t-canais">
+          <div class="card-head">
+            <div><h2 id="t-canais">Sessões por canal</h2><p data-range>Últimos 14 dias · todos os agentes</p></div>
+            <a class="link" href="#">Ver sessões <svg width="14" height="14" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <ul class="legend" id="legend"></ul>
+          <div class="chart-wrap">
+            <svg id="chart" role="img" aria-labelledby="chart-desc"></svg>
+            <p class="sr-only" id="chart-desc">Gráfico de barras empilhadas com o número diário de sessões por canal: Web, Telegram e WhatsApp.</p>
+            <div class="chart-tip" id="tip" role="presentation"></div>
+          </div>
+        </article>
+
+        <article class="card" aria-labelledby="t-con">
+          <div class="card-head">
+            <div><h2 id="t-con">Status das conexões</h2><p>Agente: Ava — Atendimento</p></div>
+          </div>
+          <ul class="conn">
+            <li>
+              <span class="conn-ico" style="background:#e5f6ef;color:#0b7a55"><svg aria-hidden="true"><use href="#i-wa"/></svg></span>
+              <span class="conn-body"><strong>WhatsApp</strong><span>+55 11 98472-3310 · somente contatos autorizados</span></span>
+              <span class="status ok"><svg aria-hidden="true"><use href="#i-check"/></svg>Conectado</span>
+            </li>
+            <li>
+              <span class="conn-ico" style="background:var(--ava-50);color:var(--ava-700)"><svg aria-hidden="true"><use href="#i-send"/></svg></span>
+              <span class="conn-body"><strong>Bot Telegram</strong><span>@ava_atendimento_bot · webhook ativo</span></span>
+              <span class="status ok"><svg aria-hidden="true"><use href="#i-check"/></svg>Ativo</span>
+            </li>
+            <li>
+              <span class="conn-ico" style="background:#fff4de;color:#9a5b00"><svg aria-hidden="true"><use href="#i-bi"/></svg></span>
+              <span class="conn-body"><strong>Power BI</strong><span>Token expira em 3 dias · 2 datasets</span></span>
+              <span class="status warn"><svg aria-hidden="true"><use href="#i-alert"/></svg>Atenção</span>
+            </li>
+            <li>
+              <span class="conn-ico" style="background:var(--line-2);color:var(--ink-2)"><svg aria-hidden="true"><use href="#i-key"/></svg></span>
+              <span class="conn-body"><strong>OpenAI</strong><span>Chave própria · gpt-4.1-mini</span></span>
+              <span class="status ok"><svg aria-hidden="true"><use href="#i-check"/></svg>Válida</span>
+            </li>
+            <li>
+              <span class="conn-ico" style="background:var(--line-2);color:var(--ink-2)"><svg aria-hidden="true"><use href="#i-plug"/></svg></span>
+              <span class="conn-body"><strong>Servidor MCP</strong><span>2 chaves de acesso · último uso há 2 h</span></span>
+              <span class="status idle"><svg aria-hidden="true"><use href="#i-clock"/></svg>Ocioso</span>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- Sessões recentes + agentes -->
+      <section class="grid row-3">
+        <article class="card" aria-labelledby="t-sess">
+          <div class="card-head">
+            <div><h2 id="t-sess">Sessões recentes</h2><p>Atualizado há 1 minuto</p></div>
+            <a class="link" href="#">Ver todas <svg width="14" height="14" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th scope="col">Usuário</th><th scope="col">Canal</th><th scope="col">Agente</th><th scope="col" class="td-num">Msgs</th><th scope="col">Início</th><th scope="col">Situação</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><div class="user"><span class="avatar">MS</span><div><b>Mariana Souza</b><small>mariana.souza@gmail.com</small></div></div></td>
+                  <td><span class="chip"><svg aria-hidden="true" style="color:var(--ch-whatsapp)"><use href="#i-wa"/></svg>WhatsApp</span></td>
+                  <td>Ava — Atendimento</td><td class="td-num">12</td><td>há 3 min</td>
+                  <td><span class="live"><i aria-hidden="true"></i>Em andamento</span></td>
+                </tr>
+                <tr>
+                  <td><div class="user"><span class="avatar" style="background:#e5f6ef;color:#0b5a40">JP</span><div><b>João Pedro Alves</b><small>(21) 99812-4407</small></div></div></td>
+                  <td><span class="chip"><svg aria-hidden="true" style="color:var(--ava-700)"><use href="#i-globe"/></svg>Web</span></td>
+                  <td>Biia — Vendas</td><td class="td-num">8</td><td>há 11 min</td>
+                  <td><span class="live"><i aria-hidden="true"></i>Em andamento</span></td>
+                </tr>
+                <tr>
+                  <td><div class="user"><span class="avatar" style="background:#fff4de;color:#6b3f00">CF</span><div><b>Carla Fernandes</b><small>@carlaf</small></div></div></td>
+                  <td><span class="chip"><svg aria-hidden="true" style="color:var(--ava-500)"><use href="#i-send"/></svg>Telegram</span></td>
+                  <td>Ava — Atendimento</td><td class="td-num">23</td><td>há 42 min</td>
+                  <td><span class="ended">Encerrada</span></td>
+                </tr>
+                <tr>
+                  <td><div class="user"><span class="avatar" style="background:#f1e9ff;color:#4b2a8a">AN</span><div><b>Anônimo</b><small>widget · abipesca.com.br</small></div></div></td>
+                  <td><span class="chip"><svg aria-hidden="true" style="color:var(--ava-700)"><use href="#i-globe"/></svg>Web</span></td>
+                  <td>Abipesca — Associados</td><td class="td-num">4</td><td>há 1 h</td>
+                  <td><span class="ended">Encerrada</span></td>
+                </tr>
+                <tr>
+                  <td><div class="user"><span class="avatar">RT</span><div><b>Roberto Tavares</b><small>roberto@tavaresdistrib.com.br</small></div></div></td>
+                  <td><span class="chip"><svg aria-hidden="true" style="color:var(--ch-whatsapp)"><use href="#i-wa"/></svg>WhatsApp</span></td>
+                  <td>Analista BI</td><td class="td-num">17</td><td>há 2 h</td>
+                  <td><span class="ended">Encerrada</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card" aria-labelledby="t-rank">
+          <div class="card-head">
+            <div><h2 id="t-rank">Agentes mais usados</h2><p>Por número de sessões no período</p></div>
+          </div>
+          <ol class="rank" id="rank"></ol>
+        </article>
+      </section>
+
+      <!-- Base, pedidos, Power BI -->
+      <section class="grid row-4">
+        <article class="card" aria-labelledby="t-kb">
+          <div class="card-head">
+            <div><h2 id="t-kb">Base de conhecimento</h2><p>342 documentos · 1,8 GB indexados</p></div>
+            <a class="link" href="#">Arquivos <svg width="14" height="14" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <div class="kb-top">
+            <svg class="donut" viewBox="0 0 42 42" role="img" aria-label="336 prontos, 4 em processamento, 2 com erro">
+              <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--line-2)" stroke-width="5"/>
+              <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--ava-600)" stroke-width="5" stroke-dasharray="98.2 1.8" stroke-dashoffset="25"/>
+              <circle cx="21" cy="21" r="15.9155" fill="none" stroke="#e0a100" stroke-width="5" stroke-dasharray="1.2 98.8" stroke-dashoffset="-73.2"/>
+              <circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--err)" stroke-width="5" stroke-dasharray="0.6 99.4" stroke-dashoffset="-74.4"/>
+              <text x="21" y="21" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-size="8" font-weight="600" fill="#0f1430">98%</text>
+              <text x="21" y="27" text-anchor="middle" font-family="Geist, sans-serif" font-size="3.6" fill="#5d6683">prontos</text>
+            </svg>
+            <ul class="kb-legend">
+              <li><span class="sw" style="background:var(--ava-600)"></span>Prontos<span class="num">336</span></li>
+              <li><span class="sw" style="background:#e0a100"></span>Processando<span class="num">4</span></li>
+              <li><span class="sw" style="background:var(--err)"></span>Com erro<span class="num">2</span></li>
+            </ul>
+          </div>
+          <ul class="files">
+            <li><span class="file-ico" style="background:var(--err-bg);color:var(--err)">PDF</span><span class="name">Manual do associado 2026.pdf</span><span class="status ok"><svg aria-hidden="true"><use href="#i-check"/></svg>Pronto</span></li>
+            <li><span class="file-ico" style="background:var(--ava-50);color:var(--ava-700)">DOC</span><span class="name">Política de trocas e devoluções.docx</span><span class="status warn"><svg aria-hidden="true"><use href="#i-clock"/></svg>Processando</span></li>
+            <li><span class="file-ico" style="background:var(--ok-bg);color:var(--ok)">XLS</span><span class="name">Tabela de preços — dezembro.xlsx</span><span class="status err"><svg aria-hidden="true"><use href="#i-x"/></svg>Erro</span></li>
+          </ul>
+        </article>
+
+        <article class="card" aria-labelledby="t-req">
+          <div class="card-head">
+            <div><h2 id="t-req">Pedidos de acesso</h2><p>WhatsApp · <span id="reqCount">3</span> aguardando aprovação</p></div>
+            <a class="link" href="#">Contatos <svg width="14" height="14" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <ul class="req" id="reqList">
+            <li>
+              <div class="who"><span class="avatar" style="background:#e5f6ef;color:#0b5a40">LC</span><div><b>Luciana Campos</b><small>+55 31 99654-1290</small></div><span class="when">há 8 min</span></div>
+              <q>Olá! Sou cliente da loja de BH e queria tirar uma dúvida sobre o meu pedido.</q>
+              <div class="actions"><button class="btn primary" type="button" data-act="aprovar"><svg aria-hidden="true"><use href="#i-check"/></svg>Aprovar</button><button class="btn ghost-danger" type="button" data-act="recusar"><svg aria-hidden="true"><use href="#i-x"/></svg>Recusar</button></div>
+            </li>
+            <li>
+              <div class="who"><span class="avatar">FN</span><div><b>Fábio Nogueira</b><small>+55 47 98120-7734</small></div><span class="when">há 1 h</span></div>
+              <q>Gostaria de acesso ao assistente de vendas, por favor.</q>
+              <div class="actions"><button class="btn primary" type="button" data-act="aprovar"><svg aria-hidden="true"><use href="#i-check"/></svg>Aprovar</button><button class="btn ghost-danger" type="button" data-act="recusar"><svg aria-hidden="true"><use href="#i-x"/></svg>Recusar</button></div>
+            </li>
+            <li>
+              <div class="who"><span class="avatar" style="background:#fff4de;color:#6b3f00">?</span><div><b>Contato sem nome</b><small>+55 85 99703-4561</small></div><span class="when">ontem</span></div>
+              <q>oi</q>
+              <div class="actions"><button class="btn primary" type="button" data-act="aprovar"><svg aria-hidden="true"><use href="#i-check"/></svg>Aprovar</button><button class="btn ghost-danger" type="button" data-act="recusar"><svg aria-hidden="true"><use href="#i-x"/></svg>Recusar</button></div>
+            </li>
+          </ul>
+        </article>
+
+        <article class="card" aria-labelledby="t-bi">
+          <div class="card-head">
+            <div><h2 id="t-bi">Consultas Power BI</h2><p>Agente: Analista BI</p></div>
+            <a class="link" href="#">Registros <svg width="14" height="14" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
+          <div class="bi-stats">
+            <div><small>Consultas</small><b class="num">412</b></div>
+            <div><small>Sucesso</small><b class="num">96%</b></div>
+            <div><small>Média</small><b class="num">1,9 s</b></div>
+          </div>
+          <ul class="bi-list">
+            <li><div class="q">Qual foi o faturamento por região em outubro?<span>Vendas Consolidado · há 6 min</span></div><span class="ms">1.420 ms</span></li>
+            <li><div class="q">Top 10 clientes por ticket médio no trimestre<span>Vendas Consolidado · há 34 min</span></div><span class="ms">2.108 ms</span></li>
+            <li><div class="q">Comparar estoque atual com a média de 90 dias<span>Logística · há 1 h</span></div><span class="status err"><svg aria-hidden="true"><use href="#i-x"/></svg>Falhou</span></li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- Nota de design -->
+      <aside class="design-note" aria-labelledby="t-note">
+        <div class="aa" aria-hidden="true">Aa</div>
+        <div>
+          <h2 id="t-note">Nota de design · tipografia e direção</h2>
+          <p><strong>Direção: “Painel de controle sereno”</strong> (minimalismo funcional), agora <strong>alinhado a avabot.net</strong>: mesma logomarca (quadrado <code>ava-600</code> <code>rounded-xl</code> com balões de chat), fundo branco, bordas <code>gray-100/200</code>, sidebar compacta no azul-escuro da marca (<code>ava-950</code> → <code>ava-900</code>, texto branco, item ativo em <code>ava-600</code>) com menu em sanfona (um grupo aberto por vez, contador visível no cabeçalho do grupo fechado, sem barra de rolagem), topo branco translúcido com blur como a navbar do site, e o cabeçalho de boas-vindas reaproveita a decoração do hero (blobs <code>ava-100/70</code> e <code>ava-200/50</code>, pontos radiais a 3,5%, filete em degradê), o selo com ponto pulsante e o destaque em <code>ava-600</code> com sublinhado curvo. Botões primários e estado ativo usam <code>ava-600</code> com sombra azul (<code>shadow-ava-600/25</code>); cantos de 12 a 16 px. Status nunca dependem só de cor: sempre ícone + texto.</p>
+          <p><strong>Bricolage Grotesque</strong> (títulos e números grandes) substitui a Instrument Serif: mantém personalidade e calor — combina com a persona Ava — mas é sem serifa e com eixo óptico, então lê bem em 17–34 px dentro de cartões densos, onde uma serifa de display perde nitidez. <strong>Geist</strong> substitui a DM Sans no corpo: mais neutra e compacta, ótima em tabelas e rótulos de 12–14 px. <strong>Geist Mono</strong> com <code>tabular-nums</code> alinha métricas, telefones e latências.</p>
+          <p>Para portar: as variáveis do <code>:root</code> viram entradas no <code>@theme</code> do Tailwind 4 (<code>--font-display</code>, <code>--font-body</code>, <code>--font-mono</code>, cores semânticas); a logomarca vira um componente <code>BrandLogo</code> compartilhado com a landing; cada bloco corresponde a um componente (KpiCard, ChannelChart, ConnectionStatusList, RecentSessionsTable, AgentRanking, KnowledgeSummary, AccessRequestList, PowerBIQueryList).</p>
+        </div>
+      </aside>
+    </div>
+    </main>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const fmt = n => n.toLocaleString('pt-BR');
+  const pct = n => n.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '%';
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Dados fictícios determinísticos ----------
+  const seed = s => () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const rnd = seed(42);
+  const today = new Date(2026, 10, 25);
+  const ALL = Array.from({length:30}, (_, i) => {
+    const d = new Date(today); d.setDate(today.getDate() - (29 - i));
+    const wk = [0,6].includes(d.getDay()) ? .55 : 1;
+    const trend = .8 + i/29*.35;
+    return {
+      date:d,
+      web: Math.round((34 + rnd()*18) * wk * trend),
+      telegram: Math.round((12 + rnd()*9) * wk * trend),
+      whatsapp: Math.round((30 + rnd()*20) * wk * trend * (i > 18 ? 1.15 : 1)),
+    };
+  });
+  const CH = [
+    {k:'web', label:'Web e widget', color:'var(--ch-web)'},
+    {k:'whatsapp', label:'WhatsApp', color:'var(--ch-whatsapp)'},
+    {k:'telegram', label:'Telegram', color:'var(--ch-telegram)'},
+  ];
+  const AGENTS = [
+    {name:'Ava — Atendimento', share:.41, ch:'Web, WhatsApp e Telegram'},
+    {name:'Biia — Vendas', share:.24, ch:'Web e WhatsApp'},
+    {name:'Abipesca — Associados', share:.17, ch:'Widget'},
+    {name:'Analista BI', share:.11, ch:'WhatsApp · Power BI'},
+    {name:'Suporte interno', share:.07, ch:'Telegram'},
+  ];
+  const dayLbl = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+  const weekday = d => d.toLocaleDateString('pt-BR',{weekday:'short',day:'numeric',month:'short'});
+
+  // ---------- Sparklines ----------
+  function spark(el, values, color){
+    const max = Math.max(...values), min = Math.min(...values);
+    const pts = values.map((v,i) => [i/(values.length-1)*94+1, 30 - (v-min)/((max-min)||1)*26]);
+    const d = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    el.innerHTML = `<path d="${d} L95 32 L1 32Z" fill="${color}" opacity=".08"/><path d="${d}" fill="none" stroke="${color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+
+  // ---------- Gráfico de barras empilhadas ----------
+  const svg = document.getElementById('chart'), tip = document.getElementById('tip'), wrap = svg.parentElement;
+  function drawChart(data){
+    const W = wrap.clientWidth || 600, H = 260, pl = 34, pr = 6, pt = 10, pb = 26;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const totals = data.map(d => d.web + d.telegram + d.whatsapp);
+    const max = Math.ceil(Math.max(...totals)/25)*25;
+    const iw = W - pl - pr, ih = H - pt - pb, step = iw / data.length;
+    const bw = Math.max(6, Math.min(26, step*.58));
+    let out = '';
+    for (let g = 0; g <= 4; g++){
+      const v = max/4*g, y = pt + ih - v/max*ih;
+      out += `<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="#eff1f7"/>`;
+      out += `<text x="${pl-8}" y="${y+4}" text-anchor="end" font-size="11" fill="#5d6683" font-family="Geist Mono, monospace">${fmt(v)}</text>`;
+    }
+    const every = data.length > 14 ? 5 : data.length > 7 ? 2 : 1;
+    data.forEach((d,i) => {
+      const x = pl + step*i + (step-bw)/2;
+      let y = pt + ih, segs = '';
+      CH.slice().forEach((c, ci) => {
+        const h = d[c.k]/max*ih;
+        y -= h;
+        const r = ci === CH.length-1 ? 4 : 0;
+        segs += `<rect x="${x}" y="${y}" width="${bw}" height="${Math.max(h-1.5,0)}" rx="${r}" fill="${c.color}"/>`;
+      });
+      const lbl = (i % every === (data.length-1) % every) ? `<text x="${x+bw/2}" y="${H-8}" text-anchor="middle" font-size="11" fill="#5d6683" font-family="Geist, sans-serif">${dayLbl(d.date)}</text>` : '';
+      out += `<g class="bar-col" data-i="${i}" tabindex="0" aria-label="${weekday(d.date)}: ${totals[i]} sessões"><rect class="hit" x="${pl+step*i+1}" y="${pt}" width="${step-2}" height="${ih}" rx="6"/>${segs}${lbl}</g>`;
+    });
+    svg.innerHTML = out;
+    svg.querySelectorAll('.bar-col').forEach(g => {
+      const show = () => {
+        const d = data[+g.dataset.i], b = g.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+        tip.innerHTML = `<b>${weekday(d.date)}</b>` + CH.map(c => `<div><span>${c.label}</span><span class="num">${d[c.k]}</span></div>`).join('') + `<div style="margin-top:4px;border-top:1px solid rgba(255,255,255,.15);padding-top:4px"><span>Total</span><span class="num">${d.web+d.telegram+d.whatsapp}</span></div>`;
+        let left = b.left - w.left + b.width/2 - 80;
+        left = Math.max(0, Math.min(left, w.width - 170));
+        tip.style.left = left + 'px'; tip.style.top = '0px';
+        tip.classList.add('show');
+      };
+      const hide = () => tip.classList.remove('show');
+      g.addEventListener('mouseenter', show); g.addEventListener('focus', show);
+      g.addEventListener('mouseleave', hide); g.addEventListener('blur', hide);
+    });
+  }
+
+  // ---------- Render por período ----------
+  let period = 14;
+  function render(){
+    const data = ALL.slice(-period);
+    const sum = k => data.reduce((a,d)=>a+d[k],0);
+    const sessions = sum('web')+sum('telegram')+sum('whatsapp');
+    const messages = Math.round(sessions * 14.7);
+
+    document.querySelector('[data-kpi="sessions"]').textContent = fmt(sessions);
+    document.querySelector('[data-kpi="messages"]').textContent = fmt(messages);
+    const dS = {7:9.2,14:12.4,30:15.8}[period], dM = {7:6.3,14:8.1,30:11.2}[period];
+    document.querySelector('[data-delta="sessions"]').lastChild.textContent = pct(dS);
+    document.querySelector('[data-delta="messages"]').lastChild.textContent = pct(dM);
+    document.querySelector('[data-meta]').textContent = `vs. ${period} dias anteriores`;
+    document.querySelector('[data-range]').textContent = `Últimos ${period} dias · todos os agentes`;
+
+    const daily = data.map(d=>d.web+d.telegram+d.whatsapp);
+    spark(document.querySelector('[data-spark="sessions"]'), daily, '#1f45f1');
+    spark(document.querySelector('[data-spark="messages"]'), daily.map((v,i)=>v*(13+((i*7)%5))), '#1f45f1');
+    spark(document.querySelector('[data-spark="latency"]'), data.map((_,i)=>2.9 - i/data.length*.5 + Math.sin(i)*.15), '#0b7a55');
+
+    document.getElementById('legend').innerHTML = CH.map(c => {
+      const v = sum(c.k);
+      return `<li><span class="sw" style="background:${c.color}"></span>${c.label} <strong>${fmt(v)}</strong> <span style="color:var(--ink-3);font-size:12px">(${Math.round(v/sessions*100)}%)</span></li>`;
+    }).join('');
+
+    document.getElementById('rank').innerHTML = AGENTS.map(a => {
+      const n = Math.round(sessions*a.share);
+      return `<li><div class="rank-row"><div><b>${a.name}</b> <span>· ${a.ch}</span></div><span class="num">${fmt(n)}</span></div><div class="track" role="presentation"><div class="fill" style="width:${a.share/AGENTS[0].share*100}%"></div></div></li>`;
+    }).join('');
+
+    drawChart(data);
+  }
+
+  document.querySelectorAll('.segmented button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.segmented button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    period = +b.dataset.period; render();
+  }));
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => drawChart(ALL.slice(-period)), 120); });
+
+  // ---------- Pedidos de acesso ----------
+  const toast = document.getElementById('toast'); let tt;
+  const say = msg => { toast.textContent = msg; toast.classList.add('show'); clearTimeout(tt); tt = setTimeout(()=>toast.classList.remove('show'), 2600); };
+  document.getElementById('reqList').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-act]'); if (!btn) return;
+    const li = btn.closest('li'), name = li.querySelector('b').textContent;
+    li.classList.add('leaving');
+    setTimeout(() => {
+      li.remove();
+      const left = document.querySelectorAll('#reqList li').length;
+      document.getElementById('reqCount').textContent = left;
+      document.querySelectorAll('[data-badge="wa"]').forEach(badge => {
+        const sufixo = badge.closest('.acc-btn') ? ' no WhatsApp' : '';
+        if (left) { badge.textContent = left; badge.setAttribute('aria-label', `${left} pedidos pendentes${sufixo}`); } else badge.remove();
+      });
+      if (!left) document.getElementById('reqList').innerHTML = '<li class="empty">Nenhum pedido pendente. Novos contatos aparecem aqui.</li>';
+    }, reduce ? 0 : 280);
+    say(btn.dataset.act === 'aprovar' ? `${name} foi adicionado aos contatos autorizados.` : `Pedido de ${name} recusado.`);
+  });
+
+  // ---------- Sanfona da sidebar (um grupo aberto por vez) ----------
+  const accBtns = [...document.querySelectorAll('#navAcc .acc-btn')];
+  const setAcc = btn => accBtns.forEach(b => {
+    const open = b === btn && b.getAttribute('aria-expanded') !== 'true';
+    b.setAttribute('aria-expanded', open);
+    document.getElementById(b.getAttribute('aria-controls')).classList.toggle('open', open);
+  });
+  accBtns.forEach((b, i) => {
+    b.addEventListener('click', () => setAcc(b));
+    b.addEventListener('keydown', e => {
+      const go = {ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: accBtns.length - 1}[e.key];
+      if (go === undefined) return;
+      e.preventDefault(); accBtns[(go + accBtns.length) % accBtns.length].focus();
+    });
+  });
+
+  // ---------- Menu mobile ----------
+  const app = document.getElementById('app'), menuBtn = document.getElementById('menuBtn');
+  const setNav = open => { app.classList.toggle('nav-open', open); menuBtn.setAttribute('aria-expanded', open); };
+  menuBtn.addEventListener('click', () => setNav(!app.classList.contains('nav-open')));
+  document.getElementById('scrim').addEventListener('click', () => setNav(false));
+  addEventListener('keydown', e => { if (e.key === 'Escape') setNav(false); });
+
+  render();
+})();
+</script>
+</body>
+</html>

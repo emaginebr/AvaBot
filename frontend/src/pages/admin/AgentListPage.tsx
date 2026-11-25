@@ -1,12 +1,23 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
+import type { AgentInfo } from '../../types/agent'
+import Button, { ButtonLink } from '../../components/admin/ui/Button'
+import { Card, CardHeader } from '../../components/admin/ui/Card'
+import { Chip, CodeChip } from '../../components/admin/ui/Chip'
+import DataTable from '../../components/admin/ui/DataTable'
+import type { DataColumn } from '../../components/admin/ui/DataTable'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { EmptyState, ErrorState, LoadingState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import { useConfirm } from '../../components/admin/ui/useConfirm'
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 const AgentListPage = () => {
   const { agents, loading, error, loadAgents } = useAgentStore()
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   useEffect(() => {
     loadAgents()
@@ -36,145 +47,141 @@ const AgentListPage = () => {
       const result = await AgentService.delete(id)
       if (!result.sucesso) {
         toast.error(result.mensagem || 'Erro ao remover agente')
-        setDeleteConfirm(null)
         return
       }
       toast.success('Agente removido com sucesso')
-      setDeleteConfirm(null)
       await loadAgents()
     } catch (err) {
       console.error('[AgentListPage] handleDelete error:', err)
       toast.error('Erro de rede ao remover agente')
-      setDeleteConfirm(null)
     }
   }
 
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agentes</h1>
-          <p className="text-sm text-gray-500 mt-1">Gerencie seus agentes de atendimento</p>
-        </div>
-        <Link
-          to="/admin/agents/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-ava-600 text-white rounded-lg font-medium hover:bg-ava-700 transition-colors shadow-sm"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
-          Novo Agente
-        </Link>
-      </div>
+  const askDelete = async (agent: AgentInfo) => {
+    const ok = await confirm({
+      title: 'Remover agente?',
+      message: (
+        <>
+          Tem certeza que deseja remover o agente <strong>{agent.name}</strong>? Esta ação não pode ser desfeita.
+        </>
+      ),
+      confirmLabel: 'Sim, remover',
+    })
+    if (ok) await handleDelete(agent.agentId)
+  }
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-gray-500">
-          <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-          Carregando...
-        </div>
-      ) : agents.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-400 mb-4">Nenhum agente cadastrado</p>
-          <Link
-            to="/admin/agents/new"
-            className="text-ava-600 hover:text-ava-700 font-medium text-sm"
+  const columns: DataColumn<AgentInfo>[] = [
+    {
+      key: 'name',
+      header: 'Nome',
+      kind: 'main',
+      cell: (agent) => (
+        <>
+          <span className="block font-medium [overflow-wrap:anywhere] text-ink">{agent.name}</span>
+          {agent.description && (
+            <span className="mt-px line-clamp-2 block max-w-[420px] text-[12.5px] [overflow-wrap:anywhere] text-ink-3 max-md:max-w-none">
+              {agent.description}
+            </span>
+          )}
+        </>
+      ),
+    },
+    { key: 'slug', header: 'Slug', cell: (agent) => <CodeChip>{agent.slug}</CodeChip> },
+    {
+      key: 'status',
+      header: 'Situação',
+      cell: (agent) =>
+        agent.status === 1 ? (
+          <StatusBadge tone="ok" label="Ativo" />
+        ) : (
+          <StatusBadge tone="idle" icon="power" label="Inativo" />
+        ),
+    },
+    {
+      key: 'collect',
+      header: 'Coleta',
+      cell: (agent) =>
+        !agent.collectName && !agent.collectEmail && !agent.collectPhone ? (
+          <span className="text-[12.5px] text-ink-3">Nenhum</span>
+        ) : (
+          <span className="inline-flex flex-wrap justify-end gap-1 md:justify-start">
+            {agent.collectName && <Chip>Nome</Chip>}
+            {agent.collectEmail && <Chip>E-mail</Chip>}
+            {agent.collectPhone && <Chip>Telefone</Chip>}
+          </span>
+        ),
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      hideHeader: true,
+      kind: 'actions',
+      cell: (agent) => (
+        <>
+          <ButtonLink size="sm" icon="edit" to={`/admin/agents/${agent.agentId}/edit`} aria-label={`Editar ${agent.name}`}>
+            Editar
+          </ButtonLink>
+          <Button size="sm" variant="ghost" onClick={() => handleToggleStatus(agent.agentId)}>
+            {agent.status === 1 ? 'Desativar' : 'Ativar'}
+          </Button>
+          <Button
+            size="sm"
+            variant="dangerGhost"
+            icon="trash"
+            onClick={() => askDelete(agent)}
+            aria-label={`Remover ${agent.name}`}
           >
-            Criar primeiro agente
-          </Link>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nome</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Slug</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coleta</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {agents.map((agent) => (
-                  <tr key={agent.agentId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{agent.name}</p>
-                        {agent.description && (
-                          <p className="text-sm text-gray-500 mt-0.5 truncate max-w-xs">{agent.description}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <code className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{agent.slug}</code>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        agent.status === 1
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 1 ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        {agent.status === 1 ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex gap-1.5">
-                        {agent.collectName && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Nome</span>}
-                        {agent.collectEmail && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Email</span>}
-                        {agent.collectPhone && <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded">Tel</span>}
-                        {!agent.collectName && !agent.collectEmail && !agent.collectPhone && (
-                          <span className="text-xs text-gray-400">Nenhum</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/admin/agents/${agent.agentId}/edit`}
-                          className="text-sm text-ava-600 hover:text-ava-700 font-medium"
-                        >
-                          Editar
-                        </Link>
-                        <button
-                          onClick={() => handleToggleStatus(agent.agentId)}
-                          className="text-sm text-amber-600 hover:text-amber-700 font-medium"
-                        >
-                          {agent.status === 1 ? 'Desativar' : 'Ativar'}
-                        </button>
-                        {deleteConfirm === agent.agentId ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDelete(agent.agentId)}
-                              className="text-sm text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded font-medium"
-                            >
-                              Confirmar
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(agent.agentId)}
-                            className="text-sm text-red-600 hover:text-red-700 font-medium"
-                          >
-                            Remover
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+            Remover
+          </Button>
+        </>
+      ),
+    },
+  ]
+
+  const activeCount = agents.filter((a) => a.status === 1).length
+
+  return (
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Meus agentes"
+        description="Gerencie seus agentes de atendimento: crie, edite, ative ou desative e remova."
+        actions={
+          <ButtonLink to="/admin/agents/new" variant="primary" size="lg" icon="plus">
+            Novo agente
+          </ButtonLink>
+        }
+      />
+
+      <Card aria-labelledby="agentes-lista-titulo">
+        <CardHeader
+          titleId="agentes-lista-titulo"
+          title="Agentes cadastrados"
+          subtitle={
+            agents.length > 0
+              ? `${plural(agents.length, 'agente', 'agentes')} · ${plural(activeCount, 'ativo', 'ativos')}`
+              : undefined
+          }
+        />
+        {loading ? (
+          <LoadingState label="Carregando agentes…" rows={4} />
+        ) : error && agents.length === 0 ? (
+          <ErrorState title="Não foi possível carregar os agentes." description={error} onRetry={() => loadAgents()} />
+        ) : agents.length === 0 ? (
+          <EmptyState
+            icon="bot"
+            title="Nenhum agente cadastrado"
+            description="Crie o primeiro agente para começar a atender pelo site, Telegram ou WhatsApp."
+            action={
+              <ButtonLink to="/admin/agents/new" variant="primary" icon="plus">
+                Criar primeiro agente
+              </ButtonLink>
+            }
+          />
+        ) : (
+          <DataTable columns={columns} rows={agents} rowKey={(agent) => agent.agentId} caption="Agentes cadastrados" />
+        )}
+      </Card>
+      {confirmDialog}
     </div>
   )
 }

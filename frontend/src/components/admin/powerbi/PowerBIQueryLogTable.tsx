@@ -1,18 +1,33 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PowerBIService } from '../../../Services/PowerBIService'
 import { PowerBIQueryStatus } from '../../../types/powerbi'
 import type { PowerBIQueryLogInfo } from '../../../types/powerbi'
+import Button from '../ui/Button'
+import { CodeChip } from '../ui/Chip'
+import CodeBlock from '../ui/CodeBlock'
+import DataTable from '../ui/DataTable'
+import type { DataColumn } from '../ui/DataTable'
+import Pagination from '../ui/Pagination'
+import { EmptyState, LoadingState } from '../ui/States'
+import StatusBadge from '../ui/StatusBadge'
+import type { StatusTone } from '../ui/StatusBadge'
 
 interface PowerBIQueryLogTableProps {
   slug: string
 }
 
-const statusConfig = {
-  [PowerBIQueryStatus.Success]: { label: 'Sucesso', className: 'bg-green-100 text-green-700' },
-  [PowerBIQueryStatus.Error]: { label: 'Erro', className: 'bg-red-100 text-red-700' },
-  [PowerBIQueryStatus.Timeout]: { label: 'Timeout', className: 'bg-yellow-100 text-yellow-700' },
+const statusConfig: Record<number, { label: string; tone: StatusTone }> = {
+  [PowerBIQueryStatus.Success]: { label: 'Sucesso', tone: 'ok' },
+  [PowerBIQueryStatus.Error]: { label: 'Erro', tone: 'err' },
+  [PowerBIQueryStatus.Timeout]: { label: 'Timeout', tone: 'warn' },
 }
+
+const DetailLabel = ({ children, error = false }: { children: string; error?: boolean }) => (
+  <p className={`m-0 mb-1 text-[11px] font-semibold tracking-[0.08em] uppercase ${error ? 'text-err' : 'text-ink-3'}`}>
+    {children}
+  </p>
+)
 
 const PowerBIQueryLogTable = ({ slug }: PowerBIQueryLogTableProps) => {
   const [logs, setLogs] = useState<PowerBIQueryLogInfo[]>([])
@@ -59,144 +74,115 @@ const PowerBIQueryLogTable = ({ slug }: PowerBIQueryLogTableProps) => {
   }
 
   if (!loaded) {
-    return (
-      <div className="flex items-center gap-2 text-gray-500">
-        <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-        Carregando histórico...
-      </div>
-    )
+    return <LoadingState label="Carregando histórico..." rows={4} />
   }
+
+  const columns: DataColumn<PowerBIQueryLogInfo>[] = [
+    {
+      key: 'date',
+      header: 'Data',
+      nowrap: true,
+      cell: (log) => <span className="font-ui-mono text-[12.5px] tabular-nums text-ink-2">{new Date(log.createdAt).toLocaleString('pt-BR')}</span>,
+    },
+    {
+      key: 'question',
+      header: 'Pergunta',
+      kind: 'main',
+      cell: (log) => (
+        <span className="line-clamp-2 max-w-[360px] text-ink max-md:max-w-none">{log.userQuestion || '—'}</span>
+      ),
+    },
+    { key: 'dataset', header: 'Dataset', cell: (log) => log.datasetName || '—' },
+    { key: 'tool', header: 'Ferramenta', cell: (log) => <CodeChip>{log.toolName}</CodeChip> },
+    {
+      key: 'status',
+      header: 'Situação',
+      cell: (log) => {
+        const badge = statusConfig[log.status] ?? statusConfig[PowerBIQueryStatus.Error]
+        return <StatusBadge tone={badge.tone} label={badge.label} />
+      },
+    },
+    {
+      key: 'duration',
+      header: 'Duração',
+      align: 'right',
+      nowrap: true,
+      cell: (log) => <span className="font-ui-mono tabular-nums text-ink-2">{log.durationMs} ms</span>,
+    },
+    {
+      key: 'rows',
+      header: 'Linhas',
+      align: 'right',
+      nowrap: true,
+      cell: (log) => (
+        <span className="font-ui-mono tabular-nums text-ink-2">
+          {log.rowCount ?? '—'}
+          {log.truncated && (
+            <span className="ml-1 rounded bg-warn-bg px-1.5 py-0.5 font-ui text-xs text-warn">truncado</span>
+          )}
+        </span>
+      ),
+    },
+  ]
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">
-          Consultas executadas pelas ferramentas do agente nas últimas conversas.
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
+        <p className="m-0 text-[12.5px] text-ink-3">
+          Consultas executadas pelas ferramentas do agente nas últimas conversas. Clique numa linha para ver a consulta.
         </p>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-        >
+        <Button size="sm" icon="refresh" onClick={refresh} loading={loading}>
           {loading ? 'Atualizando...' : 'Atualizar'}
-        </button>
+        </Button>
       </div>
 
       {logs.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <p className="text-sm text-gray-400">Nenhuma consulta registrada.</p>
-        </div>
+        <EmptyState
+          icon="chart"
+          title="Nenhuma consulta registrada"
+          description="As consultas aparecem aqui assim que o agente usar o Power BI numa conversa."
+        />
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Pergunta</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Dataset</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tool</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Duração</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Linhas</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {logs.map((log) => {
-                  const badge = statusConfig[log.status] ?? statusConfig[PowerBIQueryStatus.Error]
-                  const isExpanded = expandedId === log.powerBIQueryLogId
-
-                  return (
-                    <Fragment key={log.powerBIQueryLogId}>
-                      <tr
-                        onClick={() => setExpandedId(isExpanded ? null : log.powerBIQueryLogId)}
-                        className="hover:bg-gray-50 transition-colors cursor-pointer align-top"
-                      >
-                        <td className="px-5 py-3 text-sm text-gray-500 whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString('pt-BR')}
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-700 max-w-xs">
-                          <span className="line-clamp-2">{log.userQuestion || '—'}</span>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-700">{log.datasetName || '—'}</td>
-                        <td className="px-5 py-3">
-                          <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{log.toolName}</code>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
-                            {badge.label}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-500 text-right tabular-nums">{log.durationMs} ms</td>
-                        <td className="px-5 py-3 text-sm text-gray-500 text-right tabular-nums">
-                          {log.rowCount ?? '—'}
-                          {log.truncated && (
-                            <span className="ml-1 text-xs text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded">truncado</span>
-                          )}
-                        </td>
-                      </tr>
-
-                      {isExpanded && (
-                        <tr className="bg-gray-50">
-                          <td colSpan={7} className="px-5 py-4">
-                            <div className="space-y-3">
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                  Pergunta do usuário
-                                </p>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                  {log.userQuestion || '—'}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
-                                  Consulta
-                                </p>
-                                <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{log.query || '—'}</pre>
-                              </div>
-                              {log.errorMessage && (
-                                <div>
-                                  <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-1">
-                                    Erro
-                                  </p>
-                                  <p className="text-sm text-red-600 whitespace-pre-wrap">{log.errorMessage}</p>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          rows={logs}
+          rowKey={(log) => log.powerBIQueryLogId}
+          caption="Histórico de consultas Power BI"
+          expandable={{
+            isExpanded: (log) => expandedId === log.powerBIQueryLogId,
+            onToggle: (log) => setExpandedId(expandedId === log.powerBIQueryLogId ? null : log.powerBIQueryLogId),
+            render: (log) => (
+              <div className="flex flex-col gap-3">
+                <div>
+                  <DetailLabel>Pergunta do usuário</DetailLabel>
+                  <p className="m-0 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere] text-ink">{log.userQuestion || '—'}</p>
+                </div>
+                <div>
+                  <DetailLabel>Consulta</DetailLabel>
+                  <CodeBlock variant="plain">
+                    {log.query || '—'}
+                  </CodeBlock>
+                </div>
+                {log.errorMessage && (
+                  <div>
+                    <DetailLabel error>Erro</DetailLabel>
+                    <p className="m-0 text-[13px] whitespace-pre-wrap [overflow-wrap:anywhere] text-err">{log.errorMessage}</p>
+                  </div>
+                )}
+              </div>
+            ),
+          }}
+        />
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-gray-500">
-            Mostrando {(page - 1) * pageSize + 1} a {Math.min(page * pageSize, total)} de {total} consultas
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => goToPage(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Anterior
-            </button>
-            <button
-              onClick={() => goToPage(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
+        <Pagination
+          summary={`Mostrando ${(page - 1) * pageSize + 1} a ${Math.min(page * pageSize, total)} de ${total} consultas`}
+          onPrevious={() => goToPage(Math.max(1, page - 1))}
+          onNext={() => goToPage(Math.min(totalPages, page + 1))}
+          previousDisabled={page === 1}
+          nextDisabled={page === totalPages}
+        />
       )}
     </div>
   )

@@ -7,6 +7,20 @@ import { useWhatsappAccessStore } from '../../stores/useWhatsappAccessStore'
 import WhatsappAccessSettings from '../../components/admin/whatsapp/WhatsappAccessSettings'
 import WhatsappAccessRequestList from '../../components/admin/whatsapp/WhatsappAccessRequestList'
 import WhatsappContactList from '../../components/admin/whatsapp/WhatsappContactList'
+import Alert from '../../components/admin/ui/Alert'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardFooter, CardHeader } from '../../components/admin/ui/Card'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import Spinner from '../../components/admin/ui/Spinner'
+import { NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import Tabs, { TabPanel } from '../../components/admin/ui/Tabs'
+import { useConfirm } from '../../components/admin/ui/useConfirm'
+
+type AccessTab = 'modo' | 'pedidos' | 'contatos'
+
+const PAGE_TITLE = 'WhatsApp'
+const PAGE_DESCRIPTION = 'Conecte o número do agente e defina quem pode conversar com ele.'
 
 // Pareamento com o WPP Connect:
 // - start-session abre um navegador por agente; enquanto ele existe (INITIALIZING, QRCODE...)
@@ -37,6 +51,10 @@ const WhatsappPage = () => {
   const [renewing, setRenewing] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [checkingStatus, setCheckingStatus] = useState(false)
+  // Só apresentação: aba ativa do cartão "Acesso ao agente" e diálogo de confirmação.
+  const [accessTab, setAccessTab] = useState<AccessTab>('modo')
+  const pendingRequests = useWhatsappAccessStore((s) => s.config?.pendingRequestCount ?? 0)
+  const [confirm, confirmDialog] = useConfirm()
 
   const slugRef = useRef<string | null>(null)
   const connectingRef = useRef(false)
@@ -233,11 +251,9 @@ const WhatsappPage = () => {
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para configurar o WhatsApp.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
+        <NoAgentState purpose="configurar o WhatsApp" />
       </div>
     )
   }
@@ -260,7 +276,13 @@ const WhatsappPage = () => {
   }
 
   const handleDisconnect = async () => {
-    if (!confirm('Tem certeza que deseja desconectar a sessão WhatsApp?')) return
+    const ok = await confirm({
+      title: 'Desconectar o WhatsApp?',
+      message: 'Tem certeza que deseja desconectar a sessão WhatsApp?',
+      confirmLabel: 'Desconectar',
+      icon: 'power',
+    })
+    if (!ok) return
 
     setDisconnecting(true)
     try {
@@ -283,107 +305,137 @@ const WhatsappPage = () => {
     }
   }
 
-  const getStatusDisplay = () => {
-    if (isConnected) {
-      return { label: 'Conectado', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' }
-    }
-    if (connecting || isInProgress(status)) {
-      return { label: 'Conectando...', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500 animate-pulse' }
-    }
-    return { label: 'Desconectado', color: 'bg-gray-100 text-gray-500', dot: 'bg-gray-400' }
-  }
+  const statusBadge = checkingStatus ? (
+    <StatusBadge tone="idle" pulse label="Verificando..." />
+  ) : isConnected ? (
+    <StatusBadge tone="ok" label="Conectado" />
+  ) : connecting || isInProgress(status) ? (
+    <StatusBadge tone="warn" pulse label="Conectando..." />
+  ) : (
+    <StatusBadge tone="idle" icon="power" label="Desconectado" />
+  )
 
-  const statusDisplay = getStatusDisplay()
+  const showQr = connecting && !isConnected
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900">WhatsApp</h1>
-      <p className="text-sm text-gray-500 mt-1 mb-6">Gerencie a conexão WhatsApp do agente.</p>
+    <div className="flex flex-col gap-5">
+      <PageHeader agentName={selectedAgent.name} title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
 
-      {/* Status da Conexão */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Status da Conexão</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Agente: {selectedAgent.name} ({selectedAgent.slug})</p>
+      {/* Conexão: status ao vivo, QR Code e ações (a lógica de pareamento acima não muda). */}
+      <Card aria-labelledby="whatsapp-conexao-titulo">
+        <CardHeader
+          titleId="whatsapp-conexao-titulo"
+          icon="whatsapp"
+          iconTone="ok"
+          title="Conexão"
+          subtitle={
+            <>
+              Agente: {selectedAgent.name} (<code className="font-ui-mono">{selectedAgent.slug}</code>)
+            </>
+          }
+          actions={<span role="status">{statusBadge}</span>}
+        />
+
+        {showQr && (
+          <div className="grid grid-cols-1 items-center justify-items-center gap-6 md:grid-cols-[auto_minmax(0,1fr)] md:justify-items-stretch">
+            <div className="grid h-[232px] w-[232px] place-items-center rounded-2xl border border-gray-200 bg-white">
+              {qrCode ? (
+                <img
+                  src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
+                  alt="QR Code WhatsApp"
+                  className="h-[200px] w-[200px]"
+                />
+              ) : (
+                <div role="status" className="flex flex-col items-center gap-2.5 px-4 text-center text-[13px] text-ink-2">
+                  <Spinner className="h-7 w-7 text-ava-600" />
+                  {renewing ? 'Gerando um novo QR Code...' : 'Preparando o QR Code...'}
+                </div>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-4">
+              <h3 className="m-0 text-[15px] font-semibold text-ink">Escaneie o QR Code</h3>
+              <ol className="m-0 flex flex-col gap-1.5 pl-5 text-[13.5px] text-ink-2">
+                <li>
+                  Abra o <b className="font-semibold text-ink">WhatsApp</b> no celular.
+                </li>
+                <li>
+                  Acesse <b className="font-semibold text-ink">Configurações › Dispositivos conectados</b>.
+                </li>
+                <li>
+                  Toque em <b className="font-semibold text-ink">Conectar dispositivo</b> e aponte para o código.
+                </li>
+              </ol>
+              <Alert tone="info" icon="refresh">
+                O QR Code é renovado automaticamente e o status muda sozinho após o escaneamento.
+              </Alert>
+            </div>
           </div>
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${statusDisplay.color}`}>
-            <span className={`w-2 h-2 rounded-full ${statusDisplay.dot}`} />
-            {checkingStatus ? 'Verificando...' : statusDisplay.label}
-          </span>
-        </div>
-      </div>
-
-      {/* QR Code */}
-      {connecting && !isConnected && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Escaneie o QR Code</h2>
-          <p className="text-sm text-gray-500 mb-4">Abra o WhatsApp no seu celular, acesse Configurações &gt; Dispositivos conectados &gt; Conectar dispositivo, e escaneie o QR Code abaixo.</p>
-          <div className="flex justify-center">
-            {qrCode ? (
-              <img
-                src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`}
-                alt="QR Code WhatsApp"
-                className="w-64 h-64 border border-gray-200 rounded-lg"
-              />
-            ) : (
-              <div className="w-64 h-64 border border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center gap-3 text-gray-400">
-                <span className="w-8 h-8 border-2 border-gray-300 border-t-ava-600 rounded-full animate-spin" />
-                <span className="text-sm">{renewing ? 'Gerando um novo QR Code...' : 'Preparando o QR Code...'}</span>
-              </div>
-            )}
-          </div>
-          <p className="text-xs text-gray-400 text-center mt-3">O QR Code é renovado automaticamente e o status muda sozinho após o escaneamento.</p>
-        </div>
-      )}
-
-      {/* Ações */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Ações</h2>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleStartSession}
-            disabled={connecting || isConnected}
-            className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={isConnected ? 'Sessão já está conectada' : ''}
-          >
-            {connecting ? 'Conectando...' : 'Iniciar Sessão'}
-          </button>
-
-          {connecting && !isConnected && (
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 border border-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-              title="Para de acompanhar o pareamento nesta tela"
-            >
-              Cancelar
-            </button>
-          )}
-
-          <button
-            onClick={handleDisconnect}
-            disabled={disconnecting || !isConnected}
-            className="px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={!isConnected ? 'Nenhuma sessão ativa para desconectar' : ''}
-          >
-            {disconnecting ? 'Desconectando...' : 'Desconectar'}
-          </button>
-        </div>
+        )}
 
         {!isConnected && !connecting && (
-          <p className="text-xs text-gray-400 mt-3">Clique em "Iniciar Sessão" para conectar o WhatsApp ao agente.</p>
+          <p className="m-0 text-[12.5px] text-ink-3">Clique em “Iniciar sessão” para conectar o WhatsApp ao agente.</p>
         )}
-      </div>
 
-      {/* Controle de acesso (feature 018) */}
-      <div className="mt-10 mb-4">
-        <h2 className="text-xl font-bold text-gray-900">Acesso ao agente</h2>
-        <p className="text-sm text-gray-500 mt-1">Restrinja o atendimento pelo WhatsApp a uma lista de contatos.</p>
-      </div>
-      <WhatsappAccessSettings slug={selectedAgent.slug} />
-      <WhatsappAccessRequestList slug={selectedAgent.slug} />
-      <WhatsappContactList slug={selectedAgent.slug} />
+        <CardFooter>
+          <Button
+            variant="dangerGhost"
+            icon="power"
+            onClick={handleDisconnect}
+            loading={disconnecting}
+            disabled={!isConnected}
+            title={!isConnected ? 'Nenhuma sessão ativa para desconectar' : ''}
+            className="md:mr-auto"
+          >
+            {disconnecting ? 'Desconectando...' : 'Desconectar'}
+          </Button>
+          {showQr && (
+            <Button onClick={handleCancel} title="Para de acompanhar o pareamento nesta tela">
+              Cancelar
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            icon={connecting ? undefined : 'qr'}
+            onClick={handleStartSession}
+            loading={connecting}
+            disabled={isConnected}
+            title={isConnected ? 'Sessão já está conectada' : ''}
+          >
+            {connecting ? 'Conectando...' : 'Iniciar sessão'}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      {/* Controle de acesso (feature 018): os três painéis ficam montados para não perder rascunhos. */}
+      <Card aria-labelledby="whatsapp-acesso-titulo">
+        <CardHeader
+          titleId="whatsapp-acesso-titulo"
+          icon="shield"
+          title="Acesso ao agente"
+          subtitle="Restrinja o atendimento pelo WhatsApp a uma lista de contatos."
+        />
+        <Tabs
+          idPrefix="whatsapp-acesso"
+          label="Acesso ao agente"
+          value={accessTab}
+          onChange={setAccessTab}
+          items={[
+            { id: 'modo', label: 'Modo e frases' },
+            { id: 'pedidos', label: 'Pedidos de acesso', count: pendingRequests, countLabel: 'pendentes' },
+            { id: 'contatos', label: 'Contatos autorizados' },
+          ]}
+        />
+        <TabPanel idPrefix="whatsapp-acesso" tabId="modo" hidden={accessTab !== 'modo'}>
+          <WhatsappAccessSettings slug={selectedAgent.slug} />
+        </TabPanel>
+        <TabPanel idPrefix="whatsapp-acesso" tabId="pedidos" hidden={accessTab !== 'pedidos'}>
+          <WhatsappAccessRequestList slug={selectedAgent.slug} />
+        </TabPanel>
+        <TabPanel idPrefix="whatsapp-acesso" tabId="contatos" hidden={accessTab !== 'contatos'}>
+          <WhatsappContactList slug={selectedAgent.slug} />
+        </TabPanel>
+      </Card>
+      {confirmDialog}
     </div>
   )
 }

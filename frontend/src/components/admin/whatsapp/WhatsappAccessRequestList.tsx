@@ -3,7 +3,16 @@ import { toast } from 'sonner'
 import { useWhatsappAccessStore } from '../../../stores/useWhatsappAccessStore'
 import { WHATSAPP_REQUEST_STATUS } from '../../../types/whatsappAccess'
 import type { WhatsappAccessRequestInfo } from '../../../types/whatsappAccess'
-import WhatsappModal from './WhatsappModal'
+import Button from '../ui/Button'
+import DataTable from '../ui/DataTable'
+import type { DataColumn } from '../ui/DataTable'
+import Field from '../ui/Field'
+import { Input } from '../ui/Input'
+import KeyValueList from '../ui/KeyValueList'
+import Modal from '../ui/Modal'
+import SegmentedControl from '../ui/SegmentedControl'
+import { EmptyState, LoadingState } from '../ui/States'
+import { useConfirm } from '../ui/useConfirm'
 
 interface WhatsappAccessRequestListProps {
   slug: string
@@ -42,39 +51,32 @@ const ApproveModal = ({ slug, request, onClose }: ApproveModalProps) => {
   }
 
   return (
-    <WhatsappModal
+    <Modal
       title="Aprovar acesso"
+      description="A pessoa vira um contato autorizado e passa a ser atendida pela IA na próxima mensagem."
+      icon="check"
+      iconTone="ok"
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-100">
-            Cancelar
-          </button>
-          <button
-            onClick={handleApprove}
-            disabled={saving}
-            className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50"
-          >
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button variant="primary" onClick={handleApprove} loading={saving}>
             {saving ? 'Aprovando...' : 'Aprovar'}
-          </button>
+          </Button>
         </>
       }
     >
-      <p className="text-sm text-gray-500 mb-3">
-        A pessoa vira um contato autorizado e passa a ser atendida pela IA na próxima mensagem.
-      </p>
-      <label className="block">
-        <span className="text-sm font-medium text-gray-700">Nome do contato</span>
-        <input
+      <Field id="whatsapp-aprovar-nome" label="Nome do contato">
+        <Input
+          data-autofocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={120}
           placeholder="Nome de perfil do WhatsApp"
-          className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ava-500"
         />
-      </label>
-      <p className="text-xs text-gray-400 mt-2">Telefone: {request.phone ?? 'Não identificado'}</p>
-    </WhatsappModal>
+      </Field>
+      <KeyValueList items={[{ label: 'Telefone', value: request.phone ?? 'Não identificado', numeric: Boolean(request.phone) }]} />
+    </Modal>
   )
 }
 
@@ -82,10 +84,16 @@ const WhatsappAccessRequestList = ({ slug }: WhatsappAccessRequestListProps) => 
   const { config, requests, requestFilter, loadingRequests, setRequestFilter, rejectRequest } = useWhatsappAccessStore()
   const [approving, setApproving] = useState<WhatsappAccessRequestInfo | null>(null)
   const closeApprove = useCallback(() => setApproving(null), [])
+  const [confirm, confirmDialog] = useConfirm()
 
   const handleReject = async (request: WhatsappAccessRequestInfo) => {
     const who = request.profileName ?? request.phone ?? 'esta pessoa'
-    if (!confirm(`Rejeitar o pedido de ${who}? As próximas mensagens serão ignoradas, sem aviso.`)) return
+    const ok = await confirm({
+      title: 'Rejeitar pedido de acesso?',
+      message: `Rejeitar o pedido de ${who}? As próximas mensagens serão ignoradas, sem aviso.`,
+      confirmLabel: 'Rejeitar',
+    })
+    if (!ok) return
     const result = await rejectRequest(slug, request.whatsappAccessRequestId)
     if (result.sucesso) toast.success('Solicitação rejeitada')
     else toast.error(result.mensagem || 'Não foi possível rejeitar')
@@ -93,71 +101,86 @@ const WhatsappAccessRequestList = ({ slug }: WhatsappAccessRequestListProps) => 
 
   const pending = config?.pendingRequestCount ?? 0
 
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-lg font-semibold text-gray-900">Solicitações de acesso</h2>
-        {pending > 0 && (
-          <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">{pending} pendente{pending > 1 ? 's' : ''}</span>
-        )}
-      </div>
-      <p className="text-sm text-gray-500 mb-4">Pedidos de quem respondeu "sim" à oferta de acesso pelo WhatsApp.</p>
+  const columns: DataColumn<WhatsappAccessRequestInfo>[] = [
+    {
+      key: 'name',
+      header: 'Nome de perfil',
+      kind: 'main',
+      cell: (r) => (
+        <span className="block font-medium [overflow-wrap:anywhere] text-ink">
+          {r.profileName ?? <span className="font-normal text-ink-3">Sem nome</span>}
+        </span>
+      ),
+    },
+    {
+      key: 'phone',
+      header: 'Telefone',
+      nowrap: true,
+      cell: (r) =>
+        r.phone ? <span className="font-ui-mono tabular-nums">{r.phone}</span> : <span className="text-ink-3">Não identificado</span>,
+    },
+    {
+      key: 'date',
+      header: 'Data',
+      nowrap: true,
+      cell: (r) => <span className="font-ui-mono tabular-nums text-ink-2">{formatDate(r.requestedAt)}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      hideHeader: true,
+      kind: 'actions',
+      cell: (r) => (
+        <>
+          {r.status !== WHATSAPP_REQUEST_STATUS.APPROVED && (
+            <Button size="sm" variant="primary" icon="check" onClick={() => setApproving(r)}>
+              Aprovar
+            </Button>
+          )}
+          {r.status === WHATSAPP_REQUEST_STATUS.PENDING && (
+            <Button size="sm" variant="dangerGhost" onClick={() => handleReject(r)}>
+              Rejeitar
+            </Button>
+          )}
+          {r.status === WHATSAPP_REQUEST_STATUS.APPROVED && (
+            <span className="text-xs text-ink-3">Aprovada em {formatDate(r.decidedAt)}</span>
+          )}
+        </>
+      ),
+    },
+  ]
 
-      <div className="flex gap-1 border-b border-gray-100 mb-3">
-        {TABS.map((tab) => (
-          <button
-            key={tab.status}
-            onClick={() => setRequestFilter(slug, tab.status)}
-            className={`px-3 py-2 text-sm -mb-px border-b-2 ${
-              requestFilter === tab.status ? 'border-ava-600 text-ava-700 font-medium' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-            {tab.status === WHATSAPP_REQUEST_STATUS.PENDING && pending > 0 ? ` (${pending})` : ''}
-          </button>
-        ))}
+  return (
+    <div>
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
+        <p className="m-0 text-[12.5px] text-ink-3">Pedidos de quem respondeu "sim" à oferta de acesso pelo WhatsApp.</p>
+        <SegmentedControl
+          label="Filtrar pedidos"
+          value={requestFilter}
+          onChange={(status) => setRequestFilter(slug, status)}
+          options={TABS.map((tab) => ({
+            value: tab.status as number,
+            label: `${tab.label}${tab.status === WHATSAPP_REQUEST_STATUS.PENDING && pending > 0 ? ` (${pending})` : ''}`,
+          }))}
+        />
       </div>
 
       {loadingRequests && requests.length === 0 ? (
-        <p className="text-sm text-gray-400">Carregando...</p>
+        <LoadingState label="Carregando solicitações…" rows={3} />
       ) : requests.length === 0 ? (
-        <p className="text-sm text-gray-400">Nenhuma solicitação.</p>
+        <EmptyState
+          icon="user"
+          title="Nenhuma solicitação"
+          description="Quando alguém pedir acesso pelo WhatsApp, o pedido aparece aqui."
+        />
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-500 border-b border-gray-100">
-              <th className="py-2 font-medium">Nome de perfil</th>
-              <th className="py-2 font-medium">Telefone</th>
-              <th className="py-2 font-medium">Data</th>
-              <th className="py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {requests.map((r) => (
-              <tr key={r.whatsappAccessRequestId} className="border-b border-gray-50 last:border-0">
-                <td className="py-2 text-gray-900">{r.profileName ?? <span className="text-gray-400">Sem nome</span>}</td>
-                <td className="py-2 text-gray-600">{r.phone ?? <span className="text-gray-400">Não identificado</span>}</td>
-                <td className="py-2 text-gray-500">{formatDate(r.requestedAt)}</td>
-                <td className="py-2 text-right whitespace-nowrap">
-                  {r.status !== WHATSAPP_REQUEST_STATUS.APPROVED && (
-                    <button onClick={() => setApproving(r)} className="text-ava-600 hover:underline mr-3">Aprovar</button>
-                  )}
-                  {r.status === WHATSAPP_REQUEST_STATUS.PENDING && (
-                    <button onClick={() => handleReject(r)} className="text-red-600 hover:underline">Rejeitar</button>
-                  )}
-                  {r.status === WHATSAPP_REQUEST_STATUS.APPROVED && (
-                    <span className="text-xs text-gray-400">Aprovada em {formatDate(r.decidedAt)}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable columns={columns} rows={requests} rowKey={(r) => r.whatsappAccessRequestId} caption="Pedidos de acesso" />
       )}
 
       {approving && (
         <ApproveModal key={approving.whatsappAccessRequestId} slug={slug} request={approving} onClose={closeApprove} />
       )}
+      {confirmDialog}
     </div>
   )
 }

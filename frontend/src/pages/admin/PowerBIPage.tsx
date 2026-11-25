@@ -7,6 +7,11 @@ import PowerBIDatasetForm from '../../components/admin/powerbi/PowerBIDatasetFor
 import PowerBIDatasetList from '../../components/admin/powerbi/PowerBIDatasetList'
 import PowerBIEnableToggle from '../../components/admin/powerbi/PowerBIEnableToggle'
 import PowerBIQueryLogTable from '../../components/admin/powerbi/PowerBIQueryLogTable'
+import Button from '../../components/admin/ui/Button'
+import { Card } from '../../components/admin/ui/Card'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { NoAgentState } from '../../components/admin/ui/States'
+import Tabs, { TabPanel } from '../../components/admin/ui/Tabs'
 import type { AgentInfo } from '../../types/agent'
 import type { PowerBIConfigInfo, PowerBIDatasetInfo } from '../../types/powerbi'
 
@@ -14,12 +19,18 @@ const tabs = ['Credenciais', 'Datasets', 'Histórico'] as const
 
 type PowerBITab = (typeof tabs)[number]
 
+const TAB_IDS: Record<PowerBITab, string> = {
+  Credenciais: 'credenciais',
+  Datasets: 'datasets',
+  Histórico: 'historico',
+}
+
 interface PowerBIContentProps {
   agent: AgentInfo
   onEnabledChange: (enabled: boolean) => void
 }
 
-// Renderado com key={slug} a cada troca de agente: o estado da área é por agente,
+// Renderizado com key={slug} a cada troca de agente: o estado da área é por agente,
 // então desmontar/montar substitui o reset manual dentro de um effect.
 const PowerBIContent = ({ agent, onEnabledChange }: PowerBIContentProps) => {
   const [activeTab, setActiveTab] = useState<PowerBITab>('Credenciais')
@@ -82,84 +93,77 @@ const PowerBIContent = ({ agent, onEnabledChange }: PowerBIContentProps) => {
   const credentialsReady = Boolean(config?.isConfigured && config?.hasClientSecret)
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900">Power BI</h1>
-      <p className="text-sm text-gray-500 mt-1 mb-6">
-        Credenciais, datasets e histórico de consultas do agente {agent.name}.
-      </p>
-
-      <PowerBIEnableToggle
-        slug={agent.slug}
-        enabled={agent.powerBIEnabled}
-        onChanged={onEnabledChange}
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={agent.name}
+        title="Power BI"
+        description={`Credenciais, datasets e histórico de consultas do agente ${agent.name}.`}
       />
 
-      <div className="flex gap-1 border-b border-gray-200 mb-6">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => handleTabClick(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              activeTab === tab
-                ? 'text-ava-700 border-ava-600'
-                : 'text-gray-500 border-transparent hover:text-gray-900'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <PowerBIEnableToggle slug={agent.slug} enabled={agent.powerBIEnabled} onChanged={onEnabledChange} />
 
-      {activeTab === 'Credenciais' && (
-        <PowerBICredentialsForm slug={agent.slug} />
-      )}
+      <Card>
+        <Tabs
+          idPrefix="powerbi"
+          label="Power BI"
+          items={tabs.map((tab) => ({ id: TAB_IDS[tab], label: tab }))}
+          value={TAB_IDS[activeTab]}
+          onChange={(id) => {
+            const tab = tabs.find((t) => TAB_IDS[t] === id)
+            if (tab) handleTabClick(tab)
+          }}
+        />
 
-      {activeTab === 'Datasets' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm text-gray-500">
-              Datasets que o agente pode consultar. Cada um vira uma opção na ferramenta do modelo.
-            </p>
-            <button
-              onClick={() => {
-                setEditingDataset(null)
-                setShowDatasetForm(true)
-              }}
-              disabled={!credentialsReady || showDatasetForm}
-              className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-              title={!credentialsReady ? 'Configure as credenciais antes de adicionar datasets' : ''}
-            >
-              Adicionar dataset
-            </button>
-          </div>
+        <TabPanel idPrefix="powerbi" tabId={TAB_IDS[activeTab]}>
+          {activeTab === 'Credenciais' && <PowerBICredentialsForm slug={agent.slug} />}
 
-          {showDatasetForm && (
-            <PowerBIDatasetForm
-              slug={agent.slug}
-              dataset={editingDataset}
-              onSaved={handleDatasetSaved}
-              onCancel={() => {
-                setShowDatasetForm(false)
-                setEditingDataset(null)
-              }}
-            />
+          {activeTab === 'Datasets' && (
+            <div className="flex flex-col gap-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <p className="m-0 text-[12.5px] text-ink-3">
+                  Datasets que o agente pode consultar. Cada um vira uma opção na ferramenta do modelo.
+                </p>
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  onClick={() => {
+                    setEditingDataset(null)
+                    setShowDatasetForm(true)
+                  }}
+                  disabled={!credentialsReady || showDatasetForm}
+                  title={!credentialsReady ? 'Configure as credenciais antes de adicionar datasets' : ''}
+                >
+                  Adicionar dataset
+                </Button>
+              </div>
+
+              {showDatasetForm && (
+                <PowerBIDatasetForm
+                  slug={agent.slug}
+                  dataset={editingDataset}
+                  onSaved={handleDatasetSaved}
+                  onCancel={() => {
+                    setShowDatasetForm(false)
+                    setEditingDataset(null)
+                  }}
+                />
+              )}
+
+              <PowerBIDatasetList
+                slug={agent.slug}
+                datasets={datasets}
+                onChange={loadDatasets}
+                onEdit={(dataset) => {
+                  setShowDatasetForm(true)
+                  setEditingDataset(dataset)
+                }}
+              />
+            </div>
           )}
 
-          <PowerBIDatasetList
-            slug={agent.slug}
-            datasets={datasets}
-            onChange={loadDatasets}
-            onEdit={(dataset) => {
-              setShowDatasetForm(true)
-              setEditingDataset(dataset)
-            }}
-          />
-        </div>
-      )}
-
-      {activeTab === 'Histórico' && (
-        <PowerBIQueryLogTable slug={agent.slug} />
-      )}
+          {activeTab === 'Histórico' && <PowerBIQueryLogTable slug={agent.slug} />}
+        </TabPanel>
+      </Card>
     </div>
   )
 }
@@ -174,11 +178,9 @@ const PowerBIPage = () => {
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para configurar o Power BI.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Power BI" description="Credenciais, datasets e histórico de consultas do agente." />
+        <NoAgentState purpose="configurar o Power BI" />
       </div>
     )
   }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import AgentForm from '../../components/admin/AgentForm'
+import PageHeader from '../../components/admin/ui/PageHeader'
 import { AgentService } from '../../Services/AgentService'
 import type { AgentInsertInfo } from '../../types/agent'
 
@@ -11,6 +12,8 @@ const AgentFormPage = () => {
   const [initialData, setInitialData] = useState<AgentInsertInfo | undefined>()
   const [hasSavedOpenAIApiKey, setHasSavedOpenAIApiKey] = useState(false)
   const [loading, setLoading] = useState(false)
+  // Muda a cada carga do agente; remonta o formulário para ele partir dos dados recebidos.
+  const [formVersion, setFormVersion] = useState(0)
   const isEditing = Boolean(id)
 
   useEffect(() => {
@@ -29,12 +32,13 @@ const AgentFormPage = () => {
               chatModel: agent.chatModel || 'gpt-4o',
               telegramBotName: agent.telegramBotName,
               telegramBotToken: agent.telegramBotToken,
-              // A chave salva nunca volta para o cliente: o campo comeca vazio e
-              // deixar em branco preserva o que esta no banco.
+              // A chave salva nunca volta para o cliente: o campo começa vazio e
+              // deixar em branco preserva o que está no banco.
               openAIApiKey: null,
               removeOpenAIApiKey: false,
             })
             setHasSavedOpenAIApiKey(agent.hasOpenAIApiKey)
+            setFormVersion((v) => v + 1)
           } else {
             toast.error('Agente não encontrado')
           }
@@ -68,23 +72,23 @@ const AgentFormPage = () => {
   }
 
   return (
-    <div className="max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          {isEditing ? 'Editar Agente' : 'Novo Agente'}
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {isEditing ? 'Atualize as informações do agente' : 'Preencha os dados para criar um novo agente'}
-        </p>
-      </div>
-
-      <AgentForm
-        initialData={initialData}
-        onSubmit={handleSubmit}
-        loading={loading}
-        agentId={isEditing ? Number(id) : undefined}
-        hasSavedOpenAIApiKey={hasSavedOpenAIApiKey}
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        backTo={{ to: '/admin/agents', label: 'Meus agentes' }}
+        title={isEditing ? 'Editar agente' : 'Novo agente'}
+        description={isEditing ? 'Atualize as informações do agente.' : 'Preencha os dados para criar um novo agente.'}
       />
+
+      <div className="w-full max-w-[960px]">
+        <AgentForm
+          key={formVersion}
+          initialData={initialData}
+          onSubmit={handleSubmit}
+          loading={loading}
+          agentId={isEditing ? Number(id) : undefined}
+          hasSavedOpenAIApiKey={hasSavedOpenAIApiKey}
+        />
+      </div>
     </div>
   )
 }

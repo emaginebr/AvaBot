@@ -3,6 +3,14 @@ import { toast } from 'sonner'
 import { useWhatsappAccessStore } from '../../../stores/useWhatsappAccessStore'
 import { WHATSAPP_ACCESS_MODE, WHATSAPP_MESSAGE_MAX_LENGTH } from '../../../types/whatsappAccess'
 import type { WhatsappAccessConfigInfo, WhatsappAccessMessageInfo } from '../../../types/whatsappAccess'
+import Alert from '../ui/Alert'
+import Button from '../ui/Button'
+import { CardFooter } from '../ui/Card'
+import CharCounter from '../ui/CharCounter'
+import Field from '../ui/Field'
+import { Textarea } from '../ui/Input'
+import RadioCardGroup from '../ui/RadioCardGroup'
+import { ErrorState, LoadingState } from '../ui/States'
 
 interface WhatsappAccessSettingsProps {
   slug: string
@@ -57,111 +65,90 @@ const SettingsForm = ({ slug, config }: SettingsFormProps) => {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-      <h2 className="text-lg font-semibold text-gray-900">Controle de acesso</h2>
-      <p className="text-sm text-gray-500 mt-0.5 mb-4">Defina quem pode usar o agente pelo WhatsApp.</p>
-
-      <fieldset className="space-y-2 mb-4">
-        <legend className="sr-only">Modo de acesso</legend>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="whatsapp-access-mode"
-            checked={mode === WHATSAPP_ACCESS_MODE.ALL}
-            onChange={() => setMode(WHATSAPP_ACCESS_MODE.ALL)}
-            className="mt-1"
-          />
-          <span>
-            <span className="text-sm font-medium text-gray-900">Todos</span>
-            <span className="block text-xs text-gray-500">Qualquer pessoa que escrever é atendida pela IA.</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="radio"
-            name="whatsapp-access-mode"
-            checked={mode === WHATSAPP_ACCESS_MODE.RESTRICTED}
-            onChange={() => setMode(WHATSAPP_ACCESS_MODE.RESTRICTED)}
-            className="mt-1"
-          />
-          <span>
-            <span className="text-sm font-medium text-gray-900">Somente contatos autorizados</span>
-            <span className="block text-xs text-gray-500">
-              Quem não está na lista recebe apenas as frases abaixo e pode solicitar acesso. Nenhum token de IA é gasto com essas pessoas.
-            </span>
-          </span>
-        </label>
-      </fieldset>
+    <div className="flex flex-col gap-4">
+      <RadioCardGroup
+        name="whatsapp-access-mode"
+        legend="Modo de acesso"
+        value={mode}
+        onChange={setMode}
+        options={[
+          {
+            value: WHATSAPP_ACCESS_MODE.ALL,
+            title: 'Todos',
+            description: 'Qualquer pessoa que escrever é atendida pela IA.',
+          },
+          {
+            value: WHATSAPP_ACCESS_MODE.RESTRICTED,
+            title: 'Somente contatos autorizados',
+            description:
+              'Quem não está na lista recebe apenas as frases abaixo e pode solicitar acesso. Nenhum token de IA é gasto com essas pessoas.',
+          },
+        ]}
+      />
 
       {showEmptyListWarning && (
-        <div className="mb-4 px-3 py-2 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800">
-          Nenhum contato está autorizado; todos receberão apenas as frases de solicitação.
-        </div>
+        <Alert tone="warn">Nenhum contato está autorizado; todos receberão apenas as frases de solicitação.</Alert>
       )}
 
-      <div className="space-y-4">
+      <p className="m-0 mt-1 text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
+        Frases enviadas a quem não está na lista
+      </p>
+
+      <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 md:grid-cols-2">
         {MESSAGES.map((m) => {
           const info = config[m.key]
           const value = draft[m.key] ?? info.defaultText
           const isDefault = draft[m.key] === null
           const isEmpty = emptyFields.some((f) => f.key === m.key)
           return (
-            <div key={m.key}>
-              <div className="flex items-center justify-between">
-                <label htmlFor={`wa-${m.key}`} className="text-sm font-medium text-gray-700">
-                  {m.label}
-                  {isDefault && <span className="ml-2 text-xs font-normal text-gray-400">(padrão)</span>}
-                </label>
-                <button
-                  type="button"
+            <Field
+              key={m.key}
+              id={`wa-${m.key}`}
+              label={m.label}
+              tag={isDefault ? '(padrão)' : undefined}
+              hint={isEmpty ? undefined : m.hint}
+              error={isEmpty ? 'A frase não pode ficar vazia.' : undefined}
+              labelAside={
+                <Button
+                  size="xs"
+                  variant="ghost"
                   disabled={isDefault}
                   onClick={() => setDraft((d) => ({ ...d, [m.key]: null }))}
-                  className="text-xs text-ava-600 hover:underline disabled:text-gray-300 disabled:no-underline"
+                  aria-label={`Restaurar padrão: ${m.label}`}
                 >
                   Restaurar padrão
-                </button>
-              </div>
-              <textarea
-                id={`wa-${m.key}`}
+                </Button>
+              }
+              footer={<CharCounter value={value.length} max={WHATSAPP_MESSAGE_MAX_LENGTH} />}
+            >
+              <Textarea
                 value={value}
                 maxLength={WHATSAPP_MESSAGE_MAX_LENGTH}
                 rows={2}
                 onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-                className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ava-500 ${
-                  isEmpty ? 'border-red-300' : 'border-gray-300'
-                }`}
               />
-              <div className="flex justify-between text-xs">
-                <span className={isEmpty ? 'text-red-600' : 'text-gray-400'}>{isEmpty ? 'A frase não pode ficar vazia.' : m.hint}</span>
-                <span className="text-gray-400 tabular-nums">{value.length}/{WHATSAPP_MESSAGE_MAX_LENGTH}</span>
-              </div>
-            </div>
+            </Field>
           )
         })}
       </div>
 
-      <div className="mt-5">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50"
-        >
+      <CardFooter note={`Até ${WHATSAPP_MESSAGE_MAX_LENGTH} caracteres por frase.`}>
+        <Button variant="primary" onClick={handleSave} loading={saving}>
           {saving ? 'Salvando...' : 'Salvar'}
-        </button>
-      </div>
+        </Button>
+      </CardFooter>
     </div>
   )
 }
 
 const WhatsappAccessSettings = ({ slug }: WhatsappAccessSettingsProps) => {
-  const { config, loadingConfig } = useWhatsappAccessStore()
+  const { config, loadingConfig, loadConfig } = useWhatsappAccessStore()
 
   if (!config) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Controle de acesso</h2>
-        <p className="text-sm text-gray-400 mt-2">{loadingConfig ? 'Carregando...' : 'Configuração indisponível.'}</p>
-      </div>
+    return loadingConfig ? (
+      <LoadingState label="Carregando configuração de acesso…" rows={3} />
+    ) : (
+      <ErrorState title="Configuração indisponível." onRetry={() => loadConfig(slug)} />
     )
   }
 

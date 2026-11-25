@@ -1,7 +1,13 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import OpenAIConnectionDiagnosticModal from './OpenAIConnectionDiagnosticModal'
 import type { AgentInsertInfo } from '../../types/agent'
+import Button, { ButtonLink } from './ui/Button'
+import { Card, CardFooter, CardHeader } from './ui/Card'
+import Checkbox from './ui/Checkbox'
+import Field from './ui/Field'
+import { Input, Select, Textarea } from './ui/Input'
+import PasswordInput from './ui/PasswordInput'
+import StatusBadge from './ui/StatusBadge'
 
 interface AgentFormProps {
   initialData?: AgentInsertInfo
@@ -11,41 +17,41 @@ interface AgentFormProps {
   hasSavedOpenAIApiKey?: boolean
 }
 
+const chatModels = [
+  { value: 'gpt-5.4', label: 'GPT-5.4' },
+  { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano' },
+  { value: 'gpt-5.3', label: 'GPT-5.3' },
+  { value: 'gpt-5.2', label: 'GPT-5.2' },
+  { value: 'gpt-5.1', label: 'GPT-5.1' },
+  { value: 'gpt-5', label: 'GPT-5' },
+  { value: 'gpt-4o', label: 'GPT-4o' },
+  { value: 'gpt-4.1', label: 'GPT-4.1' },
+  { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+]
+
+const EMPTY_AGENT: AgentInsertInfo = {
+  name: '',
+  description: null,
+  systemPrompt: '',
+  collectName: false,
+  collectEmail: false,
+  collectPhone: false,
+  chatModel: 'gpt-4o',
+  telegramBotName: null,
+  telegramBotToken: null,
+  openAIApiKey: null,
+  removeOpenAIApiKey: false,
+}
+
+/**
+ * Formulário de criação/edição. Os dados iniciais valem na montagem: a página remonta o
+ * formulário (key) quando o agente termina de carregar, em vez de copiar a prop num effect.
+ */
 const AgentForm = ({ initialData, onSubmit, loading, agentId, hasSavedOpenAIApiKey = false }: AgentFormProps) => {
-  const navigate = useNavigate()
-  const chatModels = [
-    { value: 'gpt-5.4', label: 'GPT-5.4' },
-    { value: 'gpt-5.4-pro', label: 'GPT-5.4 Pro' },
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-    { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano' },
-    { value: 'gpt-5.3', label: 'GPT-5.3' },
-    { value: 'gpt-5.2', label: 'GPT-5.2' },
-    { value: 'gpt-5.1', label: 'GPT-5.1' },
-    { value: 'gpt-5', label: 'GPT-5' },
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4.1', label: 'GPT-4.1' },
-    { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-  ]
-
-  const [formData, setFormData] = useState<AgentInsertInfo>({
-    name: '',
-    description: null,
-    systemPrompt: '',
-    collectName: false,
-    collectEmail: false,
-    collectPhone: false,
-    chatModel: 'gpt-4o',
-    telegramBotName: null,
-    telegramBotToken: null,
-    openAIApiKey: null,
-    removeOpenAIApiKey: false,
-  })
-  const [revealKey, setRevealKey] = useState(false)
+  const [formData, setFormData] = useState<AgentInsertInfo>(() => initialData ?? EMPTY_AGENT)
   const [diagnosing, setDiagnosing] = useState(false)
-
-  useEffect(() => {
-    if (initialData) setFormData(initialData)
-  }, [initialData])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
@@ -61,210 +67,162 @@ const AgentForm = ({ initialData, onSubmit, loading, agentId, hasSavedOpenAIApiK
     await onSubmit(formData)
   }
 
+  const keySaved = hasSavedOpenAIApiKey && !formData.removeOpenAIApiKey
+
+  const keyHint = formData.removeOpenAIApiKey ? (
+    <span className="text-err">
+      A chave salva será removida ao salvar. Sem chave, este agente não usa chat, busca semântica nem ingestão de arquivos.
+    </span>
+  ) : hasSavedOpenAIApiKey ? (
+    'Uma chave está salva e não é exibida aqui. Deixe o campo em branco para mantê-la.'
+  ) : (
+    'Cada agente usa a sua própria chave. Sem chave, os recursos de IA ficam indisponíveis para este agente.'
+  )
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Nome do Agente <span className="text-red-500">*</span>
-          </label>
-          <input
-            id="name"
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow"
-            placeholder="Ex: Bia, Assistente de Vendas"
-          />
-        </div>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <Card aria-labelledby="agente-identidade-titulo">
+        <CardHeader
+          titleId="agente-identidade-titulo"
+          icon="bot"
+          title="Identidade e comportamento"
+          subtitle="Como o agente se apresenta e como deve responder."
+        />
+        <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 md:grid-cols-2">
+          <Field id="name" label="Nome do agente" required>
+            <Input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              required
+              placeholder="Ex.: Bia, Assistente de Vendas"
+            />
+          </Field>
 
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Descrição
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description ?? ''}
-            onChange={handleChange}
-            rows={2}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow resize-none"
-            placeholder="Breve descrição do agente"
-          />
-        </div>
+          <Field id="description" label="Descrição" tag="opcional">
+            <Textarea
+              name="description"
+              value={formData.description ?? ''}
+              onChange={handleChange}
+              rows={2}
+              placeholder="Breve descrição do agente"
+            />
+          </Field>
 
-        <div>
-          <label htmlFor="systemPrompt" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Prompt do Sistema <span className="text-red-500">*</span>
-          </label>
-          <textarea
+          <Field
             id="systemPrompt"
-            name="systemPrompt"
-            value={formData.systemPrompt}
-            onChange={handleChange}
+            label="Prompt do sistema"
             required
-            rows={8}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow font-mono text-sm resize-y"
-            placeholder="Você é um assistente especializado em..."
-          />
-          <p className="mt-1.5 text-xs text-gray-400">
-            Instruções que definem o comportamento e personalidade do agente
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Modelo de IA</h3>
-        <div>
-          <label htmlFor="chatModel" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Modelo <span className="text-red-500">*</span>
-          </label>
-          <select
-            id="chatModel"
-            name="chatModel"
-            value={formData.chatModel}
-            onChange={(e) => setFormData((prev) => ({ ...prev, chatModel: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow bg-white"
+            hint="Instruções que definem o comportamento e a personalidade do agente."
+            className="md:col-span-2"
           >
-            {chatModels.map((model) => (
-              <option key={model.value} value={model.value}>
-                {model.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1.5 text-xs text-gray-400">
-            Modelo utilizado para gerar as respostas do agente
-          </p>
+            <Textarea
+              name="systemPrompt"
+              value={formData.systemPrompt}
+              onChange={handleChange}
+              required
+              rows={8}
+              mono
+              placeholder="Você é um assistente especializado em..."
+            />
+          </Field>
         </div>
+      </Card>
 
-        <div className="mt-5 pt-5 border-t border-gray-100">
-          <label htmlFor="openAIApiKey" className="block text-sm font-medium text-gray-700 mb-1.5">
-            Chave OpenAI
-          </label>
-          <div className="relative">
-            <input
-              id="openAIApiKey"
+      <Card aria-labelledby="agente-modelo-titulo">
+        <CardHeader
+          titleId="agente-modelo-titulo"
+          icon="spark"
+          title="Modelo de IA"
+          subtitle="Modelo e credencial OpenAI usados por este agente."
+        />
+        <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 md:grid-cols-2">
+          <Field id="chatModel" label="Modelo" required hint="Modelo utilizado para gerar as respostas do agente.">
+            <Select
+              name="chatModel"
+              value={formData.chatModel}
+              onChange={(e) => setFormData((prev) => ({ ...prev, chatModel: e.target.value }))}
+            >
+              {chatModels.map((model) => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field
+            id="openAIApiKey"
+            label="Chave OpenAI"
+            labelAside={keySaved ? <StatusBadge tone="ok" icon="lock" label="Chave salva" /> : undefined}
+            hint={keyHint}
+            footer={
+              <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                {hasSavedOpenAIApiKey && (
+                  <Button
+                    size="sm"
+                    variant={formData.removeOpenAIApiKey ? 'secondary' : 'dangerGhost'}
+                    aria-pressed={formData.removeOpenAIApiKey}
+                    onClick={() => setFormData((prev) => ({ ...prev, removeOpenAIApiKey: !prev.removeOpenAIApiKey }))}
+                  >
+                    {formData.removeOpenAIApiKey ? 'Cancelar remoção' : 'Remover chave salva'}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  icon="shield"
+                  onClick={() => setDiagnosing(true)}
+                  disabled={!agentId}
+                  title={!agentId ? 'Salve o agente antes de diagnosticar' : ''}
+                >
+                  Diagnóstico
+                </Button>
+              </div>
+            }
+          >
+            <PasswordInput
               name="openAIApiKey"
-              type={revealKey ? 'text' : 'password'}
+              mono
               value={formData.openAIApiKey ?? ''}
               onChange={handleChange}
               autoComplete="new-password"
               spellCheck={false}
-              placeholder={hasSavedOpenAIApiKey && !formData.removeOpenAIApiKey ? '••••••••••••' : 'sk-...'}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow font-mono text-sm pr-20"
+              revealable={(formData.openAIApiKey ?? '') !== ''}
+              placeholder={keySaved ? '••••••••••••' : 'sk-...'}
             />
-            {(formData.openAIApiKey ?? '') !== '' && (
-              <button
-                type="button"
-                onClick={() => setRevealKey(!revealKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded"
-              >
-                {revealKey ? 'Ocultar' : 'Mostrar'}
-              </button>
-            )}
-          </div>
-
-          {formData.removeOpenAIApiKey ? (
-            <p className="mt-1.5 text-xs text-red-600">
-              A chave salva será removida ao salvar. Sem chave, este agente não usa chat, busca semântica nem ingestão de arquivos.
-            </p>
-          ) : hasSavedOpenAIApiKey ? (
-            <p className="mt-1.5 text-xs text-gray-400">
-              Uma chave está salva e não é exibida aqui. Deixe o campo em branco para mantê-la.
-            </p>
-          ) : (
-            <p className="mt-1.5 text-xs text-gray-400">
-              Cada agente usa a sua própria chave. Sem chave, os recursos de IA ficam indisponíveis para este agente.
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3 mt-3">
-            {hasSavedOpenAIApiKey && (
-              <button
-                type="button"
-                onClick={() => setFormData((prev) => ({ ...prev, removeOpenAIApiKey: !prev.removeOpenAIApiKey }))}
-                className={
-                  formData.removeOpenAIApiKey
-                    ? 'px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors'
-                    : 'px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors'
-                }
-              >
-                {formData.removeOpenAIApiKey ? 'Cancelar remoção' : 'Remover chave salva'}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setDiagnosing(true)}
-              disabled={!agentId}
-              title={!agentId ? 'Salve o agente antes de diagnosticar' : ''}
-              className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Diagnóstico
-            </button>
-          </div>
+          </Field>
         </div>
-      </div>
+      </Card>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Coleta de Dados do Visitante</h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Selecione quais informações o agente deve solicitar antes de iniciar a conversa
-        </p>
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="collectName"
-              checked={formData.collectName}
-              onChange={handleChange}
-              className="w-4 h-4 rounded border-gray-300 text-ava-600 focus:ring-ava-500"
-            />
-            <span className="text-sm text-gray-700">Solicitar nome</span>
-          </label>
-
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="collectEmail"
-              checked={formData.collectEmail}
-              onChange={handleChange}
-              className="w-4 h-4 rounded border-gray-300 text-ava-600 focus:ring-ava-500"
-            />
-            <span className="text-sm text-gray-700">Solicitar e-mail</span>
-          </label>
-
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="collectPhone"
-              checked={formData.collectPhone}
-              onChange={handleChange}
-              className="w-4 h-4 rounded border-gray-300 text-ava-600 focus:ring-ava-500"
-            />
-            <span className="text-sm text-gray-700">Solicitar telefone</span>
-          </label>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-6 py-2.5 bg-ava-600 text-white rounded-lg font-medium hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+      <Card aria-labelledby="agente-coleta-titulo">
+        <CardHeader
+          titleId="agente-coleta-titulo"
+          icon="user"
+          title="Coleta de dados do visitante"
+          subtitle="Selecione quais informações o agente deve solicitar antes de iniciar a conversa."
+        />
+        <fieldset className="m-0 min-w-0 border-0 p-0">
+          <legend className="sr-only">Dados solicitados ao visitante</legend>
+          <div className="flex flex-wrap gap-2.5">
+            <Checkbox name="collectName" checked={formData.collectName} onChange={handleChange} label="Solicitar nome" />
+            <Checkbox name="collectEmail" checked={formData.collectEmail} onChange={handleChange} label="Solicitar e-mail" />
+            <Checkbox name="collectPhone" checked={formData.collectPhone} onChange={handleChange} label="Solicitar telefone" />
+          </div>
+        </fieldset>
+        <CardFooter
+          note={
+            <>
+              Campos com <span className="text-err">*</span> são obrigatórios.
+            </>
+          }
         >
-          {loading ? 'Salvando...' : 'Salvar'}
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/admin/agents')}
-          className="px-6 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-        >
-          Cancelar
-        </button>
-      </div>
+          <ButtonLink to="/admin/agents">Cancelar</ButtonLink>
+          <Button type="submit" variant="primary" loading={loading}>
+            {loading ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </CardFooter>
+      </Card>
 
       {diagnosing && agentId && (
         <OpenAIConnectionDiagnosticModal
