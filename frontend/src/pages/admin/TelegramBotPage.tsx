@@ -3,19 +3,34 @@ import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
 import type { TelegramWebhookInfo } from '../../types/agent'
+import AdminIcon from '../../components/admin/AdminIcon'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardFooter, CardHeader, CardSection } from '../../components/admin/ui/Card'
+import { CodeChip } from '../../components/admin/ui/Chip'
+import Field from '../../components/admin/ui/Field'
+import { Input } from '../../components/admin/ui/Input'
+import KeyValueList from '../../components/admin/ui/KeyValueList'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import PasswordInput from '../../components/admin/ui/PasswordInput'
+import { NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import { useConfirm } from '../../components/admin/ui/useConfirm'
+
+const PAGE_TITLE = 'Bot Telegram'
+const PAGE_DESCRIPTION = 'Configure a integração do agente com o Telegram e registre o webhook.'
 
 const TelegramBotPage = () => {
   const { selectedAgent, loadAgents } = useAgentStore()
 
   const [botName, setBotName] = useState('')
   const [botToken, setBotToken] = useState('')
-  const [showToken, setShowToken] = useState(false)
   const [saving, setSaving] = useState(false)
   const [settingUpWebhook, setSettingUpWebhook] = useState(false)
   const [checkingWebhook, setCheckingWebhook] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [webhookInfo, setWebhookInfo] = useState<TelegramWebhookInfo | null>(null)
   const [botNameError, setBotNameError] = useState('')
+  const [confirm, confirmDialog] = useConfirm()
 
   useEffect(() => {
     if (selectedAgent) {
@@ -28,11 +43,9 @@ const TelegramBotPage = () => {
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para configurar o Bot Telegram.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
+        <NoAgentState purpose="configurar o Bot Telegram" />
       </div>
     )
   }
@@ -67,7 +80,7 @@ const TelegramBotPage = () => {
         chatModel: selectedAgent.chatModel,
         telegramBotName: botName.trim() || null,
         telegramBotToken: botToken.trim() || null,
-        // Esta tela nao toca na credencial OpenAI: null + false preserva a chave salva.
+        // Esta tela não toca na credencial OpenAI: null + false preserva a chave salva.
         openAIApiKey: null,
         removeOpenAIApiKey: false,
       })
@@ -127,9 +140,13 @@ const TelegramBotPage = () => {
   }
 
   const handleRegenerateSecret = async () => {
-    if (!confirm('Tem certeza que deseja regenerar o Webhook Secret? O webhook será re-registrado automaticamente.')) {
-      return
-    }
+    const ok = await confirm({
+      title: 'Regenerar o webhook secret?',
+      message: 'Tem certeza que deseja regenerar o Webhook Secret? O webhook será re-registrado automaticamente.',
+      confirmLabel: 'Regenerar',
+      icon: 'refresh',
+    })
+    if (!ok) return
 
     setRegenerating(true)
     try {
@@ -153,169 +170,161 @@ const TelegramBotPage = () => {
   }
 
   const hasRequiredFields = botName.trim() && botToken.trim()
+  const botUrlVisible = botName.trim() && /bot$/i.test(botName.trim())
+
+  const webhookBadge = !webhookInfo ? (
+    <StatusBadge tone="idle" label="Webhook não verificado" />
+  ) : webhookInfo.isConfigured ? (
+    <StatusBadge tone="ok" label="Webhook configurado" />
+  ) : (
+    <StatusBadge tone="warn" label="Webhook não configurado" />
+  )
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900">Bot Telegram</h1>
-      <p className="text-sm text-gray-500 mt-1 mb-6">Configure a integração do agente com o Telegram.</p>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={selectedAgent.name}
+        title={PAGE_TITLE}
+        description={PAGE_DESCRIPTION}
+        actions={<span role="status">{webhookBadge}</span>}
+      />
 
-      {/* Formulário de configuração */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Configuração do Bot</h2>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card aria-labelledby="telegram-config-titulo">
+          <CardHeader
+            titleId="telegram-config-titulo"
+            icon="send"
+            title="Configuração do bot"
+            subtitle="Dados do bot criado no @BotFather."
+          />
+          <div className="flex flex-col gap-4">
+            <Field
+              id="telegram-bot-name"
+              label="Nome do bot"
+              hint='O nome deve terminar com "bot" (ex.: MeuBot_bot, AvaAssistBot).'
+              error={botNameError || undefined}
+            >
+              <Input
+                type="text"
+                value={botName}
+                onChange={(e) => handleBotNameChange(e.target.value)}
+                onBlur={() => validateBotName(botName)}
+                placeholder="MeuBot_bot"
+              />
+            </Field>
 
-        <div className="space-y-4">
-          {/* Nome do Bot */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Bot</label>
-            <input
-              type="text"
-              value={botName}
-              onChange={(e) => handleBotNameChange(e.target.value)}
-              onBlur={() => validateBotName(botName)}
-              placeholder="MeuBot_bot"
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent ${
-                botNameError ? 'border-red-300 bg-red-50' : 'border-gray-300'
-              }`}
-            />
-            {botNameError && (
-              <p className="text-xs text-red-500 mt-1">{botNameError}</p>
-            )}
-            <p className="text-xs text-gray-400 mt-1">O nome deve terminar com "bot" (ex: MeuBot_bot, AvaAssistBot)</p>
-          </div>
-
-          {/* Bot Token */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
-            <div className="relative">
-              <input
-                type={showToken ? 'text' : 'password'}
+            <Field id="telegram-bot-token" label="Token do bot" hint="Obtido via @BotFather no Telegram.">
+              <PasswordInput
+                mono
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
                 placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent pr-20"
+                autoComplete="off"
+                spellCheck={false}
               />
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 bg-gray-100 rounded"
-              >
-                {showToken ? 'Ocultar' : 'Mostrar'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Obtido via @BotFather no Telegram</p>
-          </div>
+            </Field>
 
-          {/* Webhook Secret */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Webhook Secret</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={selectedAgent.telegramWebhookSecret || ''}
-                readOnly
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono bg-gray-50 text-gray-500"
-                placeholder="Gerado automaticamente ao salvar"
-              />
-              <button
-                type="button"
-                onClick={handleRegenerateSecret}
-                disabled={regenerating || !selectedAgent.telegramWebhookSecret}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-              >
-                {regenerating ? 'Regenerando...' : 'Regenerar'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Usado para validar requisições do Telegram</p>
-          </div>
-
-          {/* URL do Bot */}
-          {botName.trim() && /bot$/i.test(botName.trim()) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">URL do Bot</label>
-              <a
-                href={`https://t.me/${botName.trim()}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-ava-600 hover:text-ava-700 hover:underline"
-              >
-                https://t.me/{botName.trim()}
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                  <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                </svg>
-              </a>
-            </div>
-          )}
-        </div>
-
-        {/* Botão Salvar */}
-        <div className="mt-6 pt-4 border-t border-gray-100">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-        </div>
-      </div>
-
-      {/* Ações do Webhook */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Webhook</h2>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleSetupWebhook}
-            disabled={settingUpWebhook || !hasRequiredFields}
-            className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={!hasRequiredFields ? 'Preencha o nome do bot e o token antes de configurar o webhook' : ''}
-          >
-            {settingUpWebhook ? 'Configurando...' : 'Configurar Webhook'}
-          </button>
-
-          <button
-            onClick={handleCheckWebhook}
-            disabled={checkingWebhook || !hasRequiredFields}
-            className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title={!hasRequiredFields ? 'Preencha o nome do bot e o token antes de verificar o webhook' : ''}
-          >
-            {checkingWebhook ? 'Verificando...' : 'Verificar Webhook'}
-          </button>
-        </div>
-
-        {!hasRequiredFields && (
-          <p className="text-xs text-gray-400 mt-2">Preencha o nome do bot e o token para habilitar as ações de webhook.</p>
-        )}
-
-        {/* Resultado da verificação do webhook */}
-        {webhookInfo && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Status do Webhook</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500">Status:</span>
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  webhookInfo.isConfigured
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    webhookInfo.isConfigured ? 'bg-green-500' : 'bg-gray-400'
-                  }`} />
-                  {webhookInfo.isConfigured ? 'Configurado' : 'Não configurado'}
-                </span>
+            <Field id="telegram-webhook-secret" label="Webhook secret" hint="Usado para validar as requisições do Telegram.">
+              <div className="flex min-w-0 gap-2 max-md:flex-col">
+                <Input
+                  mono
+                  type="text"
+                  value={selectedAgent.telegramWebhookSecret || ''}
+                  readOnly
+                  placeholder="Gerado automaticamente ao salvar"
+                  className="flex-1"
+                />
+                <Button
+                  variant="dangerGhost"
+                  icon="refresh"
+                  onClick={handleRegenerateSecret}
+                  loading={regenerating}
+                  disabled={!selectedAgent.telegramWebhookSecret}
+                >
+                  {regenerating ? 'Regenerando...' : 'Regenerar'}
+                </Button>
               </div>
-              {webhookInfo.webhookUrl && (
-                <div className="flex items-start gap-2">
-                  <span className="text-gray-500 shrink-0">URL:</span>
-                  <code className="text-xs bg-gray-100 px-2 py-0.5 rounded break-all">{webhookInfo.webhookUrl}</code>
-                </div>
-              )}
-            </div>
+            </Field>
+
+            {botUrlVisible && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-medium text-ink">URL do bot</span>
+                <a
+                  href={`https://t.me/${botName.trim()}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 self-start rounded-md font-medium [overflow-wrap:anywhere] text-ava-700 hover:text-ava-900 hover:underline hover:underline-offset-[3px]"
+                >
+                  https://t.me/{botName.trim()}
+                  <AdminIcon name="external" className="h-3.5 w-3.5" />
+                  <span className="sr-only">(abre em nova aba)</span>
+                </a>
+              </div>
+            )}
           </div>
-        )}
+          <CardFooter>
+            <Button variant="primary" onClick={handleSave} loading={saving}>
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card aria-labelledby="telegram-webhook-titulo">
+          <CardHeader
+            titleId="telegram-webhook-titulo"
+            icon="link"
+            title="Webhook"
+            subtitle="Registra no Telegram o endereço que entrega as mensagens ao agente."
+          />
+          <div className="flex flex-wrap gap-2.5">
+            <Button
+              variant="primary"
+              onClick={handleSetupWebhook}
+              loading={settingUpWebhook}
+              disabled={!hasRequiredFields}
+              title={!hasRequiredFields ? 'Preencha o nome do bot e o token antes de configurar o webhook' : ''}
+            >
+              {settingUpWebhook ? 'Configurando...' : 'Configurar webhook'}
+            </Button>
+            <Button
+              onClick={handleCheckWebhook}
+              loading={checkingWebhook}
+              disabled={!hasRequiredFields}
+              title={!hasRequiredFields ? 'Preencha o nome do bot e o token antes de verificar o webhook' : ''}
+            >
+              {checkingWebhook ? 'Verificando...' : 'Verificar webhook'}
+            </Button>
+          </div>
+
+          {!hasRequiredFields && (
+            <p className="m-0 mt-2.5 text-[12.5px] text-ink-3">
+              Preencha o nome do bot e o token para habilitar as ações de webhook.
+            </p>
+          )}
+
+          {webhookInfo && (
+            <CardSection>
+              <h3 className="m-0 mb-2.5 text-sm font-semibold text-ink">Status do webhook</h3>
+              <KeyValueList
+                items={[
+                  {
+                    label: 'Situação',
+                    value: webhookInfo.isConfigured ? (
+                      <StatusBadge tone="ok" label="Configurado" />
+                    ) : (
+                      <StatusBadge tone="idle" label="Não configurado" />
+                    ),
+                  },
+                  ...(webhookInfo.webhookUrl
+                    ? [{ label: 'URL', value: <CodeChip>{webhookInfo.webhookUrl}</CodeChip> }]
+                    : []),
+                ]}
+              />
+            </CardSection>
+          )}
+        </Card>
       </div>
+      {confirmDialog}
     </div>
   )
 }

@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AvaBot · Proposta da tela de login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   Tokens — os mesmos de DASHBOARD_PROPOSTA.html (espelham o @theme do Tailwind 4).
+   ========================================================================== */
+:root{
+  --ava-50:#eef4ff;--ava-100:#dae6ff;--ava-200:#bdd4ff;--ava-300:#90b8ff;--ava-400:#5c91ff;
+  --ava-500:#3668fc;--ava-600:#1f45f1;--ava-700:#1833de;--ava-800:#1a2ab4;--ava-900:#1b2a8d;--ava-950:#141b56;
+
+  --ink:#0f1430;--ink-2:#475069;--ink-3:#5d6683;
+  --line:#e5e7eb;--line-2:#f3f4f6;--canvas:#f9fafb;--surface:#fff;
+
+  --ok:#0b7a55;--ok-bg:#e5f6ef;
+  --warn:#9a5b00;--warn-bg:#fff4de;
+  --err:#b42318;--err-bg:#fdeceb;
+  --ch-whatsapp:#12a17a;
+
+  --font-display:'Bricolage Grotesque','Geist',system-ui,sans-serif;
+  --font-body:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'Geist Mono',ui-monospace,'Cascadia Code',monospace;
+
+  --radius:16px;--radius-sm:12px;
+  --shadow-ava:0 4px 6px -1px rgb(31 69 241 / .25),0 2px 4px -2px rgb(31 69 241 / .25);
+  --shadow-ava-lg:0 10px 15px -3px rgb(31 69 241 / .25),0 4px 6px -4px rgb(31 69 241 / .25);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--font-body);font-size:14px;line-height:1.5;color:var(--ink);background:#fff;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+button,input{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+:focus-visible{outline:2px solid var(--ava-600);outline-offset:2px;border-radius:8px}
+
+/* ---------- Página: fundo inteiro no azul da sidebar ---------- */
+body{
+  color:rgba(255,255,255,.78);
+  background:var(--ava-950) linear-gradient(180deg,var(--ava-950) 0%,#161f66 60%,var(--ava-900) 140%) fixed;
+}
+body :focus-visible{outline-color:var(--ava-300)}
+.bg{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.bg .dots{position:absolute;inset:0;opacity:.07;background-image:radial-gradient(circle at 1px 1px,#fff 1px,transparent 0);background-size:32px 32px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 35%,#000 15%,transparent 70%);mask-image:radial-gradient(ellipse at 50% 35%,#000 15%,transparent 70%)}
+.bg .blob-a{position:absolute;right:-180px;top:-220px;width:560px;height:560px;border-radius:50%;background:rgb(31 69 241 / .45);filter:blur(90px)}
+.bg .blob-b{position:absolute;left:-200px;bottom:-240px;width:520px;height:520px;border-radius:50%;background:rgb(54 104 252 / .25);filter:blur(100px)}
+
+.page{position:relative;z-index:1;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.top{display:flex;justify-content:flex-start;padding:20px 28px}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:rgba(255,255,255,.78);padding:8px 10px;border-radius:10px;min-height:44px}
+.back:hover{color:#fff;background:rgba(255,255,255,.08)}
+.back svg{width:14px;height:14px;transform:rotate(180deg)}
+
+.center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:8px 20px 32px}
+
+.brand{display:inline-flex;align-items:center;gap:10px;border-radius:12px;padding:2px}
+/* Logomarca idêntica à de avabot.net (LandingPage.tsx) */
+.brand-mark{
+  width:40px;height:40px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--ava-600);color:#fff;box-shadow:0 6px 18px -4px rgb(31 69 241 / .8),inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.brand-mark svg{width:22px;height:22px}
+.brand-name{font-weight:700;font-size:22px;line-height:28px;letter-spacing:-.025em;color:#fff}
+
+/* Cartão de login */
+.form-card{
+  width:100%;max-width:440px;background:var(--surface);color:var(--ink);border-radius:20px;padding:36px 36px 28px;
+  box-shadow:0 24px 60px -20px rgb(5 8 40 / .65),0 8px 24px -12px rgb(31 69 241 / .35);
+}
+.form-card :focus-visible{outline-color:var(--ava-600)}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;margin-bottom:16px;
+  border:1px solid var(--ava-200);background:var(--ava-50);color:var(--ava-700);
+  border-radius:999px;padding:5px 14px;font-size:12.5px;font-weight:500;
+}
+.pill svg{width:14px;height:14px}
+h1{font-family:var(--font-display);font-weight:600;font-size:30px;line-height:1.1;letter-spacing:-.025em;margin:0}
+h1 em{font-style:normal;color:var(--ava-600);position:relative;display:inline-block}
+h1 em svg{position:absolute;left:0;bottom:-7px;width:100%;height:10px;overflow:visible}
+.lead{margin:10px 0 24px;color:var(--ink-2);font-size:14.5px}
+
+/* Avisos */
+.notice{display:flex;gap:10px;align-items:flex-start;border-radius:var(--radius-sm);padding:12px 14px;font-size:13.5px;margin-bottom:20px;border:1px solid}
+.notice svg{width:18px;height:18px;flex:none;margin-top:1px}
+.notice p{margin:0}
+.notice strong{font-weight:600}
+.notice.warn{color:var(--warn);background:var(--warn-bg);border-color:#f5d9a6}
+.notice.err{color:var(--err);background:var(--err-bg);border-color:#f6c9c5}
+.notice[hidden]{display:none}
+.notice.shake{animation:shake .35s ease}
+@keyframes shake{20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
+
+/* Campos */
+form{display:flex;flex-direction:column;gap:18px}
+.field label{display:block;font-size:13.5px;font-weight:500;color:#374151;margin-bottom:6px}
+.control{position:relative;display:flex;align-items:center}
+.control > svg.lead-ico{position:absolute;left:13px;width:18px;height:18px;color:var(--ink-3);pointer-events:none;transition:color .15s}
+.control input{
+  width:100%;height:46px;padding:0 14px 0 40px;border:1px solid #d1d5db;border-radius:var(--radius-sm);background:#fff;
+  font-size:14.5px;outline:none;transition:border-color .15s,box-shadow .15s;
+}
+.control input::placeholder{color:#8a91a8}
+.control input:hover{border-color:#b6bcc8}
+.control input:focus{border-color:var(--ava-500);box-shadow:0 0 0 4px var(--ava-100)}
+.control:focus-within > svg.lead-ico{color:var(--ava-600)}
+.control.has-toggle input{padding-right:52px}
+.toggle{
+  position:absolute;right:4px;width:44px;height:38px;border:0;border-radius:9px;background:transparent;cursor:pointer;
+  display:grid;place-items:center;color:var(--ink-3);transition:background .15s,color .15s;
+}
+.toggle:hover{background:var(--ava-50);color:var(--ava-700)}
+.toggle svg{width:18px;height:18px}
+.toggle .ico-hide{display:none}
+.toggle[aria-pressed="true"] .ico-show{display:none}
+.toggle[aria-pressed="true"] .ico-hide{display:block}
+.field[data-invalid] input{border-color:var(--err)}
+.field[data-invalid] input:focus{box-shadow:0 0 0 4px var(--err-bg)}
+.field[data-invalid] .control > svg.lead-ico{color:var(--err)}
+.field-error{display:none;align-items:center;gap:6px;margin:6px 0 0;font-size:12.5px;color:var(--err);font-weight:500}
+.field-error svg{width:14px;height:14px;flex:none}
+.field[data-invalid] .field-error{display:flex}
+.caps{display:none;margin:6px 0 0;font-size:12.5px;color:var(--warn)}
+.caps.show{display:block}
+
+/* Botão */
+.btn{
+  min-height:46px;width:100%;border-radius:var(--radius-sm);border:1px solid var(--ava-600);background:var(--ava-600);color:#fff;
+  font-size:14.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:var(--shadow-ava);transition:background .15s,border-color .15s,box-shadow .15s,transform .15s;margin-top:4px;
+}
+.btn:hover{background:var(--ava-700);border-color:var(--ava-700);box-shadow:var(--shadow-ava-lg)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--ava-600);outline-offset:3px}
+.btn svg{width:16px;height:16px;transition:transform .15s}
+.btn:hover svg.arrow{transform:translateX(2px)}
+.btn[aria-disabled="true"]{cursor:progress;background:var(--ava-500);border-color:var(--ava-500);box-shadow:none}
+.spinner{display:none;width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin .7s linear infinite}
+.btn[aria-disabled="true"] .spinner{display:block}
+.btn[aria-disabled="true"] .arrow{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.alt{margin-top:24px;padding-top:20px;border-top:1px solid var(--line-2);display:flex;flex-direction:column;gap:6px;text-align:center;font-size:13.5px;color:var(--ink-2)}
+.alt p{margin:0}
+.alt a{color:var(--ava-700);font-weight:600;border-radius:6px;padding:2px}
+.alt a:hover{color:var(--ava-900);text-decoration:underline;text-underline-offset:3px}
+.alt .muted{color:var(--ink-3);font-size:13px}
+
+/* Barra de demonstração (não faz parte da tela real) */
+.demo{
+  max-width:440px;width:100%;
+  border:1px dashed rgba(144,184,255,.4);border-radius:var(--radius-sm);padding:10px 12px;background:rgba(255,255,255,.05);
+  font-size:12px;color:rgba(255,255,255,.72);display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;
+}
+.demo b{font-family:var(--font-mono);font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ava-300)}
+.demo button{border:0;background:transparent;color:rgba(255,255,255,.85);font-size:12px;padding:6px;border-radius:6px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(144,184,255,.5)}
+.demo button:hover{color:#fff;background:rgba(255,255,255,.08)}
+.demo button[aria-pressed="true"]{color:#fff;font-weight:600;text-decoration-color:var(--ava-300)}
+
+.foot{text-align:center;font-size:12px;color:rgba(255,255,255,.62);padding:0 20px 24px}
+
+/* Nota de design (sobre o fundo azul) */
+.design-wrap{position:relative;z-index:1;border-top:1px solid rgba(255,255,255,.08);padding:32px 40px 40px}
+.design-note{
+  max-width:1100px;margin:0 auto;border:1px solid rgba(144,184,255,.25);background:rgba(255,255,255,.05);
+  border-radius:var(--radius);padding:20px 22px;display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;
+}
+.design-note .aa{font-family:var(--font-display);font-size:52px;font-weight:600;line-height:.9;color:var(--ava-300);letter-spacing:-.04em}
+.design-note h2{font-family:var(--font-display);font-weight:600;font-size:17px;letter-spacing:-.01em;margin:0 0 6px;color:#fff}
+.design-note p{margin:0 0 6px;color:rgba(255,255,255,.82);font-size:13.5px;max-width:880px}
+.design-note strong{color:#fff}
+.design-note code{font-family:var(--font-mono);font-size:12px;color:var(--ava-100);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:0 5px}
+
+/* Toast (equivale ao sonner) */
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;z-index:50;
+  background:#fff;color:var(--ink);border-radius:12px;padding:11px 16px;font-size:13px;display:flex;gap:8px;align-items:center;
+  box-shadow:0 12px 30px -10px rgba(5,8,40,.6);transition:opacity .2s,transform .2s;
+}
+.toast svg{width:16px;height:16px;color:var(--ok)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Responsivo ---------- */
+@media (max-width:620px){
+  .top{padding:12px 8px}
+  .center{padding:0 12px 24px;justify-content:flex-start;gap:18px}
+  .form-card{padding:26px 20px 22px;border-radius:18px}
+  h1{font-size:27px}
+  .design-wrap{padding:24px 12px 32px}
+  .design-note{grid-template-columns:1fr}
+}
+@media (max-height:720px) and (min-width:621px){
+  .center{justify-content:flex-start}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<!-- Ícones (SVG inline, traço 1.75 — equivalentes a lucide-react) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m4 7 8 6 8-6"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.6A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-2.6 3.4M6.6 6.6C4 8.3 2.5 12 2.5 12S6 18.5 12 18.5c1.9 0 3.5-.6 4.9-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2M3 3l18 18"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 16.5v.01"/><circle cx="12" cy="12" r="9"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M4.913 2.658c2.075-.27 4.19-.408 6.337-.408 2.147 0 4.262.139 6.337.408 1.922.25 3.291 1.861 3.405 3.727a4.403 4.403 0 00-1.032-.211 50.89 50.89 0 00-8.42 0c-2.358.196-4.04 2.19-4.04 4.434v4.286a4.47 4.47 0 002.433 3.984L7.28 21.53A.75.75 0 016 21v-4.03a48.527 48.527 0 01-1.087-.128C2.905 16.58 1.5 14.833 1.5 12.862V6.638c0-1.97 1.405-3.718 3.413-3.979z"/>
+      <path d="M15.75 7.5c-1.376 0-2.739.057-4.086.169C10.124 7.797 9 9.103 9 10.609v4.285c0 1.507 1.128 2.814 2.67 2.94 1.243.102 2.5.157 3.768.165l2.782 2.781a.75.75 0 001.28-.53v-2.39l.33-.026c1.542-.125 2.67-1.433 2.67-2.94v-4.286c0-1.505-1.125-2.811-2.664-2.94A49.392 49.392 0 0015.75 7.5z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="bg" aria-hidden="true"><div class="blob-a"></div><div class="blob-b"></div><div class="dots"></div></div>
+
+<div class="page">
+  <header class="top">
+    <a class="back" href="/"><svg aria-hidden="true"><use href="#i-arrow"/></svg><span>Voltar ao site</span></a>
+  </header>
+
+  <main class="center">
+    <a class="brand" href="/" aria-label="AvaBot — página inicial">
+      <span class="brand-mark" aria-hidden="true"><svg><use href="#i-logo"/></svg></span>
+      <span class="brand-name">AvaBot</span>
+    </a>
+
+    <div class="form-card">
+      <span class="pill"><svg aria-hidden="true"><use href="#i-shield"/></svg>Acesso seguro</span>
+      <h1>Bem-vindo de <em>volta<svg viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2 7 Q 50 1 98 6" fill="none" stroke="#90b8ff" stroke-width="3" stroke-linecap="round"/></svg></em></h1>
+      <p class="lead">Acesse o painel administrativo.</p>
+
+      <!-- ?expired=1 -->
+      <div class="notice warn" id="expired" role="status" hidden>
+        <svg aria-hidden="true"><use href="#i-clock"/></svg>
+        <p>Sessão expirada, entre novamente.</p>
+      </div>
+
+      <!-- Erro vindo da API (result.mensagem) -->
+      <div class="notice err" id="formError" role="alert" hidden tabindex="-1">
+        <svg aria-hidden="true"><use href="#i-alert"/></svg>
+        <p id="formErrorText"></p>
+      </div>
+
+      <form id="loginForm" novalidate aria-label="Entrar no painel">
+        <div class="field" id="f-email">
+          <label for="email">E-mail</label>
+          <div class="control">
+            <svg class="lead-ico" aria-hidden="true"><use href="#i-mail"/></svg>
+            <input id="email" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false"
+                   required autofocus placeholder="Digite seu e-mail" aria-describedby="email-error">
+          </div>
+          <p class="field-error" id="email-error"><svg aria-hidden="true"><use href="#i-alert"/></svg><span></span></p>
+        </div>
+
+        <div class="field" id="f-password">
+          <label for="password">Senha</label>
+          <div class="control has-toggle">
+            <svg class="lead-ico" aria-hidden="true"><use href="#i-lock"/></svg>
+            <input id="password" name="password" type="password" autocomplete="current-password"
+                   required placeholder="Digite sua senha" aria-describedby="password-error password-caps">
+            <button class="toggle" type="button" id="togglePwd" aria-pressed="false" aria-controls="password" aria-label="Mostrar senha">
+              <svg class="ico-show" aria-hidden="true"><use href="#i-eye"/></svg>
+              <svg class="ico-hide" aria-hidden="true"><use href="#i-eye-off"/></svg>
+            </button>
+          </div>
+          <p class="field-error" id="password-error"><svg aria-hidden="true"><use href="#i-alert"/></svg><span></span></p>
+          <p class="caps" id="password-caps" aria-live="polite"></p>
+        </div>
+
+        <button class="btn" type="submit" id="submitBtn">
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="submitLabel">Entrar</span>
+          <svg class="arrow" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </button>
+      </form>
+
+      <div class="alt">
+        <p>Não tem conta? <a href="/register">Criar conta</a></p>
+        <!-- FR-017: sem recuperação automática nesta versão -->
+        <p class="muted">Esqueceu a senha? Fale com o suporte.</p>
+      </div>
+    </div>
+
+    <!-- Só para a proposta: alterna o desfecho do envio e os estados -->
+    <div class="demo" role="group" aria-label="Controles de demonstração da proposta">
+      <b>Demo</b>
+      <span>Ao enviar:</span>
+      <button type="button" data-outcome="ok" aria-pressed="false">sucesso</button>
+      <button type="button" data-outcome="invalid" aria-pressed="true">simular erro</button>
+      <button type="button" data-outcome="locked" aria-pressed="false">bloqueio</button>
+      <button type="button" data-outcome="server" aria-pressed="false">servidor fora</button>
+      <span aria-hidden="true">·</span>
+      <button type="button" id="toggleExpired" aria-pressed="false">sessão expirada</button>
+    </div>
+  </main>
+
+  <footer class="foot">© 2026 AvaBot · avabot.net</footer>
+</div>
+
+<div class="design-wrap">
+  <aside class="design-note" aria-labelledby="t-note">
+    <div class="aa" aria-hidden="true">Aa</div>
+    <div>
+      <h2 id="t-note">Nota de design · login</h2>
+      <p><strong>Direção: “Painel de controle sereno”</strong>, a mesma do dashboard, agora em tela única. Fundo da página inteira com o gradiente da sidebar (<code>ava-950</code> → <code>ava-900</code>), dois blobs desfocados (<code>ava-600/45</code> e <code>ava-500/25</code>) e pontos brancos a 7% com máscara radial — sem conteúdo de marketing. No centro, a logomarca de avabot.net (quadrado <code>ava-600</code> + “AvaBot” em branco) <em>acima</em> do cartão, para o cartão ficar só com a tarefa; cartão branco de 440 px, raio 20 px, sombra suave azulada, selo “Acesso seguro” e botão <code>ava-600</code>. Abaixo de 620 px o cartão ocupa a largura menos 12 px de cada lado e sobe para o topo.</p>
+      <p><strong>Funcionalidade idêntica à atual</strong>: e-mail (<code>autocomplete="email"</code>) e senha (<code>current-password</code>), aviso “Sessão expirada” via <code>?expired=1</code>, “Entrando...” no envio, “Criar conta” → <code>/register</code> e “Esqueceu a senha? Fale com o suporte.” (sem recuperação automática, FR-017). Sem login social: o backend não tem. Acréscimos só de apresentação: validação inline de obrigatório/formato com <code>aria-invalid</code> e foco no primeiro erro, mostrar/ocultar senha, aviso de Caps Lock e o erro da API (credenciais inválidas, bloqueio de 15 min, servidor) como alerta persistente acima do formulário em vez de toast; o sucesso continua em toast. Sugestão ao backend: as mensagens <code>Credenciais invalidas</code> e <code>Muitas tentativas</code> saem sem acento.</p>
+      <p>Para portar: <code>AuthLayout</code> (fundo azul + decoração + logomarca + slot do cartão, reutilizável no <code>RegisterPage</code>; classes Tailwind <code>bg-linear-to-b from-ava-950 via-[#161f66] to-ava-900</code>, cartão <code>bg-white rounded-[20px] shadow-xl max-w-[440px]</code>), <code>BrandLogo</code> compartilhado com landing e sidebar, <code>FormField</code> (label, ícone, erro via <code>aria-describedby</code>), <code>PasswordInput</code> (toggle com <code>aria-pressed</code>), <code>FormAlert</code> (<code>role="alert"</code>) e <code>Button</code> com <code>loading</code>. Nenhuma dependência nova.</p>
+    </div>
+  </aside>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const form = $('#loginForm'), email = $('#email'), pwd = $('#password');
+  const btn = $('#submitBtn'), label = $('#submitLabel');
+  const errBox = $('#formError'), errText = $('#formErrorText');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  let outcome = 'invalid', loading = false;
+
+  // ?expired=1 também funciona na proposta
+  if (new URLSearchParams(location.search).get('expired') === '1') setExpired(true);
+
+  function setExpired(on) {
+    $('#expired').hidden = !on;
+    $('#toggleExpired').setAttribute('aria-pressed', String(on));
+  }
+
+  function setFieldError(input, msg) {
+    const field = input.closest('.field');
+    const out = field.querySelector('.field-error span');
+    if (msg) { field.dataset.invalid = ''; input.setAttribute('aria-invalid', 'true'); out.textContent = msg; }
+    else { delete field.dataset.invalid; input.removeAttribute('aria-invalid'); out.textContent = ''; }
+  }
+
+  function validateEmail() {
+    const v = email.value.trim();
+    const msg = !v ? 'Informe seu e-mail.' : !EMAIL.test(v) ? 'Informe um e-mail válido.' : '';
+    setFieldError(email, msg); return !msg;
+  }
+  function validatePwd() {
+    const msg = pwd.value ? '' : 'Informe sua senha.';
+    setFieldError(pwd, msg); return !msg;
+  }
+
+  // Valida ao sair do campo; limpa o erro enquanto a pessoa corrige
+  email.addEventListener('blur', () => { if (email.value) validateEmail(); });
+  email.addEventListener('input', () => { if (email.hasAttribute('aria-invalid')) validateEmail(); hideError(); });
+  pwd.addEventListener('input', () => { if (pwd.hasAttribute('aria-invalid')) validatePwd(); hideError(); });
+
+  // Caps Lock
+  const caps = $('#password-caps');
+  ['keydown', 'keyup'].forEach(ev => pwd.addEventListener(ev, e => {
+    const on = e.getModifierState && e.getModifierState('CapsLock');
+    caps.classList.toggle('show', !!on); caps.textContent = on ? 'Caps Lock está ativado.' : '';
+  }));
+  pwd.addEventListener('blur', () => { caps.classList.remove('show'); caps.textContent = ''; });
+
+  // Mostrar / ocultar senha
+  const tg = $('#togglePwd');
+  tg.addEventListener('click', () => {
+    const show = tg.getAttribute('aria-pressed') !== 'true';
+    tg.setAttribute('aria-pressed', String(show));
+    tg.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+    pwd.type = show ? 'text' : 'password';
+    pwd.focus({ preventScroll: true });
+  });
+
+  function showError(msg) {
+    errText.textContent = msg; errBox.hidden = false;
+    if (!reduce) { errBox.classList.remove('shake'); void errBox.offsetWidth; errBox.classList.add('shake'); }
+  }
+  function hideError() { errBox.hidden = true; }
+
+  function setLoading(on) {
+    loading = on;
+    btn.setAttribute('aria-disabled', String(on));
+    btn.setAttribute('aria-busy', String(on));
+    label.textContent = on ? 'Entrando...' : 'Entrar';
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.innerHTML = '<svg aria-hidden="true"><use href="#i-check"/></svg>';
+    t.append(msg); t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    if (loading) return;
+    hideError();
+    const okE = validateEmail(), okP = validatePwd();
+    if (!okE || !okP) { (!okE ? email : pwd).focus(); return; }
+
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      if (outcome === 'ok') {
+        setExpired(false);
+        toast('Login realizado com sucesso');
+        return;
+      }
+      const msgs = {
+        invalid: 'Credenciais inválidas.',
+        locked: 'Credenciais inválidas. Muitas tentativas; aguarde 15 minutos.',
+        server: 'Erro ao conectar com o servidor.'
+      };
+      showError(msgs[outcome]);
+      pwd.value = ''; pwd.focus();   // não revela qual campo errou (FR-006); só limpa a senha
+    }, 1300);
+  });
+
+  // Controles de demonstração
+  document.querySelectorAll('.demo [data-outcome]').forEach(b => b.addEventListener('click', () => {
+    outcome = b.dataset.outcome;
+    document.querySelectorAll('.demo [data-outcome]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    if (!email.value) email.value = 'ana@empresa.com.br';
+    if (!pwd.value) pwd.value = 'senha-de-teste';
+    setFieldError(email, ''); setFieldError(pwd, '');
+    form.requestSubmit();
+  }));
+  $('#toggleExpired').addEventListener('click', e => setExpired(e.currentTarget.getAttribute('aria-pressed') !== 'true'));
+})();
+</script>
+</body>
+</html>

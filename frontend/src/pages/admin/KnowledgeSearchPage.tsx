@@ -2,6 +2,16 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardHeader } from '../../components/admin/ui/Card'
+import ChunkList from '../../components/admin/ui/ChunkList'
+import Field from '../../components/admin/ui/Field'
+import { Input } from '../../components/admin/ui/Input'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { EmptyState, LoadingState, NoAgentState } from '../../components/admin/ui/States'
+
+const PAGE_TITLE = 'Busca na base de conhecimento'
+const PAGE_DESCRIPTION = 'Veja quais trechos dos arquivos a busca semântica devolve para um termo.'
 
 const KnowledgeSearchPage = () => {
   const selectedAgent = useAgentStore((state) => state.selectedAgent)
@@ -13,11 +23,9 @@ const KnowledgeSearchPage = () => {
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para buscar na base de conhecimento.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
+        <NoAgentState purpose="buscar na base de conhecimento" />
       </div>
     )
   }
@@ -51,69 +59,67 @@ const KnowledgeSearchPage = () => {
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Busca na Base de Conhecimento</h1>
-        <p className="text-sm text-gray-500 mt-1">Agente: {selectedAgent.name}</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader agentName={selectedAgent.name} title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
 
-      <form onSubmit={handleSearch} className="mb-6">
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <input
-              type="text"
+      <Card as="form" role="search" aria-label="Busca na base" onSubmit={handleSearch}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start">
+          <Field id="kb-search-query" label="Termo de busca" className="flex-1">
+            <Input
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Digite o termo de busca..."
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow"
             />
-          </div>
-          <div className="w-24">
-            <input
+          </Field>
+          <Field
+            id="kb-search-topk"
+            label="Máx. de resultados"
+            hint={`Máximo de resultados: ${topK} (de 1 a 20).`}
+            className="md:w-[180px]"
+          >
+            <Input
               type="number"
               value={topK}
               onChange={(e) => setTopK(Math.max(1, Math.min(20, Number(e.target.value))))}
               min={1}
               max={20}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow text-center"
-              title="Número de resultados"
+              className="font-ui-mono tabular-nums"
             />
-          </div>
-          <button
+          </Field>
+          <Button
             type="submit"
-            disabled={loading || !query.trim()}
-            className="px-6 py-2.5 bg-ava-600 text-white rounded-lg font-medium hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            variant="primary"
+            size="lg"
+            icon="search"
+            loading={loading}
+            disabled={!query.trim()}
+            className="md:mt-[25px]"
           >
             {loading ? 'Buscando...' : 'Buscar'}
-          </button>
+          </Button>
         </div>
-        <p className="text-xs text-gray-400 mt-1.5">Máximo de resultados: {topK}</p>
-      </form>
+      </Card>
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-gray-500">
-          <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-          Buscando na base de conhecimento...
-        </div>
-      ) : searched && results.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-400">Nenhum resultado encontrado para "{query}".</p>
-        </div>
-      ) : results.length > 0 ? (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-500">{results.length} resultado(s) encontrado(s)</p>
-          {results.map((chunk, index) => (
-            <div key={index} className="bg-white rounded-xl border border-gray-200 p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-ava-600 bg-ava-50 px-2 py-0.5 rounded">
-                  #{index + 1}
-                </span>
-              </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{chunk}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div aria-live="polite">
+        {loading ? (
+          <Card>
+            <LoadingState label="Buscando na base de conhecimento..." rows={3} rowClassName="h-16" />
+          </Card>
+        ) : searched && results.length === 0 ? (
+          <EmptyState icon="search" title={`Nenhum resultado encontrado para "${query}".`} className="bg-white" />
+        ) : results.length > 0 ? (
+          <Card aria-labelledby="kb-search-resultados">
+            <CardHeader
+              titleId="kb-search-resultados"
+              icon="search"
+              title="Trechos encontrados"
+              subtitle={`${results.length} resultado(s) encontrado(s)`}
+            />
+            <ChunkList chunks={results} />
+          </Card>
+        ) : null}
+      </div>
     </div>
   )
 }

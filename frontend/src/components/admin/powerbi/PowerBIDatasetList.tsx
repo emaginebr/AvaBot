@@ -4,6 +4,13 @@ import { PowerBIService } from '../../../Services/PowerBIService'
 import PowerBISchemaViewer from './PowerBISchemaViewer'
 import { PowerBISchemaStatus } from '../../../types/powerbi'
 import type { PowerBIDatasetInfo } from '../../../types/powerbi'
+import Alert from '../ui/Alert'
+import Button from '../ui/Button'
+import { CodeChip } from '../ui/Chip'
+import { EmptyState } from '../ui/States'
+import StatusBadge from '../ui/StatusBadge'
+import type { StatusTone } from '../ui/StatusBadge'
+import { useConfirm } from '../ui/useConfirm'
 
 interface PowerBIDatasetListProps {
   slug: string
@@ -16,21 +23,22 @@ const PowerBIDatasetList = ({ slug, datasets, onChange, onEdit }: PowerBIDataset
   const [generatingId, setGeneratingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [viewerDataset, setViewerDataset] = useState<PowerBIDatasetInfo | null>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
-  const getStatusBadge = (dataset: PowerBIDatasetInfo) => {
+  const getStatusBadge = (dataset: PowerBIDatasetInfo): { label: string; tone: StatusTone } => {
     if (dataset.schemaStatus === PowerBISchemaStatus.Generated) {
       const date = dataset.schemaGeneratedAt
         ? new Date(dataset.schemaGeneratedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         : ''
-      return { label: `Gerado${date ? ` em ${date}` : ''}`, className: 'bg-green-100 text-green-700' }
+      return { label: `Gerado${date ? ` em ${date}` : ''}`, tone: 'ok' }
     }
     if (dataset.schemaStatus === PowerBISchemaStatus.Partial) {
-      return { label: 'Parcial', className: 'bg-yellow-100 text-yellow-700' }
+      return { label: 'Parcial', tone: 'warn' }
     }
     if (dataset.schemaStatus === PowerBISchemaStatus.Error) {
-      return { label: 'Erro', className: 'bg-red-100 text-red-700' }
+      return { label: 'Erro', tone: 'err' }
     }
-    return { label: 'Não gerado', className: 'bg-gray-100 text-gray-500' }
+    return { label: 'Não gerado', tone: 'idle' }
   }
 
   const handleGenerateSchema = async (dataset: PowerBIDatasetInfo) => {
@@ -71,93 +79,106 @@ const PowerBIDatasetList = ({ slug, datasets, onChange, onEdit }: PowerBIDataset
     }
   }
 
+  const askDelete = async (dataset: PowerBIDatasetInfo) => {
+    const ok = await confirm({
+      title: 'Remover dataset?',
+      message: (
+        <>
+          Remover <strong>{dataset.name}</strong> deste agente? O schema gerado também será descartado.
+        </>
+      ),
+      confirmLabel: 'Sim, remover',
+    })
+    if (!ok) return
+    setDeletingId(dataset.powerBIDatasetId)
+    await handleDelete(dataset)
+  }
+
   if (datasets.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <p className="text-sm text-gray-400">Nenhum dataset cadastrado.</p>
-      </div>
+      <EmptyState
+        icon="database"
+        title="Nenhum dataset cadastrado"
+        description="Adicione um dataset para que o agente possa consultá-lo."
+      />
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3">
       {datasets.map((dataset) => {
         const badge = getStatusBadge(dataset)
 
         return (
-          <div key={dataset.powerBIDatasetId} className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold text-gray-900">{dataset.name}</h3>
-                <p className="text-sm text-gray-500 mt-0.5">{dataset.description || 'Sem descrição de negócio.'}</p>
-                <p className="text-xs text-gray-400 mt-1 font-mono">{dataset.toolKey}</p>
+          <article
+            key={dataset.powerBIDatasetId}
+            aria-labelledby={`powerbi-ds-${dataset.powerBIDatasetId}`}
+            className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-gray-200 p-4"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-[1_1_260px]">
+                <h3 id={`powerbi-ds-${dataset.powerBIDatasetId}`} className="m-0 text-[15px] font-semibold [overflow-wrap:anywhere] text-ink">
+                  {dataset.name}
+                </h3>
+                <p className="m-0 mt-0.5 text-[13px] [overflow-wrap:anywhere] text-ink-2">
+                  {dataset.description || 'Sem descrição de negócio.'}
+                </p>
+                <CodeChip className="mt-1.5 inline-block">{dataset.toolKey}</CodeChip>
               </div>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium shrink-0 ${badge.className}`}>
-                {badge.label}
+              <StatusBadge tone={badge.tone} label={badge.label} />
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-ink-3">
+              <span>
+                <b className="font-ui-mono font-medium text-ink">{dataset.tableCount}</b> tabela(s)
+              </span>
+              <span>
+                <b className="font-ui-mono font-medium text-ink">{dataset.columnCount}</b> coluna(s)
+              </span>
+              <span>
+                <b className="font-ui-mono font-medium text-ink">{dataset.measureCount}</b> medida(s)
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mt-3">
-              <span>{dataset.tableCount} tabela(s)</span>
-              <span>{dataset.columnCount} coluna(s)</span>
-              <span>{dataset.measureCount} medida(s)</span>
-            </div>
-
             {dataset.schemaError && (
-              <p className="text-xs text-red-600 mt-3 whitespace-pre-wrap">{dataset.schemaError}</p>
+              <Alert tone="err">
+                <span className="whitespace-pre-wrap">{dataset.schemaError}</span>
+              </Alert>
             )}
 
-            {deletingId === dataset.powerBIDatasetId ? (
-              <div className="mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700 mb-3">
-                  Remover <strong>{dataset.name}</strong> deste agente? O schema gerado também será descartado.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDelete(dataset)}
-                    className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 font-medium"
-                  >
-                    Sim, remover
-                  </button>
-                  <button
-                    onClick={() => setDeletingId(null)}
-                    className="px-4 py-2 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 font-medium"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-                <button
-                  onClick={() => handleGenerateSchema(dataset)}
-                  disabled={generatingId === dataset.powerBIDatasetId}
-                  className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {generatingId === dataset.powerBIDatasetId ? 'Gerando...' : 'Gerar schema'}
-                </button>
-                <button
-                  onClick={() => setViewerDataset(dataset)}
-                  disabled={dataset.schemaStatus === PowerBISchemaStatus.NotGenerated && !dataset.tableCount}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Ver schema
-                </button>
-                <button
-                  onClick={() => onEdit(dataset)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => setDeletingId(dataset.powerBIDatasetId)}
-                  className="px-4 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Remover
-                </button>
-              </div>
-            )}
-          </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                icon="refresh"
+                onClick={() => handleGenerateSchema(dataset)}
+                loading={generatingId === dataset.powerBIDatasetId}
+              >
+                {generatingId === dataset.powerBIDatasetId ? 'Gerando...' : 'Gerar schema'}
+              </Button>
+              <Button
+                size="sm"
+                icon="eye"
+                onClick={() => setViewerDataset(dataset)}
+                disabled={dataset.schemaStatus === PowerBISchemaStatus.NotGenerated && !dataset.tableCount}
+              >
+                Ver schema
+              </Button>
+              <Button size="sm" variant="ghost" icon="edit" onClick={() => onEdit(dataset)}>
+                Editar
+              </Button>
+              <Button
+                size="sm"
+                variant="dangerGhost"
+                icon="trash"
+                onClick={() => askDelete(dataset)}
+                loading={deletingId === dataset.powerBIDatasetId}
+                aria-label={`Remover ${dataset.name}`}
+              >
+                Remover
+              </Button>
+            </div>
+          </article>
         )
       })}
 
@@ -168,6 +189,7 @@ const PowerBIDatasetList = ({ slug, datasets, onChange, onEdit }: PowerBIDataset
           onClose={() => setViewerDataset(null)}
         />
       )}
+      {confirmDialog}
     </div>
   )
 }

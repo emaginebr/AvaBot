@@ -2,10 +2,19 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PowerBIService } from '../../../Services/PowerBIService'
 import type { PowerBIConnectionTestInfo } from '../../../types/powerbi'
+import AdminIcon from '../AdminIcon'
+import Button from '../ui/Button'
+import Field from '../ui/Field'
+import { Input } from '../ui/Input'
+import PasswordInput from '../ui/PasswordInput'
+import { LoadingState } from '../ui/States'
+import StatusBadge from '../ui/StatusBadge'
 
 interface PowerBICredentialsFormProps {
   slug: string
 }
+
+type CredentialErrors = Partial<Record<'tenant' | 'client' | 'secret', string>>
 
 const PowerBICredentialsForm = ({ slug }: PowerBICredentialsFormProps) => {
   const [tenantId, setTenantId] = useState('')
@@ -20,6 +29,7 @@ const PowerBICredentialsForm = ({ slug }: PowerBICredentialsFormProps) => {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [errors, setErrors] = useState<CredentialErrors>({})
 
   useEffect(() => {
     const load = async () => {
@@ -53,13 +63,19 @@ const PowerBICredentialsForm = ({ slug }: PowerBICredentialsFormProps) => {
 
   const handleSave = async () => {
     if (!tenantId.trim() || !clientId.trim()) {
+      setErrors({
+        tenant: tenantId.trim() ? undefined : 'Informe o Tenant ID.',
+        client: clientId.trim() ? undefined : 'Informe o Client ID.',
+      })
       toast.error('Informe o Tenant ID e o Client ID')
       return
     }
     if (!isConfigured && !clientSecret.trim()) {
+      setErrors({ secret: 'Informe o Client Secret para a primeira configuração.' })
       toast.error('Informe o Client Secret para a primeira configuração')
       return
     }
+    setErrors({})
 
     setSaving(true)
     try {
@@ -115,121 +131,137 @@ const PowerBICredentialsForm = ({ slug }: PowerBICredentialsFormProps) => {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-gray-500">
-        <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-        Carregando credenciais...
-      </div>
-    )
+    return <LoadingState label="Carregando credenciais..." rows={4} />
   }
 
+  const hasSidePanel = Boolean((lastTestAt && !testResult) || testResult)
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900">Credenciais do aplicativo</h2>
-        <p className="text-sm text-gray-500 mt-0.5 mb-6">
-          Service principal do Entra ID usado para consultar o Power BI em nome deste agente.
-        </p>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tenant ID</label>
-            <input
-              type="text"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-              placeholder="d375fd58-0000-0000-0000-000000000000"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">Directory (tenant) ID do aplicativo registrado</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
-            <input
-              type="text"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              placeholder="e686fb17-0000-0000-0000-000000000000"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">Application (client) ID</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
-            <input
-              type="password"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              placeholder={isConfigured ? (maskedSecret || '••••') : 'segredo do aplicativo'}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              {isConfigured
-                ? 'Deixe em branco para manter o segredo atual.'
-                : 'O segredo é armazenado criptografado e nunca exibido novamente.'}
-            </p>
-          </div>
+    <div className={hasSidePanel ? 'grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]' : ''}>
+      <div className="flex min-w-0 flex-col gap-4">
+        <div>
+          <h2 className="font-brand text-[17px] leading-[1.3] font-semibold tracking-[-0.01em] text-ink">Credenciais do aplicativo</h2>
+          <p className="m-0 mt-[3px] text-[12.5px] text-ink-3">
+            Service principal do Entra ID usado para consultar o Power BI em nome deste agente.
+          </p>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-gray-100 flex flex-wrap gap-3">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        <div className="grid grid-cols-1 gap-x-[18px] gap-y-4 md:grid-cols-2">
+          <Field
+            id="powerbi-tenant"
+            label="Tenant ID"
+            required
+            hint="Directory (tenant) ID do aplicativo registrado."
+            error={errors.tenant}
           >
+            <Input
+              mono
+              type="text"
+              value={tenantId}
+              onChange={(e) => {
+                setTenantId(e.target.value)
+                setErrors((prev) => ({ ...prev, tenant: undefined }))
+              }}
+              placeholder="d375fd58-0000-0000-0000-000000000000"
+              spellCheck={false}
+            />
+          </Field>
+
+          <Field id="powerbi-client" label="Client ID" required hint="Application (client) ID." error={errors.client}>
+            <Input
+              mono
+              type="text"
+              value={clientId}
+              onChange={(e) => {
+                setClientId(e.target.value)
+                setErrors((prev) => ({ ...prev, client: undefined }))
+              }}
+              placeholder="e686fb17-0000-0000-0000-000000000000"
+              spellCheck={false}
+            />
+          </Field>
+
+          <Field
+            id="powerbi-secret"
+            label="Client secret"
+            required={!isConfigured}
+            className="md:col-span-2"
+            hint={
+              isConfigured
+                ? 'Deixe em branco para manter o segredo atual.'
+                : 'O segredo é armazenado criptografado e nunca exibido novamente.'
+            }
+            error={errors.secret}
+          >
+            <PasswordInput
+              mono
+              value={clientSecret}
+              onChange={(e) => {
+                setClientSecret(e.target.value)
+                setErrors((prev) => ({ ...prev, secret: undefined }))
+              }}
+              placeholder={isConfigured ? (maskedSecret || '••••') : 'segredo do aplicativo'}
+              autoComplete="new-password"
+              spellCheck={false}
+              revealable={clientSecret !== ''}
+            />
+          </Field>
+        </div>
+
+        <div className="flex flex-wrap gap-2.5">
+          <Button variant="primary" onClick={handleSave} loading={saving}>
             {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-          <button
+          </Button>
+          <Button
+            icon="refresh"
             onClick={handleTest}
-            disabled={testing || !isConfigured}
-            className="px-5 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            loading={testing}
+            disabled={!isConfigured}
             title={!isConfigured ? 'Salve as credenciais antes de testar' : ''}
           >
             {testing ? 'Testando...' : 'Testar conexão'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {lastTestAt && !testResult && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Último teste</h2>
-          <div className="flex items-center gap-2 text-sm">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-              lastTestSuccess
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${lastTestSuccess ? 'bg-green-500' : 'bg-red-500'}`} />
-              {lastTestSuccess ? 'Sucesso' : 'Falhou'}
+        <div className="self-start rounded-2xl border border-gray-200 bg-gray-50 p-5" aria-live="polite">
+          <h3 className="m-0 mb-2 text-sm font-semibold text-ink">Último teste</h3>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {lastTestSuccess ? <StatusBadge tone="ok" label="Sucesso" /> : <StatusBadge tone="err" label="Falhou" />}
+            <span className="font-ui-mono text-[12.5px] tabular-nums text-ink-3">
+              {new Date(lastTestAt).toLocaleString('pt-BR')}
             </span>
-            <span className="text-xs text-gray-400">{new Date(lastTestAt).toLocaleString('pt-BR')}</span>
           </div>
           {lastTestMessage && (
-            <p className="text-sm text-gray-500 mt-2 whitespace-pre-wrap">{lastTestMessage}</p>
+            <p className="m-0 mt-2 text-[12.5px] whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-2">{lastTestMessage}</p>
           )}
         </div>
       )}
 
       {testResult && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Resultado do teste</h2>
-          <div className="space-y-2">
+        <div className="self-start rounded-2xl border border-gray-200 bg-gray-50 p-5" aria-live="polite">
+          <h3 className="m-0 mb-3 text-sm font-semibold text-ink">Resultado do teste</h3>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {testResult.steps.map((step) => (
-              <div key={step.step} className="flex items-start gap-2 text-sm">
-                <span className={step.success ? 'text-green-600 shrink-0' : 'text-red-600 shrink-0'}>
-                  {step.success ? '✓' : '✗'}
+              <li key={step.step} className="flex items-start gap-2.5 text-[13px]">
+                <span
+                  className={`grid h-[22px] w-[22px] flex-none place-items-center rounded-full ${
+                    step.success ? 'bg-ok-bg text-ok' : 'bg-err-bg text-err'
+                  }`}
+                >
+                  <AdminIcon name={step.success ? 'check' : 'x'} className="h-3 w-3" />
+                  <span className="sr-only">{step.success ? 'Sucesso:' : 'Falha:'}</span>
                 </span>
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-700 break-words">{step.step}</p>
+                  <p className="m-0 font-medium [overflow-wrap:anywhere] text-ink">{step.step}</p>
                   {step.message && (
-                    <p className="text-gray-500 text-xs mt-0.5 whitespace-pre-wrap">{step.message}</p>
+                    <p className="m-0 mt-0.5 text-xs whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-3">{step.message}</p>
                   )}
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </div>

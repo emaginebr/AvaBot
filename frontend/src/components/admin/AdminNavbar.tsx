@@ -1,15 +1,28 @@
-import { Link, useNavigate } from 'react-router-dom'
+import type { Ref } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/useAuthStore'
-import AgentSelector from './AgentSelector'
+import AdminIcon from './AdminIcon'
+import { resolveCrumbs } from './layout/adminNav'
+import { initialsOf } from './layout/initials'
 
 interface AdminNavbarProps {
-  onToggleSidebar?: () => void
+  onToggleSidebar: () => void
+  sidebarOpen: boolean
+  sidebarId: string
+  /** Recebe o foco de volta quando o drawer fecha com Esc. */
+  menuButtonRef?: Ref<HTMLButtonElement>
 }
 
-const AdminNavbar = ({ onToggleSidebar }: AdminNavbarProps) => {
+/**
+ * Cabeçalho do painel: branco translúcido com blur (como a navbar do site), botão do drawer
+ * no mobile, trilha da página atual, usuário e "Sair".
+ */
+const AdminNavbar = ({ onToggleSidebar, sidebarOpen, sidebarId, menuButtonRef }: AdminNavbarProps) => {
   const logout = useAuthStore((state) => state.logout)
   const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()
+  const location = useLocation()
+  const { trail } = resolveCrumbs(location.pathname, location.hash)
 
   const handleLogout = () => {
     logout()
@@ -17,45 +30,63 @@ const AdminNavbar = ({ onToggleSidebar }: AdminNavbarProps) => {
   }
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 shrink-0">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onToggleSidebar}
-          className="lg:hidden p-1.5 text-gray-500 hover:text-gray-700 rounded-md"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-          </svg>
-        </button>
-        <h1 className="font-display text-xl text-ava-900 font-semibold">AvaBot</h1>
-        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Admin</span>
-      </div>
+    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-gray-100 bg-white/80 px-4 py-3 backdrop-blur-lg sm:px-8 lg:py-3.5">
+      <button
+        ref={menuButtonRef}
+        type="button"
+        onClick={onToggleSidebar}
+        aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'}
+        aria-controls={sidebarId}
+        aria-expanded={sidebarOpen}
+        className="grid h-10 w-10 flex-none place-items-center rounded-xl border border-gray-200 bg-white text-ink-2 transition-colors hover:border-ava-200 hover:bg-ava-50 hover:text-ava-700 lg:hidden"
+      >
+        <AdminIcon name="menu" className="h-5 w-5" />
+      </button>
 
-      <div className="flex items-center gap-4">
-        <AgentSelector />
-      </div>
+      <nav aria-label="Trilha" className="min-w-0 flex-1">
+        <ol className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-3">
+          {trail.map((crumb, i) => {
+            const last = i === trail.length - 1
+            return (
+              <li key={`${crumb}-${i}`} className={`flex min-w-0 items-center gap-1.5 ${last ? '' : 'max-sm:hidden'}`}>
+                {i > 0 && (
+                  <AdminIcon name="chevron" className="h-3.5 w-3.5 -rotate-90 text-gray-300 max-sm:hidden" />
+                )}
+                <span
+                  aria-current={last ? 'page' : undefined}
+                  className={last ? 'truncate font-brand text-[15px] font-semibold tracking-[-0.01em] text-ink' : 'truncate'}
+                >
+                  {crumb}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
 
-      <div className="flex items-center gap-4">
+      <div className="ml-auto flex flex-none items-center gap-2">
         {user && (
           <Link
             to="/admin/account"
             title="Minha conta"
-            className="hidden sm:flex items-center gap-1.5 text-sm text-gray-600 hover:text-ava-700 transition-colors max-w-[180px]"
+            className="flex max-w-[200px] items-center gap-2 rounded-xl px-1.5 py-1 text-[13px] text-ink-2 transition-colors hover:bg-ava-50 hover:text-ava-700"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-            <span className="truncate">{user.name}</span>
+            <span
+              aria-hidden="true"
+              className="grid h-8 w-8 flex-none place-items-center rounded-full bg-ava-100 text-[11px] font-semibold text-ava-800"
+            >
+              {initialsOf(user.name)}
+            </span>
+            <span className="truncate max-sm:sr-only">{user.name}</span>
           </Link>
         )}
 
         <button
+          type="button"
           onClick={handleLogout}
-          className="text-sm text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1.5"
+          className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
         >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-        </svg>
+          <AdminIcon name="logout" className="h-4 w-4" />
           Sair
         </button>
       </div>

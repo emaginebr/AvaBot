@@ -1,99 +1,79 @@
+import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAgentStore } from '../../stores/useAgentStore'
+import { useAuthStore } from '../../stores/useAuthStore'
+import { useWhatsappPendingStore } from '../../stores/useWhatsappPendingStore'
+import BrandLogo from '../common/BrandLogo'
+import AgentSelector from './AgentSelector'
+import SidebarAccordion from './layout/SidebarAccordion'
+import { initialsOf } from './layout/initials'
 
-interface MenuItem {
-  label: string
-  path: string
-  requiresAgent: boolean
+interface AdminSidebarProps {
+  id: string
+  /** Drawer aberto (só tem efeito abaixo de lg; no desktop a sidebar é fixa). */
+  open: boolean
+  onNavigate: () => void
 }
 
-const menuItems: MenuItem[] = [
-  { label: 'Dashboard', path: '/admin', requiresAgent: false },
-  { label: 'Agentes', path: '/admin/agents', requiresAgent: false },
-  { label: 'Minha conta', path: '/admin/account', requiresAgent: false },
-  { label: 'Configurações', path: '/admin/settings', requiresAgent: true },
-  { label: 'Bot Telegram', path: '/admin/telegram', requiresAgent: true },
-  { label: 'WhatsApp', path: '/admin/whatsapp', requiresAgent: true },
-  { label: 'Power BI', path: '/admin/powerbi', requiresAgent: true },
-  { label: 'Sessões', path: '/admin/sessions', requiresAgent: true },
-  { label: 'Arquivos', path: '/admin/knowledge/files', requiresAgent: true },
-  { label: 'Busca na Base', path: '/admin/knowledge/search', requiresAgent: true },
-  { label: 'Teste do Agente', path: '/admin/knowledge/test', requiresAgent: true },
-]
-
-const AdminSidebar = () => {
+/** Sidebar azul-escura e compacta do painel: logomarca, agente ativo, menu em sanfona e usuário. */
+const AdminSidebar = ({ id, open, onNavigate }: AdminSidebarProps) => {
   const location = useLocation()
   const selectedAgent = useAgentStore((state) => state.selectedAgent)
+  const user = useAuthStore((state) => state.user)
+  const pending = useWhatsappPendingStore((state) => (state.slug === selectedAgent?.slug ? state.count : 0))
+  const refreshPending = useWhatsappPendingStore((state) => state.refresh)
 
-  const isActive = (path: string) => {
-    if (path === '/admin') return location.pathname === '/admin'
-    return location.pathname.startsWith(path)
-  }
+  // Contador do badge: consulta leve ao trocar de agente e a cada navegação (com intervalo mínimo).
+  const slug = selectedAgent?.slug ?? null
+  useEffect(() => {
+    refreshPending(slug)
+  }, [slug, location.pathname, refreshPending])
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 shrink-0 flex flex-col">
-      {selectedAgent && (
-        <div className="px-4 py-3 border-b border-gray-200 bg-ava-50">
-          <p className="text-xs text-gray-500">Agente ativo</p>
-          <p className="text-sm font-medium text-ava-800 truncate">{selectedAgent.name}</p>
-        </div>
-      )}
+    <aside
+      id={id}
+      aria-label="Navegação principal"
+      className={`fixed inset-y-0 left-0 z-40 flex h-dvh w-[min(82vw,224px)] flex-col gap-3 overflow-x-hidden overflow-y-auto scrollbar-none border-r border-white/6 bg-[linear-gradient(180deg,var(--color-ava-950)_0%,#161f66_60%,var(--color-ava-900)_140%)] px-2.5 pt-3.5 pb-2.5 text-white/75 transition-[translate,visibility] duration-[250ms] ease-out motion-reduce:transition-none lg:sticky lg:top-0 lg:z-auto lg:visible lg:w-auto lg:translate-x-0 [@media(min-width:1024px)_and_(max-height:640px)]:gap-2 [@media(min-width:1024px)_and_(max-height:640px)]:pt-2.5 [&_:focus-visible]:outline-ava-300 ${
+        open ? 'visible translate-x-0' : 'invisible -translate-x-full'
+      }`}
+    >
+      <Link
+        to="/admin"
+        onClick={onNavigate}
+        aria-label="AvaBot — painel"
+        className="rounded-lg px-1.5 py-0.5"
+      >
+        <BrandLogo tone="light" size="sm" />
+      </Link>
 
-      <nav className="flex-1 py-3">
-        <div className="px-3 mb-2">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-3">Geral</p>
-        </div>
-        {menuItems.filter((item) => !item.requiresAgent).map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`flex items-center px-6 py-2 text-sm transition-colors ${
-              isActive(item.path)
-                ? 'text-ava-700 bg-ava-50 font-medium border-r-2 border-ava-600'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
+      <AgentSelector variant="sidebar" />
+
+      <SidebarAccordion
+        pathname={location.pathname}
+        hash={location.hash}
+        hasAgent={!!selectedAgent}
+        whatsappPending={pending}
+        onNavigate={onNavigate}
+      />
+
+      {user && (
+        <Link
+          to="/admin/account"
+          onClick={onNavigate}
+          className="mt-auto flex items-center gap-2.5 rounded-lg border-t border-white/10 px-1.5 pt-2.5 pb-0.5 transition-colors hover:bg-white/5"
+        >
+          <span
+            aria-hidden="true"
+            className="grid h-7 w-7 flex-none place-items-center rounded-full bg-ava-600 text-[10.5px] font-semibold text-white"
           >
-            {item.label}
-          </Link>
-        ))}
-
-        <div className="px-3 mt-5 mb-2">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider px-3">Agente</p>
-        </div>
-        {menuItems.filter((item) => item.requiresAgent).map((item) => {
-          const disabled = !selectedAgent
-          if (disabled) {
-            return (
-              <span
-                key={item.path}
-                className="flex items-center px-6 py-2 text-sm text-gray-300 cursor-not-allowed"
-                title="Selecione um agente na navbar"
-              >
-                {item.label}
-              </span>
-            )
-          }
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center px-6 py-2 text-sm transition-colors ${
-                isActive(item.path)
-                  ? 'text-ava-700 bg-ava-50 font-medium border-r-2 border-ava-600'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              }`}
-            >
-              {item.label}
-            </Link>
-          )
-        })}
-
-        {!selectedAgent && (
-          <p className="px-6 mt-2 text-xs text-gray-400">
-            Selecione um agente na navbar para acessar estas opções
-          </p>
-        )}
-      </nav>
+            {initialsOf(user.name)}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[12.5px] leading-tight font-medium text-white">{user.name}</span>
+            <small className="block truncate text-[11px] text-ava-200">{user.email}</small>
+          </span>
+        </Link>
+      )}
     </aside>
   )
 }

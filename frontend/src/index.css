@@ -6,6 +6,83 @@
 @theme {
   --font-display: 'Instrument Serif', Georgia, serif;
   --font-body: 'DM Sans', system-ui, sans-serif;
+  /* Fontes das telas de autenticação (carregadas em index.html); não alteram a fonte global. */
+  --font-brand: 'Bricolage Grotesque', 'Geist', system-ui, sans-serif;
+  --font-ui: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Números tabulares do painel admin (métricas, telefones, latências). */
+  --font-ui-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  /* Cores semânticas do painel admin (proposta de dashboard). */
+  --color-ink: #0f1430;
+  --color-ink-2: #475069;
+  --color-ink-3: #5d6683;
+  --color-ok: #0b7a55;
+  --color-ok-bg: #e5f6ef;
+  --color-warn: #9a5b00;
+  --color-warn-bg: #fff4de;
+  --color-err: #b42318;
+  --color-err-bg: #fdeceb;
+  --color-err-line: #f6c9c5;
+
+  --shadow-card: 0 1px 2px rgb(17 24 39 / 0.04);
+  --shadow-card-hover: 0 10px 25px -12px rgb(17 24 39 / 0.15);
+  --shadow-pop: 0 24px 48px -16px rgb(20 27 86 / 0.35);
+  --shadow-ava: 0 4px 6px -1px rgb(31 69 241 / 0.25), 0 2px 4px -2px rgb(31 69 241 / 0.25);
+  --shadow-ava-lg: 0 10px 15px -3px rgb(31 69 241 / 0.25), 0 4px 6px -4px rgb(31 69 241 / 0.25);
+
+  /* Crescimento das barras de ranking do dashboard. */
+  --animate-bar-grow: bar-grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+
+  @keyframes bar-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  /* Tremor do alerta de erro nas telas de autenticação. */
+  --animate-auth-shake: auth-shake 0.35s ease;
+
+  @keyframes auth-shake {
+    20%,
+    60% {
+      transform: translateX(-4px);
+    }
+    40%,
+    80% {
+      transform: translateX(4px);
+    }
+  }
+
+  /* Kit admin (src/components/admin/ui): entrada de modais, esqueleto e selo "em andamento". */
+  --animate-modal-pop: modal-pop 0.18s ease both;
+  --animate-modal-fade: modal-fade 0.15s ease both;
+  --animate-shimmer: shimmer 1.3s linear infinite;
+  --animate-blink: blink 1.4s ease-in-out infinite;
+
+  @keyframes modal-pop {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+  }
+
+  @keyframes modal-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0.25;
+    }
+  }
 
   --color-ava-50: #eef4ff;
   --color-ava-100: #dae6ff;
@@ -18,6 +95,14 @@
   --color-ava-800: #1a2ab4;
   --color-ava-900: #1b2a8d;
   --color-ava-950: #141b56;
+}
+
+/* Rolagem sem barra visível (sidebar compacta do painel admin). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 body {

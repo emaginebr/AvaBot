@@ -1,23 +1,58 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { AgentService } from '../../Services/AgentService'
 import type { AgentTestResult } from '../../types/agent'
+import AdminIcon from '../../components/admin/AdminIcon'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardHeader } from '../../components/admin/ui/Card'
+import { CodeChip } from '../../components/admin/ui/Chip'
+import ChunkList from '../../components/admin/ui/ChunkList'
+import CodeBlock from '../../components/admin/ui/CodeBlock'
+import Field from '../../components/admin/ui/Field'
+import { Input } from '../../components/admin/ui/Input'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { EmptyState, LoadingState, NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import Tabs, { TabPanel } from '../../components/admin/ui/Tabs'
+import { cx } from '../../components/admin/ui/cx'
+
+type ResponseTab = 'formatada' | 'bruta'
+
+const ROLE_STYLES: Record<string, string> = {
+  system: 'bg-gray-100 text-ink-2',
+  user: 'bg-ava-50 text-ava-700',
+  assistant: 'bg-ok-bg text-ok',
+}
+
+/** Seção recolhível (details/summary nativos) no estilo dos cartões. */
+const Disclosure = ({ title, children }: { title: ReactNode; children: ReactNode }) => (
+  <details className="group rounded-2xl border border-gray-200 bg-white shadow-card">
+    <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2.5 rounded-2xl px-5 py-4 font-brand text-[15px] font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ava-600 [&::-webkit-details-marker]:hidden">
+      <AdminIcon
+        name="chevron"
+        className="h-4 w-4 -rotate-90 text-ink-3 transition-transform group-open:rotate-0 motion-reduce:transition-none"
+      />
+      {title}
+    </summary>
+    <div className="flex flex-col gap-2.5 px-5 pb-5">{children}</div>
+  </details>
+)
 
 const AgentTestPage = () => {
   const selectedAgent = useAgentStore((state) => state.selectedAgent)
   const [query, setQuery] = useState('')
   const [result, setResult] = useState<AgentTestResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [responseTab, setResponseTab] = useState<ResponseTab>('formatada')
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para testar.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Teste do agente" description="Envie uma pergunta para testar a resposta do agente." />
+        <NoAgentState purpose="testar" />
       </div>
     )
   }
@@ -45,153 +80,142 @@ const AgentTestPage = () => {
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Teste do Agente</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Envie uma pergunta para testar a resposta do agente {selectedAgent.name}
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={selectedAgent.name}
+        title="Teste do agente"
+        description={`Envie uma pergunta para testar a resposta do agente ${selectedAgent.name} e ver o que foi usado para responder.`}
+      />
 
-      <form onSubmit={handleTest} className="mb-6">
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <input
+      <Card as="form" onSubmit={handleTest} aria-label="Teste do agente">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <Field id="agent-test-query" label="Pergunta" className="flex-1">
+            <Input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ex: Qual o horário de funcionamento?"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow"
+              placeholder="Ex.: Qual o horário de funcionamento?"
             />
-          </div>
-          <button
-            type="submit"
-            disabled={loading || !query.trim()}
-            className="px-6 py-2.5 bg-ava-600 text-white rounded-lg font-medium hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-          >
+          </Field>
+          <Button type="submit" variant="primary" size="lg" icon="flask" loading={loading} disabled={!query.trim()}>
             {loading ? 'Testando...' : 'Testar'}
-          </button>
+          </Button>
         </div>
-      </form>
+      </Card>
 
-      {loading && (
-        <div className="flex items-center gap-2 text-gray-500">
-          <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-          Aguardando resposta do agente...
-        </div>
-      )}
+      <div aria-live="polite" className="flex flex-col gap-5">
+        {loading && (
+          <Card>
+            <LoadingState label="Aguardando resposta do agente..." rows={0} />
+          </Card>
+        )}
 
-      {result && (
-        <div className="space-y-4">
-          {/* Resposta formatada */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Resposta do Agente (Formatada)</h2>
-            <div className="prose prose-sm max-w-none bg-ava-50 rounded-lg p-4">
-              <ReactMarkdown>{result.assistantResponse}</ReactMarkdown>
-            </div>
-          </div>
-
-          {/* Resposta raw */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Resposta do Agente (Raw)</h2>
-            <pre className="text-sm text-gray-700 bg-gray-50 rounded-lg p-4 whitespace-pre-wrap">{result.assistantResponse}</pre>
-          </div>
-
-          {/* Resultados da busca */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="text-sm font-semibold text-gray-900 mb-1">Resultados da Busca na Base</h2>
-            <p className="text-xs text-gray-400 mb-3">
-              Query: "{result.searchQuery}" — {result.searchResults.length} chunk(s) encontrado(s)
-            </p>
-            {result.searchResults.length === 0 ? (
-              <p className="text-sm text-gray-400">Nenhum resultado encontrado na base de conhecimento.</p>
-            ) : (
-              <div className="space-y-2">
-                {result.searchResults.map((chunk, i) => (
-                  <div key={i} className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-xs font-medium text-ava-600 bg-ava-50 px-1.5 py-0.5 rounded mr-2">#{i + 1}</span>
-                    <span className="text-sm text-gray-700 whitespace-pre-wrap">{chunk}</span>
+        {result && (
+          <>
+            <Card aria-labelledby="teste-resposta-titulo">
+              <CardHeader titleId="teste-resposta-titulo" icon="bot" title="Resposta do agente" />
+              <Tabs
+                idPrefix="teste-resposta"
+                label="Formato da resposta"
+                value={responseTab}
+                onChange={setResponseTab}
+                items={[
+                  { id: 'formatada', label: 'Formatada' },
+                  { id: 'bruta', label: 'Bruta (raw)' },
+                ]}
+              />
+              <TabPanel idPrefix="teste-resposta" tabId={responseTab}>
+                {responseTab === 'formatada' ? (
+                  <div className="prose prose-sm max-w-none rounded-xl bg-ava-50 p-4 [overflow-wrap:anywhere]">
+                    <ReactMarkdown>{result.assistantResponse}</ReactMarkdown>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ) : (
+                  <CodeBlock variant="plain" limitHeight={false}>
+                    {result.assistantResponse}
+                  </CodeBlock>
+                )}
+              </TabPanel>
+            </Card>
 
-          {/* Consultas Power BI */}
-          {result.powerBIQueries.length > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h2 className="text-sm font-semibold text-gray-900 mb-1">Consultas Power BI</h2>
-              <p className="text-xs text-gray-400 mb-3">
-                {result.powerBIQueries.length} chamada(s) de ferramenta durante a resposta
-              </p>
-              <div className="space-y-3">
-                {result.powerBIQueries.map((call, i) => (
-                  <div key={i} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-xs font-medium text-ava-600 bg-ava-50 px-1.5 py-0.5 rounded">#{i + 1}</span>
-                      <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{call.toolName}</code>
-                      {call.datasetName && (
-                        <span className="text-sm text-gray-700">{call.datasetName}</span>
+            <Card aria-labelledby="teste-busca-titulo">
+              <CardHeader
+                titleId="teste-busca-titulo"
+                icon="search"
+                title="Resultados da busca na base"
+                subtitle={`Query: "${result.searchQuery}" — ${result.searchResults.length} chunk(s) encontrado(s)`}
+              />
+              {result.searchResults.length === 0 ? (
+                <EmptyState icon="search" title="Nenhum resultado encontrado na base de conhecimento." />
+              ) : (
+                <ChunkList chunks={result.searchResults} />
+              )}
+            </Card>
+
+            {result.powerBIQueries.length > 0 && (
+              <Card aria-labelledby="teste-powerbi-titulo">
+                <CardHeader
+                  titleId="teste-powerbi-titulo"
+                  icon="chart"
+                  iconTone="warn"
+                  title="Consultas Power BI"
+                  subtitle={`${result.powerBIQueries.length} chamada(s) de ferramenta durante a resposta`}
+                />
+                <ol className="m-0 flex list-none flex-col gap-3 p-0">
+                  {result.powerBIQueries.map((call, i) => (
+                    <li key={i} className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-gray-200 p-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="grid h-[22px] min-w-[30px] place-items-center rounded-md bg-ava-50 font-ui-mono text-xs font-medium text-ava-700">
+                          #{i + 1}
+                        </span>
+                        <CodeChip>{call.toolName}</CodeChip>
+                        {call.datasetName && <span className="text-[13px] [overflow-wrap:anywhere] text-ink">{call.datasetName}</span>}
+                        <span className="ml-auto">
+                          {call.success ? <StatusBadge tone="ok" label="Sucesso" /> : <StatusBadge tone="err" label="Erro" />}
+                        </span>
+                      </div>
+
+                      {call.query && <CodeBlock variant="plain">{call.query}</CodeBlock>}
+
+                      {call.error && (
+                        <p className="m-0 text-xs whitespace-pre-wrap [overflow-wrap:anywhere] text-err">{call.error}</p>
                       )}
-                      <span className={`ml-auto text-xs font-medium px-1.5 py-0.5 rounded ${
-                        call.success ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {call.success ? 'Sucesso' : 'Erro'}
-                      </span>
-                    </div>
 
-                    {call.query && (
-                      <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap mb-2">{call.query}</pre>
-                    )}
+                      {call.resultPreview && <CodeBlock variant="plain">{call.resultPreview}</CodeBlock>}
 
-                    {call.error && (
-                      <p className="text-xs text-red-600 whitespace-pre-wrap mb-2">{call.error}</p>
-                    )}
+                      <p className="m-0 font-ui-mono text-xs tabular-nums text-ink-3">
+                        {call.durationMs} ms · {call.rowCount ?? 0} linha(s)
+                        {call.truncated && ' · truncado'}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            )}
 
-                    {call.resultPreview && (
-                      <pre className="text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap mb-2">{call.resultPreview}</pre>
-                    )}
-
-                    <p className="text-xs text-gray-400">
-                      {call.durationMs} ms · {call.rowCount ?? 0} linha(s)
-                      {call.truncated && ' · truncado'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Messages enviadas à LLM */}
-          <details className="bg-white rounded-xl border border-gray-200">
-            <summary className="px-5 py-3 cursor-pointer text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">
-              Messages enviadas ({result.messages.length})
-            </summary>
-            <div className="px-5 pb-4 space-y-2">
+            <Disclosure title={`Mensagens enviadas (${result.messages.length})`}>
               {result.messages.map((msg, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3">
-                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded mr-2 ${
-                    msg.role === 'user' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                  }`}>
+                <div key={i} className="min-w-0 rounded-xl border border-gray-200 p-3.5">
+                  <span
+                    className={cx(
+                      'mb-1.5 inline-flex rounded-md px-2 py-px font-ui-mono text-[11.5px]',
+                      ROLE_STYLES[msg.role] ?? ROLE_STYLES.system,
+                    )}
+                  >
                     {msg.role}
                   </span>
-                  <pre className="text-xs text-gray-600 mt-2 whitespace-pre-wrap">{msg.content}</pre>
+                  <CodeBlock variant="bare">
+                    {msg.content}
+                  </CodeBlock>
                 </div>
               ))}
-            </div>
-          </details>
+            </Disclosure>
 
-          {/* System Prompt utilizado */}
-          <details className="bg-white rounded-xl border border-gray-200">
-            <summary className="px-5 py-3 cursor-pointer text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">
-              System Prompt utilizado
-            </summary>
-            <div className="px-5 pb-4">
-              <pre className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">{result.systemPrompt}</pre>
-            </div>
-          </details>
-        </div>
-      )}
+            <Disclosure title="Prompt do sistema utilizado">
+              <CodeBlock variant="plain">{result.systemPrompt}</CodeBlock>
+            </Disclosure>
+          </>
+        )}
+      </div>
     </div>
   )
 }

@@ -3,6 +3,12 @@ import { toast } from 'sonner'
 import { PowerBIService } from '../../../Services/PowerBIService'
 import { PowerBISchemaStatus } from '../../../types/powerbi'
 import type { PowerBIDatasetInfo, PowerBIDatasetSchemaInfo, PowerBISchemaDescriptionItemInfo } from '../../../types/powerbi'
+import AdminIcon from '../AdminIcon'
+import Alert from '../ui/Alert'
+import Button from '../ui/Button'
+import { Input, Textarea } from '../ui/Input'
+import Modal from '../ui/Modal'
+import { EmptyState, LoadingState } from '../ui/States'
 
 const tableKey = (table: string) => `t:${table.toLowerCase()}`
 const columnKey = (table: string, name: string) => `c:${table.toLowerCase()}|${name.toLowerCase()}`
@@ -13,6 +19,10 @@ interface PowerBISchemaViewerProps {
   dataset: PowerBIDatasetInfo
   onClose: () => void
 }
+
+const SectionLabel = ({ children }: { children: string }) => (
+  <p className="m-0 mb-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">{children}</p>
+)
 
 const PowerBISchemaViewer = ({ slug, dataset, onClose }: PowerBISchemaViewerProps) => {
   const [schema, setSchema] = useState<PowerBIDatasetSchemaInfo | null>(null)
@@ -143,6 +153,7 @@ const PowerBISchemaViewer = ({ slug, dataset, onClose }: PowerBISchemaViewerProp
 
   const renderDescriptionBlock = (
     key: string,
+    label: string,
     modelDescription: string | null,
     userDescription: string | null,
   ) => {
@@ -151,35 +162,34 @@ const PowerBISchemaViewer = ({ slug, dataset, onClose }: PowerBISchemaViewerProp
     return (
       <div className="mt-1">
         {modelDescription && (
-          <p className="text-xs text-gray-400 italic whitespace-pre-wrap">{modelDescription}</p>
+          <p className="m-0 text-[12.5px] whitespace-pre-wrap text-ink-3 italic">{modelDescription}</p>
         )}
 
         {isEditing ? (
-          <div className="mt-1">
-            <textarea
+          <div className="mt-1 flex flex-col items-start gap-1">
+            <Textarea
+              aria-label={`Descrição de negócio: ${label}`}
               value={currentDescription(key, userDescription)}
               onChange={(e) => handleDraftChange(key, e.target.value)}
               rows={2}
               maxLength={1000}
               placeholder="Explique o que este item significa para o negócio"
-              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent resize-y"
             />
-            <button
-              onClick={() => handleStopEditing(key, userDescription)}
-              className="mt-1 text-xs text-gray-500 hover:text-gray-700 font-medium"
-            >
+            <Button size="xs" variant="ghost" onClick={() => handleStopEditing(key, userDescription)}>
               Cancelar edição
-            </button>
+            </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {userDescription && (
-              <p className="text-xs text-gray-700 whitespace-pre-wrap">{userDescription}</p>
+              <p className="m-0 text-[12.5px] whitespace-pre-wrap [overflow-wrap:anywhere] text-ink">{userDescription}</p>
             )}
             <button
+              type="button"
               onClick={() => handleDescribe(key, userDescription)}
-              className={`text-xs font-medium whitespace-nowrap ${
-                key in drafts ? 'text-ava-700' : 'text-gray-400 hover:text-gray-600'
+              aria-label={`${userDescription ? 'Editar descrição' : 'Descrever'}: ${label}`}
+              className={`cursor-pointer rounded-md text-xs font-medium whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ava-600 ${
+                key in drafts ? 'text-ava-700' : 'text-ink-3 hover:text-ava-700'
               }`}
             >
               {userDescription ? 'Editar descrição' : 'Descrever'}
@@ -191,159 +201,143 @@ const PowerBISchemaViewer = ({ slug, dataset, onClose }: PowerBISchemaViewerProp
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="absolute inset-0 bg-black/30" onClick={handleClose} />
-
-      <div className="relative bg-white rounded-xl border border-gray-200 shadow-lg max-w-3xl w-full my-8">
-        <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="font-semibold text-gray-900">Schema — {dataset.name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {statusLabel}
-              {schema?.schemaGeneratedAt && ` em ${new Date(schema.schemaGeneratedAt).toLocaleString('pt-BR')}`}
-              {schema && ` — ${schema.tables.length} tabela(s)`}
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="text-sm text-gray-400 hover:text-gray-600 font-medium shrink-0"
-          >
-            Fechar
-          </button>
-        </div>
-
-        {confirmClose && (
-          <div className="px-5 py-4 bg-red-50 border-b border-red-200">
-            <p className="text-sm text-red-700 mb-3">
-              Há descrições não salvas. Fechar sem salvar descarta essas alterações.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 font-medium"
-              >
-                Fechar sem salvar
-              </button>
-              <button
-                onClick={() => setConfirmClose(false)}
-                className="px-4 py-2 bg-white text-gray-700 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 font-medium"
-              >
-                Continuar editando
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="px-5 py-4">
-          {schema?.schemaStatus === PowerBISchemaStatus.Partial && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                schema parcial: medidas e tipos indisponíveis
-              </p>
-            </div>
-          )}
-
-          {schema?.schemaError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700 whitespace-pre-wrap">{schema.schemaError}</p>
-            </div>
-          )}
-
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar tabela, coluna ou medida"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ava-600 focus:border-transparent mb-4"
-          />
-
-          {loading ? (
-            <div className="flex items-center gap-2 text-gray-500">
-              <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-              Carregando schema...
-            </div>
-          ) : !schema || schema.tables.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhuma tabela no schema gerado.</p>
-          ) : filteredTables.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhum item corresponde à busca.</p>
-          ) : (
-            <div className="space-y-2">
-              {filteredTables.map((table) => (
-                <details
-                  key={table.name}
-                  className="bg-gray-50 rounded-lg border border-gray-200"
-                >
-                  <summary className="px-4 py-2.5 cursor-pointer text-sm font-medium text-gray-800 hover:bg-gray-100 rounded-lg">
-                    {table.name}
-                    <span className="text-xs text-gray-400 font-normal ml-2">
-                      {table.columns.length} coluna(s) · {table.measures.length} medida(s)
-                    </span>
-                  </summary>
-
-                  <div className="px-4 pb-3">
-                    {renderDescriptionBlock(tableKey(table.name), table.description, table.userDescription)}
-
-                    <div className="mt-3">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Colunas</p>
-                      <div className="space-y-1">
-                        {table.columns.map((column) => (
-                          <div key={column.name} className="pl-3 border-l-2 border-gray-200">
-                            <p className="text-sm text-gray-700">
-                              {column.name}
-                              {column.dataType && (
-                                <span className="text-xs text-gray-400 ml-1.5">{column.dataType}</span>
-                              )}
-                            </p>
-                            {renderDescriptionBlock(
-                              columnKey(table.name, column.name),
-                              column.description,
-                              column.userDescription,
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {table.measures.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Medidas</p>
-                        <div className="space-y-1">
-                          {table.measures.map((measure) => (
-                            <div key={measure.name} className="pl-3 border-l-2 border-gray-200">
-                              <p className="text-sm text-gray-700">{measure.name}</p>
-                              {renderDescriptionBlock(
-                                measureKey(table.name, measure.name),
-                                measure.description,
-                                measure.userDescription,
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </details>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">
+    <Modal
+      size="lg"
+      icon="database"
+      title={`Schema — ${dataset.name}`}
+      description={
+        <>
+          {statusLabel}
+          {schema?.schemaGeneratedAt && ` em ${new Date(schema.schemaGeneratedAt).toLocaleString('pt-BR')}`}
+          {schema && ` — ${schema.tables.length} tabela(s)`}
+        </>
+      }
+      onClose={handleClose}
+      footer={
+        <>
+          <p className="m-0 mr-auto self-center text-[12.5px] text-ink-3 max-md:mr-0 max-md:text-center">
             {dirtyKeys.length > 0
               ? `${dirtyKeys.length} alteração(ões) não salva(s)`
               : 'As descrições vão para o modelo junto com o schema.'}
           </p>
-          <button
-            onClick={handleSave}
-            disabled={saving || dirtyKeys.length === 0}
-            className="px-4 py-2 bg-ava-600 text-white text-sm font-medium rounded-lg hover:bg-ava-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button variant="primary" onClick={handleSave} loading={saving} disabled={dirtyKeys.length === 0}>
             {saving ? 'Salvando...' : 'Salvar descrições'}
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      {confirmClose && (
+        <Alert
+          tone="err"
+          live
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="danger" onClick={onClose}>
+                Fechar sem salvar
+              </Button>
+              <Button size="sm" onClick={() => setConfirmClose(false)}>
+                Continuar editando
+              </Button>
+            </div>
+          }
+          className="flex-wrap"
+        >
+          Há descrições não salvas. Fechar sem salvar descarta essas alterações.
+        </Alert>
+      )}
+
+      {schema?.schemaStatus === PowerBISchemaStatus.Partial && (
+        <Alert tone="warn">schema parcial: medidas e tipos indisponíveis</Alert>
+      )}
+
+      {schema?.schemaError && (
+        <Alert tone="err">
+          <span className="whitespace-pre-wrap">{schema.schemaError}</span>
+        </Alert>
+      )}
+
+      <div className="relative">
+        <AdminIcon name="search" className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-3" />
+        <Input
+          type="search"
+          aria-label="Buscar tabela, coluna ou medida"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar tabela, coluna ou medida"
+          className="pl-9"
+        />
       </div>
-    </div>
+
+      {loading ? (
+        <LoadingState label="Carregando schema..." rows={4} />
+      ) : !schema || schema.tables.length === 0 ? (
+        <EmptyState icon="database" title="Nenhuma tabela no schema gerado." />
+      ) : filteredTables.length === 0 ? (
+        <EmptyState icon="search" title="Nenhum item corresponde à busca." />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filteredTables.map((table) => (
+            <details key={table.name} className="group overflow-hidden rounded-xl border border-gray-200">
+              <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2.5 bg-gray-50 px-3.5 py-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ava-600 [&::-webkit-details-marker]:hidden">
+                <AdminIcon
+                  name="chevron"
+                  className="h-4 w-4 -rotate-90 text-ink-3 transition-transform group-open:rotate-0 motion-reduce:transition-none"
+                />
+                <b className="font-ui-mono text-[13px] font-medium [overflow-wrap:anywhere] text-ink">{table.name}</b>
+                <small className="ml-auto text-xs whitespace-nowrap text-ink-3">
+                  {table.columns.length} coluna(s) · {table.measures.length} medida(s)
+                </small>
+              </summary>
+
+              <div className="flex flex-col gap-2 px-3.5 pt-2 pb-3.5">
+                {renderDescriptionBlock(tableKey(table.name), table.name, table.description, table.userDescription)}
+
+                <div className="mt-2">
+                  <SectionLabel>Colunas</SectionLabel>
+                  <div className="flex flex-col gap-2">
+                    {table.columns.map((column) => (
+                      <div key={column.name} className="border-l-2 border-gray-200 py-1 pl-3">
+                        <p className="m-0 text-[13px] text-ink">
+                          <code className="font-ui-mono text-[12.5px] [overflow-wrap:anywhere]">{column.name}</code>
+                          {column.dataType && <span className="ml-1.5 text-xs text-ink-3">{column.dataType}</span>}
+                        </p>
+                        {renderDescriptionBlock(
+                          columnKey(table.name, column.name),
+                          `${table.name}.${column.name}`,
+                          column.description,
+                          column.userDescription,
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {table.measures.length > 0 && (
+                  <div className="mt-2">
+                    <SectionLabel>Medidas</SectionLabel>
+                    <div className="flex flex-col gap-2">
+                      {table.measures.map((measure) => (
+                        <div key={measure.name} className="border-l-2 border-gray-200 py-1 pl-3">
+                          <p className="m-0 text-[13px] text-ink">
+                            <code className="font-ui-mono text-[12.5px] [overflow-wrap:anywhere]">{measure.name}</code>
+                          </p>
+                          {renderDescriptionBlock(
+                            measureKey(table.name, measure.name),
+                            `${table.name}.${measure.name}`,
+                            measure.description,
+                            measure.userDescription,
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      )}
+    </Modal>
   )
 }
 

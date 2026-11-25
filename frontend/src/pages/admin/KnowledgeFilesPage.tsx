@@ -1,17 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { useKnowledgeFileStore } from '../../stores/useKnowledgeFileStore'
 import { KnowledgeFileService } from '../../Services/KnowledgeFileService'
 import FileUpload from '../../components/admin/FileUpload'
-import FileStatusBadge from '../../components/admin/FileStatusBadge'
+import type { FileUploadHandle } from '../../components/admin/FileUpload'
 import { ProcessingStatus } from '../../types/knowledgeFile'
+import type { KnowledgeFileInfo } from '../../types/knowledgeFile'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardHeader } from '../../components/admin/ui/Card'
+import DataTable from '../../components/admin/ui/DataTable'
+import type { DataColumn } from '../../components/admin/ui/DataTable'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import { EmptyState, LoadingState, NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+import { useConfirm } from '../../components/admin/ui/useConfirm'
+import { cx } from '../../components/admin/ui/cx'
+
+const PAGE_TITLE = 'Arquivos da base de conhecimento'
+const PAGE_DESCRIPTION = 'Envie documentos em Markdown; o agente usa o conteúdo deles para responder.'
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const FileStatus = ({ status }: { status: ProcessingStatus }) => {
+  if (status === ProcessingStatus.Ready) return <StatusBadge tone="ok" label="Pronto" />
+  if (status === ProcessingStatus.Error) return <StatusBadge tone="err" label="Erro" />
+  return <StatusBadge tone="warn" pulse label="Processando" />
+}
 
 const KnowledgeFilesPage = () => {
   const selectedAgent = useAgentStore((state) => state.selectedAgent)
   const { files, loading, error, loadFiles } = useKnowledgeFileStore()
   const [uploading, setUploading] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const uploadRef = useRef<FileUploadHandle>(null)
+  const [confirm, confirmDialog] = useConfirm()
 
   const agentId = selectedAgent?.agentId
 
@@ -63,12 +90,30 @@ const KnowledgeFilesPage = () => {
       } else {
         toast.success('Arquivo removido com sucesso')
       }
-      setDeleteConfirm(null)
       await loadFiles(agentId)
     } catch (err) {
       console.error('[KnowledgeFilesPage] delete — exceção:', err)
       toast.error('Erro de rede ao remover arquivo')
-      setDeleteConfirm(null)
+    }
+  }
+
+  const askDelete = async (file: KnowledgeFileInfo) => {
+    const ok = await confirm({
+      title: 'Remover arquivo?',
+      message: (
+        <>
+          O arquivo <strong className="[overflow-wrap:anywhere]">{file.fileName}</strong> será removido da base de conhecimento
+          do agente.
+        </>
+      ),
+      confirmLabel: 'Remover',
+    })
+    if (!ok) return
+    setDeletingId(file.knowledgeFileId)
+    try {
+      await handleDelete(file.knowledgeFileId)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -91,112 +136,127 @@ const KnowledgeFilesPage = () => {
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para gerenciar a base de conhecimento.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title={PAGE_TITLE} description={PAGE_DESCRIPTION} />
+        <NoAgentState purpose="gerenciar a base de conhecimento" />
       </div>
     )
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
+  const openPicker = () => uploadRef.current?.open()
+
+  const columns: DataColumn<KnowledgeFileInfo>[] = [
+    {
+      key: 'file',
+      header: 'Arquivo',
+      kind: 'main',
+      cell: (file) => {
+        const failed = file.processingStatus === ProcessingStatus.Error
+        return (
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className={cx(
+                'grid h-8 w-8 flex-none place-items-center rounded-lg font-ui-mono text-[9.5px] font-medium',
+                failed ? 'bg-err-bg text-err' : 'bg-ava-50 text-ava-700',
+              )}
+            >
+              MD
+            </span>
+            <span className="min-w-0">
+              <code className="block font-ui-mono text-[13px] font-medium [overflow-wrap:anywhere] text-ink">{file.fileName}</code>
+              {file.errorMessage && (
+                <span className="mt-px block max-w-[420px] text-[12.5px] [overflow-wrap:anywhere] text-err max-md:max-w-none">
+                  {file.errorMessage}
+                </span>
+              )}
+            </span>
+          </span>
+        )
+      },
+    },
+    {
+      key: 'size',
+      header: 'Tamanho',
+      align: 'right',
+      nowrap: true,
+      cell: (file) => <span className="font-ui-mono tabular-nums">{formatFileSize(file.fileSize)}</span>,
+    },
+    { key: 'status', header: 'Situação', cell: (file) => <FileStatus status={file.processingStatus} /> },
+    {
+      key: 'sent',
+      header: 'Enviado em',
+      nowrap: true,
+      cell: (file) => (
+        <span className="font-ui-mono text-[12.5px] tabular-nums text-ink-2">{new Date(file.createdAt).toLocaleString('pt-BR')}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      hideHeader: true,
+      kind: 'actions',
+      cell: (file) => (
+        <>
+          {file.processingStatus === ProcessingStatus.Error && (
+            <Button size="sm" icon="refresh" onClick={() => handleReprocess(file.knowledgeFileId)}>
+              Reprocessar
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="dangerGhost"
+            icon="trash"
+            onClick={() => askDelete(file)}
+            loading={deletingId === file.knowledgeFileId}
+            aria-label={`Remover ${file.fileName}`}
+          >
+            Remover
+          </Button>
+        </>
+      ),
+    },
+  ]
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Arquivos da Base de Conhecimento</h1>
-        <p className="text-sm text-gray-500 mt-1">Agente: {selectedAgent.name}</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={selectedAgent.name}
+        title={PAGE_TITLE}
+        description={PAGE_DESCRIPTION}
+        actions={
+          <Button variant="primary" size="lg" icon="upload" onClick={openPicker} disabled={uploading}>
+            Enviar arquivo
+          </Button>
+        }
+      />
 
-      <div className="mb-6">
-        <FileUpload onUpload={handleUpload} loading={uploading} />
-      </div>
+      <FileUpload ref={uploadRef} onUpload={handleUpload} loading={uploading} />
 
-      {loading && files.length === 0 ? (
-        <div className="flex items-center gap-2 text-gray-500">
-          <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-          Carregando...
-        </div>
-      ) : files.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-400">Nenhum arquivo enviado para este agente.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Arquivo</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tamanho</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Enviado em</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {files.map((file) => (
-                  <tr key={file.knowledgeFileId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3">
-                      <code className="text-sm text-gray-700 bg-gray-50 px-2 py-0.5 rounded">{file.fileName}</code>
-                    </td>
-                    <td className="px-5 py-3 text-sm text-gray-500">{formatFileSize(file.fileSize)}</td>
-                    <td className="px-5 py-3">
-                      <FileStatusBadge status={file.processingStatus} />
-                      {file.errorMessage && (
-                        <p className="text-xs text-red-500 mt-1">{file.errorMessage}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-sm text-gray-500">
-                      {new Date(file.createdAt).toLocaleString('pt-BR')}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {file.processingStatus === ProcessingStatus.Error && (
-                          <button
-                            onClick={() => handleReprocess(file.knowledgeFileId)}
-                            className="text-sm text-ava-600 hover:text-ava-700 font-medium"
-                          >
-                            Reprocessar
-                          </button>
-                        )}
-                        {deleteConfirm === file.knowledgeFileId ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDelete(file.knowledgeFileId)}
-                              className="text-sm text-white bg-red-600 hover:bg-red-700 px-2 py-0.5 rounded font-medium"
-                            >
-                              Confirmar
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="text-sm text-gray-500 hover:text-gray-700 font-medium"
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(file.knowledgeFileId)}
-                            className="text-sm text-red-600 hover:text-red-700 font-medium"
-                          >
-                            Remover
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <Card aria-labelledby="arquivos-lista-titulo">
+        <CardHeader
+          titleId="arquivos-lista-titulo"
+          title="Arquivos enviados"
+          subtitle="A lista se atualiza sozinha enquanto houver arquivos em processamento."
+        />
+        {loading && files.length === 0 ? (
+          <LoadingState label="Carregando arquivos…" rows={3} />
+        ) : files.length === 0 ? (
+          <EmptyState
+            icon="file"
+            title="Nenhum arquivo enviado para este agente"
+            description="Envie o primeiro arquivo .md para montar a base de conhecimento."
+            action={
+              <Button variant="primary" icon="upload" onClick={openPicker} disabled={uploading}>
+                Enviar arquivo
+              </Button>
+            }
+          />
+        ) : (
+          <DataTable columns={columns} rows={files} rowKey={(file) => file.knowledgeFileId} caption="Arquivos da base de conhecimento" />
+        )}
+      </Card>
+      {confirmDialog}
     </div>
   )
 }

@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../stores/useAuthStore'
 import McpAccessKeysPanel from '../../components/admin/McpAccessKeysPanel'
+import Button from '../../components/admin/ui/Button'
+import { Card, CardFooter, CardHeader, CardSection } from '../../components/admin/ui/Card'
+import Field from '../../components/admin/ui/Field'
+import { Input } from '../../components/admin/ui/Input'
+import KeyValueList from '../../components/admin/ui/KeyValueList'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import PasswordInput from '../../components/admin/ui/PasswordInput'
 
 const MIN_PASSWORD = 8
 
-const inputClass =
-  'w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-ava-500 focus:border-transparent transition-shadow'
-
-const buttonClass =
-  'px-5 py-2.5 bg-ava-600 text-white rounded-lg font-medium hover:bg-ava-700 focus:outline-none focus:ring-2 focus:ring-ava-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+type PasswordErrors = Partial<Record<'current' | 'new' | 'confirm', string>>
 
 const AccountPage = () => {
   const user = useAuthStore((state) => state.user)
@@ -18,14 +21,16 @@ const AccountPage = () => {
   const changePassword = useAuthStore((state) => state.changePassword)
 
   const [name, setName] = useState(user?.name ?? '')
+  const [nameError, setNameError] = useState<string | null>(null)
   const [savingName, setSavingName] = useState(false)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({})
   const [savingPassword, setSavingPassword] = useState(false)
 
-  // Sincroniza nome/e-mail com a API ao abrir a pagina (o storage pode estar defasado).
+  // Sincroniza nome/e-mail com a API ao abrir a página (o storage pode estar defasado).
   useEffect(() => {
     refreshUser()
   }, [refreshUser])
@@ -33,6 +38,7 @@ const AccountPage = () => {
   const handleSaveName = async (e: React.FormEvent) => {
     e.preventDefault()
     if (name.trim().length < 2) {
+      setNameError('O nome precisa ter ao menos 2 caracteres.')
       toast.error('O nome precisa ter ao menos 2 caracteres')
       return
     }
@@ -51,22 +57,27 @@ const AccountPage = () => {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Mesmas regras e mensagens de antes; o erro agora aparece também junto ao campo.
     if (!currentPassword) {
+      setPasswordErrors({ current: 'Informe a senha atual.' })
       toast.error('Informe a senha atual')
       return
     }
     if (newPassword.length < MIN_PASSWORD) {
+      setPasswordErrors({ new: `A nova senha deve ter ao menos ${MIN_PASSWORD} caracteres.` })
       toast.error(`A nova senha deve ter ao menos ${MIN_PASSWORD} caracteres`)
       return
     }
     if (newPassword !== confirmPassword) {
+      setPasswordErrors({ confirm: 'A confirmação não confere com a nova senha.' })
       toast.error('A confirmação não confere com a nova senha')
       return
     }
+    setPasswordErrors({})
 
     setSavingPassword(true)
     try {
-      // Senhas vao so no corpo da requisicao; nada delas no console.
+      // Senhas vão só no corpo da requisição; nada delas no console.
       const result = await changePassword({ currentPassword, newPassword })
       if (result.sucesso) {
         toast.success('Senha alterada com sucesso')
@@ -83,126 +94,126 @@ const AccountPage = () => {
     }
   }
 
+  const clearPasswordError = (key: keyof PasswordErrors) =>
+    setPasswordErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev))
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Minha conta</h1>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        title="Minha conta"
+        description="Seus dados de acesso, sua senha e as chaves que conectam assistentes de IA à sua conta."
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-          <div>
-            <h2 className="font-semibold text-gray-900 mb-3">Dados da conta</h2>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-500">E-mail</dt>
-                <dd className="font-medium text-gray-900 truncate">{user?.email ?? '—'}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-gray-500">Conta criada em</dt>
-                <dd className="font-medium text-gray-900">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR') : '—'}
-                </dd>
-              </div>
-            </dl>
-          </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card aria-labelledby="conta-dados-titulo">
+          <CardHeader titleId="conta-dados-titulo" icon="user" title="Dados da conta" subtitle="Informações do seu usuário." />
+          <KeyValueList
+            items={[
+              { label: 'E-mail', value: user?.email ?? '—' },
+              {
+                label: 'Conta criada em',
+                value: user?.createdAt ? new Date(user.createdAt).toLocaleDateString('pt-BR') : '—',
+                numeric: Boolean(user?.createdAt),
+              },
+            ]}
+          />
+          <CardSection>
+            <form onSubmit={handleSaveName} className="flex flex-col gap-4">
+              <Field id="name" label="Nome" error={nameError}>
+                <Input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setNameError(null)
+                  }}
+                  required
+                  maxLength={260}
+                  autoComplete="name"
+                />
+              </Field>
+              <CardFooter note="O nome aparece no menu e no cabeçalho.">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  loading={savingName}
+                  disabled={name.trim() === (user?.name ?? '')}
+                >
+                  {savingName ? 'Salvando...' : 'Salvar nome'}
+                </Button>
+              </CardFooter>
+            </form>
+          </CardSection>
+        </Card>
 
-          <form onSubmit={handleSaveName} className="space-y-4 border-t border-gray-100 pt-5">
-            <h2 className="font-semibold text-gray-900">Alterar nome</h2>
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
-                Nome
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+        <Card as="form" onSubmit={handleChangePassword} aria-labelledby="conta-senha-titulo">
+          <CardHeader
+            titleId="conta-senha-titulo"
+            icon="lock"
+            title="Alterar senha"
+            subtitle="Use uma senha que você não usa em outros serviços."
+          />
+          <div className="flex flex-col gap-4">
+            <Field id="currentPassword" label="Senha atual" required error={passwordErrors.current}>
+              <PasswordInput
+                value={currentPassword}
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value)
+                  clearPasswordError('current')
+                }}
                 required
-                maxLength={260}
-                className={inputClass}
+                autoComplete="current-password"
               />
-            </div>
-            <button type="submit" disabled={savingName || name.trim() === (user?.name ?? '')} className={buttonClass}>
-              {savingName ? 'Salvando...' : 'Salvar nome'}
-            </button>
-          </form>
-        </div>
-
-        <form onSubmit={handleChangePassword} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900">Alterar senha</h2>
-
-          <div>
-            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Senha atual
-            </label>
-            <input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Nova senha
-            </label>
-            <input
+            </Field>
+            <Field
               id="newPassword"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              label="Nova senha"
               required
-              autoComplete="new-password"
-              minLength={MIN_PASSWORD}
-              maxLength={128}
-              className={inputClass}
-            />
-            <p className="mt-1 text-xs text-gray-400">Ao menos {MIN_PASSWORD} caracteres.</p>
+              hint={`Ao menos ${MIN_PASSWORD} caracteres.`}
+              error={passwordErrors.new}
+            >
+              <PasswordInput
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value)
+                  clearPasswordError('new')
+                }}
+                required
+                autoComplete="new-password"
+                minLength={MIN_PASSWORD}
+                maxLength={128}
+              />
+            </Field>
+            <Field id="confirmPassword" label="Confirmar nova senha" required error={passwordErrors.confirm}>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value)
+                  clearPasswordError('confirm')
+                }}
+                required
+                autoComplete="new-password"
+              />
+            </Field>
           </div>
+          <CardFooter>
+            <Button type="submit" variant="primary" loading={savingPassword}>
+              {savingPassword ? 'Alterando...' : 'Alterar senha'}
+            </Button>
+          </CardFooter>
+        </Card>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Confirmar nova senha
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              className={inputClass}
-            />
-          </div>
-
-          <button type="submit" disabled={savingPassword} className={buttonClass}>
-            {savingPassword ? 'Alterando...' : 'Alterar senha'}
-          </button>
-        </form>
-
-        <section className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <div>
-            <h2 className="font-semibold text-gray-900">Assistentes de IA (MCP)</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Conecte o Claude, o Cursor, o VS Code ou outro assistente compatível com MCP à sua conta para criar,
-              configurar e inspecionar os seus agentes por conversa. O assistente nunca exclui agentes nem lê ou grava
-              credenciais; isso continua sendo feito só aqui no painel. Passo a passo em{' '}
-              <a
-                href="https://github.com/emaginebr/AvaBot/blob/main/docs/MCP_SETUP.md"
-                target="_blank"
-                rel="noreferrer"
-                className="text-ava-600 hover:underline"
-              >
-                docs/MCP_SETUP.md
-              </a>
-              .
-            </p>
-          </div>
+        {/* Âncora do item "Chaves MCP" da sidebar; scroll-mt compensa o cabeçalho fixo. */}
+        <Card as="section" id="chaves-mcp" aria-labelledby="conta-mcp-titulo" className="scroll-mt-24 lg:col-span-2">
+          <CardHeader
+            titleId="conta-mcp-titulo"
+            icon="key"
+            title="Assistentes de IA (MCP)"
+            subtitle="Conecte o Claude, o Cursor, o VS Code ou outro assistente compatível com MCP à sua conta para criar, configurar e inspecionar os seus agentes por conversa."
+          />
           <McpAccessKeysPanel />
-        </section>
+        </Card>
       </div>
     </div>
   )

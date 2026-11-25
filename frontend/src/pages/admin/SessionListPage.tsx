@@ -1,45 +1,119 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAgentStore } from '../../stores/useAgentStore'
 import { ChatHistoryService } from '../../Services/ChatHistoryService'
 import type { ChatSessionInfo } from '../../types/chatSession'
+import { ButtonLink } from '../../components/admin/ui/Button'
+import { Card, CardHeader } from '../../components/admin/ui/Card'
+import DataTable from '../../components/admin/ui/DataTable'
+import type { DataColumn } from '../../components/admin/ui/DataTable'
+import PageHeader from '../../components/admin/ui/PageHeader'
+import Pagination from '../../components/admin/ui/Pagination'
+import { EmptyState, ErrorState, LoadingState, NoAgentState } from '../../components/admin/ui/States'
+import StatusBadge from '../../components/admin/ui/StatusBadge'
+
+const pageSize = 20
+
+const columns: DataColumn<ChatSessionInfo>[] = [
+  {
+    key: 'visitor',
+    header: 'Visitante',
+    kind: 'main',
+    cell: (session) =>
+      session.userName ? (
+        <span className="block font-medium [overflow-wrap:anywhere] text-ink">{session.userName}</span>
+      ) : (
+        <span className="block text-ink-3">Anônimo</span>
+      ),
+  },
+  { key: 'email', header: 'E-mail', cell: (session) => session.userEmail || '-' },
+  {
+    key: 'phone',
+    header: 'Telefone',
+    nowrap: true,
+    cell: (session) => <span className="font-ui-mono tabular-nums">{session.userPhone || '-'}</span>,
+  },
+  {
+    key: 'start',
+    header: 'Início',
+    nowrap: true,
+    cell: (session) => (
+      <span className="font-ui-mono text-[12.5px] tabular-nums text-ink-2">{new Date(session.startedAt).toLocaleString('pt-BR')}</span>
+    ),
+  },
+  {
+    key: 'end',
+    header: 'Fim',
+    nowrap: true,
+    cell: (session) =>
+      session.endedAt ? (
+        <span className="font-ui-mono text-[12.5px] tabular-nums text-ink-2">{new Date(session.endedAt).toLocaleString('pt-BR')}</span>
+      ) : (
+        <StatusBadge tone="ok" pulse label="Em andamento" />
+      ),
+  },
+  {
+    key: 'messages',
+    header: 'Msgs',
+    label: 'Mensagens',
+    align: 'right',
+    cell: (session) => <span className="font-ui-mono tabular-nums">{session.messageCount ?? 0}</span>,
+  },
+  {
+    key: 'actions',
+    header: 'Ações',
+    hideHeader: true,
+    kind: 'actions',
+    cell: (session) => (
+      <ButtonLink size="sm" icon="chat" to={`/admin/sessions/${session.chatSessionId}`}>
+        Ver conversa
+      </ButtonLink>
+    ),
+  },
+]
 
 const SessionListPage = () => {
   const selectedAgent = useAgentStore((state) => state.selectedAgent)
   const [sessions, setSessions] = useState<ChatSessionInfo[]>([])
-  const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
-  const pageSize = 20
+  const [error, setError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  // Chave da última consulta concluída: "carregando" é derivado dela, sem setState síncrono no effect.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+
+  const agentId = selectedAgent?.agentId
+  const requestKey = agentId ? `${agentId}:${page}:${reloadToken}` : null
+  const loading = requestKey !== null && requestKey !== loadedKey
 
   useEffect(() => {
     if (!selectedAgent) return
-    setLoading(true)
+    const key = `${selectedAgent.agentId}:${page}:${reloadToken}`
     ChatHistoryService.getSessions(selectedAgent.agentId, page, pageSize)
       .then((result) => {
         if (result.sucesso) {
           setSessions(result.dados.items)
           setTotal(result.dados.total)
+          setError(null)
         } else {
           toast.error(result.mensagem || 'Erro ao carregar sessões')
           console.error('[SessionListPage] getSessions — erro:', result.mensagem)
+          setError(result.mensagem || 'Erro ao carregar sessões')
         }
       })
       .catch((err) => {
         console.error('[SessionListPage] getSessions — exceção:', err)
         toast.error('Erro de rede ao carregar sessões')
+        setError('Erro de rede ao carregar sessões')
       })
-      .finally(() => setLoading(false))
-  }, [selectedAgent, page])
+      .finally(() => setLoadedKey(key))
+  }, [selectedAgent, page, reloadToken])
 
   if (!selectedAgent) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <p className="text-gray-400 mb-2">Nenhum agente selecionado</p>
-          <p className="text-sm text-gray-300">Selecione um agente na navbar para ver as sessões.</p>
-        </div>
+      <div className="flex flex-col gap-5">
+        <PageHeader title="Sessões" description="Histórico de conversas do agente." />
+        <NoAgentState purpose="ver as sessões" />
       </div>
     )
   }
@@ -47,98 +121,49 @@ const SessionListPage = () => {
   const totalPages = Math.ceil(total / pageSize)
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Sessões</h1>
-        <p className="text-sm text-gray-500 mt-1">Histórico de conversas do agente {selectedAgent.name}</p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        agentName={selectedAgent.name}
+        title="Sessões"
+        description={`Histórico de conversas do agente ${selectedAgent.name}.`}
+      />
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-gray-500">
-          <div className="w-4 h-4 border-2 border-ava-600 border-t-transparent rounded-full animate-spin" />
-          Carregando...
-        </div>
-      ) : sessions.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-          <p className="text-gray-400">Nenhuma sessão encontrada para este agente.</p>
-        </div>
-      ) : (
-        <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Visitante</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Telefone</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Início</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fim</th>
-                    <th className="text-center px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Msgs</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {sessions.map((session) => (
-                    <tr key={session.chatSessionId} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-5 py-3 text-sm font-medium text-gray-900">
-                        {session.userName || <span className="text-gray-400">Anônimo</span>}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-gray-500">{session.userEmail || '-'}</td>
-                      <td className="px-5 py-3 text-sm text-gray-500">{session.userPhone || '-'}</td>
-                      <td className="px-5 py-3 text-sm text-gray-500">
-                        {new Date(session.startedAt).toLocaleString('pt-BR')}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-gray-500">
-                        {session.endedAt
-                          ? new Date(session.endedAt).toLocaleString('pt-BR')
-                          : <span className="text-green-600 text-xs font-medium">Em andamento</span>}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-gray-500 text-center">
-                        <span className="bg-gray-100 px-2 py-0.5 rounded-full text-xs font-medium">
-                          {session.messageCount ?? 0}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <Link
-                          to={`/admin/sessions/${session.chatSessionId}`}
-                          className="text-sm text-ava-600 hover:text-ava-700 font-medium"
-                        >
-                          Ver conversa
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-gray-500">
-                Mostrando {(page - 1) * pageSize + 1} a {Math.min(page * pageSize, total)} de {total} sessões
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  Anterior
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  Próxima
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      <Card aria-labelledby="sessoes-lista-titulo">
+        <CardHeader titleId="sessoes-lista-titulo" title="Conversas" subtitle="Mais recentes primeiro" />
+        {loading ? (
+          <LoadingState label="Carregando sessões…" rows={5} />
+        ) : error && sessions.length === 0 ? (
+          <ErrorState
+            title="Não foi possível carregar as sessões."
+            description={error}
+            onRetry={() => setReloadToken((t) => t + 1)}
+          />
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon="chat"
+            title="Nenhuma sessão encontrada para este agente"
+            description="As conversas aparecem aqui assim que alguém falar com o agente pelo site, Telegram ou WhatsApp."
+          />
+        ) : (
+          <>
+            <DataTable
+              columns={columns}
+              rows={sessions}
+              rowKey={(session) => session.chatSessionId}
+              caption="Sessões do agente"
+            />
+            {totalPages > 1 && (
+              <Pagination
+                summary={`Mostrando ${(page - 1) * pageSize + 1} a ${Math.min(page * pageSize, total)} de ${total} sessões`}
+                onPrevious={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+                previousDisabled={page === 1}
+                nextDisabled={page === totalPages}
+              />
+            )}
+          </>
+        )}
+      </Card>
     </div>
   )
 }
