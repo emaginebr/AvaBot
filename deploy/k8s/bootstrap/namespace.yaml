@@ -1,0 +1,8 @@
+# Namespace do projeto. Criado uma única vez pelo admin (kubectl apply -f deploy/k8s/bootstrap/);
+# a pipeline não cria nem apaga namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: avabot
+  labels:
+    app.kubernetes.io/part-of: avabot

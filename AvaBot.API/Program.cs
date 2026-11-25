@@ -1,4 +1,7 @@
 using System.Text;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+using AvaBot.Infra.Context;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -150,6 +153,24 @@ if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docke
     app.UseSwaggerUI();
 }
 
+// Atras do ingress-nginx e da Cloudflare: o Service e ClusterIP (so o ingress fala com a API),
+// entao a API confia em X-Forwarded-For/Proto para ter o IP real do cliente e o esquema https.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
+
+// No Kubernetes o ingress encaminha /api/* sem reescrever o caminho: PathBase=/api faz a API
+// aceitar /api/agents (publico) e continuar aceitando /agents (chamadas internas).
+var pathBase = app.Configuration["PathBase"];
+if (!string.IsNullOrWhiteSpace(pathBase))
+{
+    app.UsePathBase(pathBase);
+}
+
 app.UseCors();
 
 // WebSocket
@@ -161,6 +182,13 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapChatWebSocket();
+
+// Readiness do Kubernetes: 200 so quando o banco responde.
+app.MapGet("/health", async (AvaBotContext db, CancellationToken ct) =>
+        await db.Database.CanConnectAsync(ct)
+            ? Results.Ok(new { status = "ok" })
+            : Results.Json(new { status = "database_unavailable" }, statusCode: StatusCodes.Status503ServiceUnavailable))
+    .AllowAnonymous();
 
 app.MapMcp("/mcp").RequireAuthorization(McpAccessKeyAuthenticationHandler.PolicyName);
 

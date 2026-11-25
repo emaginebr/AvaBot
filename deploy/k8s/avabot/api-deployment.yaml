@@ -1,0 +1,77 @@
+# API do projeto (padrão: .NET 8 ouvindo na porta 8080). Se as migrations rodam no startup, a
+# startupProbe dá até 5 min para a porta abrir. Rolling update sem queda: o pod novo só recebe
+# tráfego quando /health responde; o antigo segue atendendo até lá.
+# Outras stacks — adapte: containerPort (e a porta em api-service.yaml/ingress*.yaml), o caminho da
+# readinessProbe (precisa existir na aplicação), recursos e o securityContext (runAsUser).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avabot-api
+  labels:
+    app: avabot-api
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: avabot-api
+  template:
+    metadata:
+      labels:
+        app: avabot-api
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: api
+          # Tag definida pela pipeline (kustomization.yaml → images)
+          image: ghcr.io/emaginebr/avabot-api
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: avabot-api-env
+            - secretRef:
+                name: avabot-api-secrets
+          # TCP: só espera a porta abrir (cobre migrations no startup: 5 s × 60 = 5 min).
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          # HTTP /health: pode incluir o banco; enquanto falhar, o pod não recebe tráfego.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          # Sem banco na liveness: uma oscilação do banco não deve reiniciar o pod.
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            # Imagens oficiais do .NET 8 declaram `USER app` (nome); com runAsNonRoot o kubelet exige
+            # UID numérico para conferir que não é root. 1654 é o UID do usuário `app` nessas imagens.
+            # Outras stacks: use o UID não root da imagem (ex.: node → 1000) ou remova a linha se a
+            # imagem já declarar um USER numérico.
+            runAsUser: 1654
+            allowPrivilegeEscalation: false

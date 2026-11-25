@@ -1,75 +1,423 @@
 name: Deploy Production
 
+# Publica o projeto no cluster Kubernetes da DigitalOcean (do-nyc2-emagine-k8s, namespace avabot):
+#   test → images (GHCR, tag sha-<commit>) → deploy (kubectl apply -k + rollout status)
+# A entrada pública (Cloudflare Tunnel + ingress-nginx compartilhados) é infra do cluster, aplicada
+# pelo admin; esta pipeline só toca no namespace avabot (credencial: ServiceAccount avabot-deployer).
+# O job `manifests` valida os manifestos de deploy/k8s/ (roda mesmo com skip_tests).
+#
+# Segurança: secrets entram nos passos só por `env:` (nunca interpolados em `run:`), nenhum passo
+# usa `set -x` nem imprime valores, e arquivos temporários ficam em $RUNNER_TEMP com umask 077.
+#
+# Projeto sem frontend (ou sem API): remova o build da imagem correspondente, a variável
+# *_IMAGE, o rollout e as referências no diagnóstico/resumo.
+
 on:
+  # Cada merge na main publica a API e o frontend; também dá para disparar à mão (rollback).
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch ou tag a publicar (ex.: main ou v1.2.0)"
+        required: true
+        default: main
+      skip_tests:
+        description: "Pular os testes (só para rollback de uma ref já testada)"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  NAMESPACE: avabot
+  API_IMAGE: ghcr.io/emaginebr/avabot-api
+  WEB_IMAGE: ghcr.io/emaginebr/avabot-web
 
 jobs:
-  deploy:
+  # ADAPTE AO PROJETO: troque os passos abaixo pelos testes/build reais da stack.
+  test:
+    name: Testes (backend e frontend)
+    if: ${{ !inputs.skip_tests }}
     runs-on: ubuntu-latest
-
     steps:
-    - name: Deploy via SSH
-      uses: appleboy/ssh-action@v1
-      with:
-        host: ${{ secrets.PROD_SSH_HOST }}
-        username: ${{ secrets.PROD_SSH_USER }}
-        password: ${{ secrets.PROD_SSH_PASSWORD }}
-        port: ${{ secrets.PROD_SSH_PORT || 22 }}
-        script: |
-          set -e
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
 
-          DEPLOY_DIR="/opt/avabot"
-          REPO_URL="https://github.com/${{ github.repository }}.git"
-          BRANCH="main"
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
 
-          # Clone or update repository
-          if [ -d "$DEPLOY_DIR" ]; then
-            echo "Updating existing repository..."
-            cd "$DEPLOY_DIR"
-            git fetch origin
-            git reset --hard "origin/$BRANCH"
-            git clean -fd
-          else
-            echo "Cloning repository..."
-            git clone --branch "$BRANCH" --single-branch "$REPO_URL" "$DEPLOY_DIR"
-            cd "$DEPLOY_DIR"
+      # Só os testes unitários: AvaBot.Tests.API precisa de uma API no ar.
+      - name: Backend — build e testes unitários
+        run: |
+          dotnet restore AvaBot.Tests/AvaBot.Tests.csproj
+          dotnet build AvaBot.Tests/AvaBot.Tests.csproj --configuration Release --no-restore
+          dotnet test AvaBot.Tests/AvaBot.Tests.csproj --configuration Release --no-build
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # O frontend não tem script de testes: o build (tsc + vite) é a verificação.
+      - name: Frontend — build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+  manifests:
+    name: Validação dos manifestos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Renderizar o Kustomize
+        run: kubectl kustomize "deploy/k8s/$NAMESPACE" > /dev/null
+
+      - name: Sintaxe dos scripts
+        run: |
+          shopt -s nullglob
+          for script in deploy/k8s/*/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Nenhuma credencial em deploy/k8s/
+        run: |
+          set -euo pipefail
+          failed=0
+
+          # Padrões de credenciais conhecidos (token da DigitalOcean, chave privada, senha em
+          # connection string). Só os nomes dos arquivos/linhas são mostrados.
+          if grep -rnE 'dop_v1_|BEGIN .*PRIVATE KEY|Password=' deploy/k8s/; then
+            echo "::error::deploy/k8s/ contém um padrão de credencial (dop_v1_, chave privada ou Password=)."
+            failed=1
           fi
 
-          # Inject .env.prod from GitHub Secrets
-          cat > .env.prod <<'ENVEOF'
-          AVABOT_CONNECTION_STRING=${{ secrets.AVABOT_CONNECTION_STRING }}
-          POWERBI_SECRET_ENCRYPTION_KEY=${{ secrets.POWERBI_SECRET_ENCRYPTION_KEY }}
-          AVABOT_USERNAME=${{ secrets.AVABOT_USERNAME }}
-          AVABOT_PASSWORD=${{ secrets.AVABOT_PASSWORD }}
-          AVABOT_JWT_SECRET=${{ secrets.AVABOT_JWT_SECRET }}
-          WPP_SECRET_KEY=${{ secrets.WPP_SECRET_KEY }}
-          ENVEOF
+          # Nenhum Secret com dados versionado. O token da ServiceAccount em
+          # bootstrap/deployer-rbac.yaml não tem `data`/`stringData` (o cluster preenche).
+          while IFS= read -r -d '' file; do
+            if awk '
+              /^---/ { if (secret && hasdata) bad = 1; secret = 0; hasdata = 0; next }
+              /^kind:[[:space:]]*Secret[[:space:]]*$/ { secret = 1 }
+              /^(data|stringData):/ { hasdata = 1 }
+              END { if (secret && hasdata) bad = 1; exit (bad ? 1 : 0) }
+            ' "$file"; then
+              :
+            else
+              echo "::error file=$file::Secret com data/stringData versionado em $file."
+              failed=1
+            fi
+          done < <(find deploy/k8s -type f \( -name '*.yaml' -o -name '*.yml' \) -print0)
 
-          # Remove leading whitespace from .env.prod
-          sed -i 's/^[[:space:]]*//' .env.prod
+          exit "$failed"
 
-          # Create external network if it doesn't exist
-          docker network inspect emagine-network >/dev/null 2>&1 || docker network create emagine-network
+  images:
+    name: Imagens (GHCR)
+    needs: test
+    # Roda também quando `test` foi pulado (skip_tests), mas não quando falhou.
+    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    # Environment para ler build args do frontend guardados no environment `production`. Se houver
+    # revisores obrigatórios, a aprovação é pedida aqui também. Sem build args de environment,
+    # pode remover.
+    environment:
+      name: production
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+      reftag: ${{ steps.meta.outputs.reftag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
 
-          # Deploy with docker compose
-          docker compose --env-file .env.prod -f docker-compose-prod.yml down
-          docker compose --env-file .env.prod -f docker-compose-prod.yml up --build -d
+      - name: Commit e tags
+        id: meta
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse --short=7 HEAD)"
+          # Tag a partir da ref: '/' vira '-', só [A-Za-z0-9._-], sem começar com '.' ou '-',
+          # no máximo 128 caracteres (regras de tag do registro).
+          reftag="$(printf '%s' "$INPUT_REF" | tr '/' '-' | tr -cd 'A-Za-z0-9._-')"
+          reftag="${reftag#"${reftag%%[!.-]*}"}"
+          reftag="${reftag:0:128}"
+          [[ -n "$reftag" ]] || reftag="ref-$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "reftag=$reftag" >> "$GITHUB_OUTPUT"
+          echo "Commit: $sha · tag da ref: $reftag"
 
-          # Wait and verify
-          echo "Waiting for services to start..."
-          sleep 10
-          docker compose --env-file .env.prod -f docker-compose-prod.yml ps
+      - name: Login no GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-          echo "Deployment completed successfully."
+      # Rollback rápido: se a imagem sha-<commit> já existe, o build é pulado.
+      - name: Imagens já publicadas?
+        id: exists
+        env:
+          SHA: ${{ steps.meta.outputs.sha }}
+        run: |
+          set -euo pipefail
+          for name in api web; do
+            if [[ "$name" == "api" ]]; then image="$API_IMAGE"; else image="$WEB_IMAGE"; fi
+            if docker manifest inspect "$image:sha-$SHA" > /dev/null 2>&1; then
+              echo "$image:sha-$SHA já existe — build pulado."
+              echo "$name=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$name=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
 
-    - name: Summary
-      run: |
-        echo "## Production Deployment" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- Server: \`${{ secrets.PROD_SSH_HOST }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Branch: \`main\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- Triggered by: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+      - name: Setup Buildx
+        if: ${{ steps.exists.outputs.api != 'true' || steps.exists.outputs.web != 'true' }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build e push — API
+        if: ${{ steps.exists.outputs.api != 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:sha-${{ steps.meta.outputs.sha }}
+            ${{ env.API_IMAGE }}:${{ steps.meta.outputs.reftag }}
+          cache-from: type=gha,scope=avabot-api
+          cache-to: type=gha,mode=max,scope=avabot-api
+
+      - name: Build e push — frontend
+        if: ${{ steps.exists.outputs.web != 'true' }}
+        uses: docker/build-push-action@v6
+        # Build args são PÚBLICOS (vão para o navegador). URLs absolutas: o mesmo build serve o
+        # widget embutido em sites de terceiros. NGINX_CONF=nginx.k8s.conf: só a SPA e /healthz.
+        with:
+          context: frontend
+          push: true
+          build-args: |
+            VITE_API_URL=https://avabot.net/api
+            VITE_WS_URL=wss://avabot.net/api
+            NGINX_CONF=nginx.k8s.conf
+          tags: |
+            ${{ env.WEB_IMAGE }}:sha-${{ steps.meta.outputs.sha }}
+            ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.reftag }}
+          cache-from: type=gha,scope=avabot-web
+          cache-to: type=gha,mode=max,scope=avabot-web
+
+  deploy:
+    name: Deploy no Kubernetes
+    needs: [images, manifests]
+    if: ${{ !cancelled() && needs.images.result == 'success' && needs.manifests.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://avabot.net
+    env:
+      SHA: ${{ needs.images.outputs.sha }}
+      REFTAG: ${{ needs.images.outputs.reftag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref_name }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      # Antes de qualquer kubectl: falha cedo, com o nome do que falta, sem imprimir valores.
+      # Para adicionar um secret obrigatório do projeto: inclua-o em `env:` deste passo e no
+      # `for pair` como NOME_NO_GITHUB:VARIÁVEL. Secrets opcionais ficam fora da lista.
+      - name: Validar secrets
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+          GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER || vars.GHCR_PULL_USER }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          AVABOT_CONNECTION_STRING: ${{ secrets.AVABOT_CONNECTION_STRING }}
+          AVABOT_JWT_SECRET: ${{ secrets.AVABOT_JWT_SECRET }}
+          POWERBI_SECRET_ENCRYPTION_KEY: ${{ secrets.POWERBI_SECRET_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          # "NOME_NO_GITHUB:VARIÁVEL_DE_AMBIENTE" (o KUBECONFIG usa outro nome no env para não
+          # ser lido pelo kubectl como caminho de arquivo)
+          for pair in \
+            KUBECONFIG:KUBECONFIG_CONTENT \
+            GHCR_PULL_USER:GHCR_PULL_USER \
+            GHCR_PULL_TOKEN:GHCR_PULL_TOKEN \
+            AVABOT_CONNECTION_STRING:AVABOT_CONNECTION_STRING \
+            AVABOT_JWT_SECRET:AVABOT_JWT_SECRET \
+            POWERBI_SECRET_ENCRYPTION_KEY:POWERBI_SECRET_ENCRYPTION_KEY; do
+            name="${pair%%:*}"
+            var="${pair#*:}"
+            if [[ -z "${!var:-}" ]]; then
+              echo "::error::Secret/Variable $name não definido no environment production."
+              missing=1
+            fi
+          done
+          # Precisa ter pelo menos 32 bytes (HMAC-SHA256).
+          if [[ -n "${AVABOT_JWT_SECRET:-}" ]]; then
+            jwt_bytes="$(printf '%s' "$AVABOT_JWT_SECRET" | wc -c)"
+            if (( jwt_bytes < 32 )); then
+              echo "::error::Secret AVABOT_JWT_SECRET precisa ter pelo menos 32 bytes."
+              missing=1
+            fi
+          fi
+          exit "$missing"
+
+      - name: Kubeconfig
+        env:
+          KUBECONFIG_CONTENT: ${{ secrets.KUBECONFIG }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$KUBECONFIG_CONTENT" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      # Idempotente: create --dry-run=client -o yaml | apply. Valores só via env/arquivos
+      # temporários (umask 077), nunca impressos.
+      # Secret avabot-api-secrets: cada par CHAVE_NO_CLUSTER:VARIÁVEL vira uma chave do Secret
+      # (lida pela API como variável de ambiente; `__` = `:` na configuração do .NET). Variável
+      # vazia (secret opcional não cadastrado) fica de fora. Para adicionar um secret: inclua-o em
+      # `env:` e na lista `for pair`; para remover, tire dos dois lugares (e da validação acima).
+      - name: Secrets do cluster
+        env:
+          AVABOT_CONNECTION_STRING: ${{ secrets.AVABOT_CONNECTION_STRING }}
+          AVABOT_JWT_SECRET: ${{ secrets.AVABOT_JWT_SECRET }}
+          POWERBI_SECRET_ENCRYPTION_KEY: ${{ secrets.POWERBI_SECRET_ENCRYPTION_KEY }}
+          AVABOT_USERNAME: ${{ secrets.AVABOT_USERNAME }}
+          AVABOT_PASSWORD: ${{ secrets.AVABOT_PASSWORD }}
+          WPP_SECRET_KEY: ${{ secrets.WPP_SECRET_KEY }}
+          GHCR_PULL_USER: ${{ secrets.GHCR_PULL_USER || vars.GHCR_PULL_USER }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          tmp="$RUNNER_TEMP/app-secrets"
+          mkdir -p "$tmp"
+          args=()
+          for pair in \
+            ConnectionStrings__AvaBotContext:AVABOT_CONNECTION_STRING \
+            Auth__JwtSecret:AVABOT_JWT_SECRET \
+            PowerBI__SecretEncryptionKey:POWERBI_SECRET_ENCRYPTION_KEY \
+            Auth__Username:AVABOT_USERNAME \
+            Auth__Password:AVABOT_PASSWORD \
+            WppConnect__SecretKey:WPP_SECRET_KEY; do
+            key="${pair%%:*}"
+            var="${pair#*:}"
+            [[ -n "${!var:-}" ]] || continue
+            printf '%s' "${!var}" > "$tmp/$key"
+            args+=("--from-file=$key=$tmp/$key")
+          done
+
+          kubectl -n "$NAMESPACE" create secret generic avabot-api-secrets \
+            "${args[@]}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_PULL_USER" \
+            --docker-password="$GHCR_PULL_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          rm -rf "$tmp"
+
+      # `kustomize edit set image` quando o kustomize está no runner (vem nas imagens
+      # ubuntu-latest do GitHub). Como isso não é garantido, há um fallback com sed sobre o bloco
+      # `images` do kustomization.yaml (formato fixo, controlado por este repositório). Em ambos
+      # os casos o resultado é conferido no YAML renderizado antes do apply.
+      - name: Definir as imagens (sha-${{ needs.images.outputs.sha }})
+        working-directory: deploy/k8s/avabot
+        run: |
+          set -euo pipefail
+          if command -v kustomize > /dev/null 2>&1; then
+            kustomize edit set image "$API_IMAGE=$API_IMAGE:sha-$SHA"
+            kustomize edit set image "$WEB_IMAGE=$WEB_IMAGE:sha-$SHA"
+          else
+            echo "kustomize não encontrado no runner; usando sed no kustomization.yaml."
+            for image in "$API_IMAGE" "$WEB_IMAGE"; do
+              sed -i "\#- name: ${image}\$#{n;s#newTag: .*#newTag: sha-${SHA}#}" kustomization.yaml
+            done
+          fi
+          rendered="$(kubectl kustomize .)"
+          for image in "$API_IMAGE" "$WEB_IMAGE"; do
+            if ! grep -qF "image: $image:sha-$SHA" <<< "$rendered"; then
+              echo "::error::A imagem $image:sha-$SHA não aparece nos manifestos renderizados."
+              exit 1
+            fi
+          done
+          # `image` pode ser a 1ª chave do container (linha `- image:`)
+          grep -E '^\s+(- )?image:' <<< "$rendered"
+
+      - name: Aplicar os manifestos
+        run: kubectl apply -k "deploy/k8s/$NAMESPACE"
+
+      - name: Rollout — Elasticsearch
+        run: kubectl -n "$NAMESPACE" rollout status statefulset/avabot-elasticsearch --timeout=10m
+
+      - name: Rollout — API
+        run: kubectl -n "$NAMESPACE" rollout status deployment/avabot-api --timeout=10m
+
+      - name: Rollout — frontend
+        run: kubectl -n "$NAMESPACE" rollout status deployment/avabot-web --timeout=10m
+
+      # Diagnóstico do pod novo; o anterior segue atendendo (maxUnavailable: 0). Sem Secrets.
+      - name: Diagnóstico da falha
+        if: ${{ failure() }}
+        run: |
+          if [[ -z "${KUBECONFIG:-}" || ! -f "${KUBECONFIG}" ]]; then
+            echo "Sem kubeconfig (a falha ocorreu antes do acesso ao cluster)."
+            exit 0
+          fi
+          kubectl -n "$NAMESPACE" get pods -o wide || true
+          kubectl -n "$NAMESPACE" describe deploy avabot-api avabot-web || true
+          kubectl -n "$NAMESPACE" describe statefulset avabot-elasticsearch || true
+          kubectl -n "$NAMESPACE" describe pods -l 'app in (avabot-api,avabot-web,avabot-elasticsearch)' || true
+          kubectl -n "$NAMESPACE" logs -l app=avabot-elasticsearch --tail=60 --all-containers --prefix || true
+          kubectl -n "$NAMESPACE" logs -l app=avabot-api --tail=100 --all-containers --prefix || true
+          kubectl -n "$NAMESPACE" logs -l app=avabot-web --tail=100 --all-containers --prefix || true
+
+      - name: Resumo e limpeza
+        if: ${{ always() }}
+        env:
+          INPUT_REF: ${{ inputs.ref || github.ref_name }}
+          JOB_STATUS: ${{ job.status }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          rm -f "$RUNNER_TEMP/kubeconfig"
+          rm -rf "$RUNNER_TEMP/app-secrets"
+          {
+            echo "## Deploy de produção (Kubernetes)"
+            echo ""
+            echo "- Resultado: \`$JOB_STATUS\`"
+            echo "- URL: https://avabot.net"
+            echo "- Ref: \`$INPUT_REF\`"
+            echo "- Commit: \`$SHA\`"
+            echo "- Imagens: \`$API_IMAGE:sha-$SHA\`, \`$WEB_IMAGE:sha-$SHA\`"
+            echo "- Tag da ref (aplicada quando a imagem foi gerada nesta execução): \`$REFTAG\`"
+            echo "- Disparado por: \`$ACTOR\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,16 @@
+# Só o ingress fala com a API (ClusterIP): por isso a API pode confiar em X-Forwarded-For/Proto.
+apiVersion: v1
+kind: Service
+metadata:
+  name: avabot-api
+  labels:
+    app: avabot-api
+spec:
+  type: ClusterIP
+  selector:
+    app: avabot-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

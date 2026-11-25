@@ -55,3 +55,7 @@ nginx/certs/
 # Calibracao de perguntas: configuracao local (chaves OpenAI e Power BI) e schemas gerados
 AvaBot.Calibration/appsettings.json
 calibration/schemas/
+
+# Kubernetes: kubeconfigs nunca vão para o repositório
+*.kubeconfig
+kubeconfig*

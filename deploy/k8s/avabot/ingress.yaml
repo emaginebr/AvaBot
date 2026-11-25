@@ -1,0 +1,41 @@
+# Roteamento público de avabot.net. Os caminhos chegam à API com o prefixo /api (sem rewrite):
+# a API usa PathBase=/api (api-configmap.yaml).
+# - Sem TLS: o HTTPS termina na Cloudflare e o túnel chega aqui por HTTP.
+# - Só o host principal: o 301 www → avabot.net é uma Redirect Rule da Cloudflare.
+# - CORS aberto na API (como no nginx antigo): o widget é embutido em sites de terceiros.
+# - WebSocket do chat e MCP ficam em ingress-stream.yaml (timeouts longos, sem buffer).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: avabot
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Upload de arquivos da base de conhecimento.
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Tenant-Id, X-Device-Fingerprint, User-Agent"
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: avabot.net
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: avabot-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: avabot-web
+                port:
+                  number: 80

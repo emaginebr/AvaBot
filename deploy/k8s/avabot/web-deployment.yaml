@@ -1,0 +1,55 @@
+# Frontend do projeto (SPA servida por nginx na porta 80). Variáveis de build (ex.: VITE_*) são
+# embutidas na imagem, por isso não há env aqui. No cluster as rotas da API chegam direto do
+# ingress à API; um proxy `location /api` no nginx.conf da imagem só serve para o ambiente local.
+# O nginx.conf da imagem precisa responder 200 em /healthz (ex.: `location = /healthz { return 200; }`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avabot-web
+  labels:
+    app: avabot-web
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 300
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: avabot-web
+  template:
+    metadata:
+      labels:
+        app: avabot-web
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: web
+          # Tag definida pela pipeline (kustomization.yaml → images)
+          image: ghcr.io/emaginebr/avabot-web
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
