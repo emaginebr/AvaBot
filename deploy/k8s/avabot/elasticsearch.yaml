@@ -1,0 +1,98 @@
+# Elasticsearch 8.17 single-node do AvaBot (base de conhecimento, índice knowledge_chunks).
+# Só acessível dentro do cluster (Service ClusterIP, sem Ingress), sem segurança do x-pack,
+# como no servidor Docker anterior. Dados no volume persistente (do-block-storage-retain: o disco
+# sobrevive à exclusão do PVC).
+# Memória: heap de 512 MB; o cluster tem pouca folga, por isso request de 640Mi (cabe no nó com mais folga hoje) e limite de 1Gi.
+apiVersion: v1
+kind: Service
+metadata:
+  name: avabot-elasticsearch
+  labels:
+    app: avabot-elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    app: avabot-elasticsearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: avabot-elasticsearch
+  labels:
+    app: avabot-elasticsearch
+spec:
+  serviceName: avabot-elasticsearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: avabot-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: avabot-elasticsearch
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        # UID/GID 1000 = usuário elasticsearch da imagem oficial; fsGroup dá acesso ao volume.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: elasticsearch
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+          ports:
+            - name: http
+              containerPort: 9200
+              protocol: TCP
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+            # Sem mmap: dispensa vm.max_map_count no nó (não temos acesso privilegiado ao host).
+            - name: node.store.allow_mmap
+              value: "false"
+            # Permite `_reindex` a partir do Elasticsearch antigo durante a migração
+            # (ver deploy/k8s/README.md). Pode ser removido depois.
+            - name: reindex.remote.whitelist
+              value: "*:9200"
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?local=true
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 640Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: do-block-storage-retain
+        resources:
+          requests:
+            storage: 5Gi

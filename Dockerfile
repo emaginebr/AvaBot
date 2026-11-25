@@ -23,4 +23,6 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+# Usuario nao root das imagens oficiais do .NET (UID 1654); o Kubernetes roda com runAsNonRoot.
+USER $APP_UID
 ENTRYPOINT ["dotnet", "AvaBot.API.dll"]

@@ -1,0 +1,16 @@
+# Configuração NÃO secreta da API, injetada como variáveis de ambiente (envFrom). Segredos ficam no
+# Secret avabot-api-secrets, criado pela pipeline. O restante vem de appsettings.Production.json.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: avabot-api-env
+data:
+  ASPNETCORE_ENVIRONMENT: Production
+  # O ingress encaminha /api/* sem reescrever: a API usa /api como PathBase.
+  PathBase: /api
+  # Elasticsearch do próprio namespace (elasticsearch.yaml).
+  Elasticsearch__Url: http://avabot-elasticsearch:9200
+  # WhatsApp fora do ar por ora: o WPP Connect não roda no cluster. Quando voltar, aponte
+  # WppConnect__BaseUrl e WppConnect__WebhookBaseUrl (http://avabot-api:8080/api) para cá.
+  WppConnect__BaseUrl: http://wppconnect-indisponivel.invalid:21465
+  WppConnect__WebhookBaseUrl: http://avabot-api:8080/api

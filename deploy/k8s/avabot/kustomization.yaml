@@ -1,0 +1,31 @@
+# Recursos do projeto no namespace avabot, aplicados pela pipeline Deploy Production com
+# `kubectl apply -k deploy/k8s/avabot`. Os Secrets (avabot-api-secrets e ghcr-pull) NÃO ficam
+# aqui: a pipeline os cria a partir dos secrets do GitHub.
+# Projeto sem frontend (ou sem API): remova os arquivos correspondentes de `resources` e de `images`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: avabot
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: avabot
+    includeSelectors: false
+    includeTemplates: true
+
+resources:
+  - elasticsearch.yaml
+  - api-configmap.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  - ingress.yaml
+  - ingress-stream.yaml
+
+# `latest` é só um marcador: a pipeline troca as tags por `sha-<commit>` antes do apply.
+images:
+  - name: ghcr.io/emaginebr/avabot-api
+    newTag: latest
+  - name: ghcr.io/emaginebr/avabot-web
+    newTag: latest
