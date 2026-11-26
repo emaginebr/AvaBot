@@ -1,110 +1,95 @@
 ---
 name: avabot-deploy
-description: Sobe para produção o frontend do AvaBot (avabot.net) ou o WPP Connect / infraestrutura compartilhada (RabbitMQ, Elasticsearch, WPP Connect) usando o repositório C:\repos\emagine-deploy. Use sempre que o usuário pedir para subir, publicar ou fazer deploy do frontend, do wppconnect ou da infra do AvaBot.
+description: Sobe para produção o AvaBot (API e frontend de avabot.net) no cluster Kubernetes da emagine (do-nyc2-emagine-k8s, namespace avabot) pela pipeline Deploy Production deste repositório. Use sempre que o usuário pedir para subir, publicar, fazer deploy, rollback, reiniciar ou ver logs/status do AvaBot em produção.
 ---
 
-# Deploy do frontend e da infra do AvaBot (via emagine-deploy)
+# Deploy do AvaBot (cluster Kubernetes)
 
-O frontend do AvaBot e o WPP Connect **não** são publicados por este repositório. Quem publica é o repo irmão `C:\repos\emagine-deploy` (GitHub `emaginebr/emagine-deploy`), que tem dois caminhos independentes:
-
-| Alvo | Como sobe | Workflow |
-|---|---|---|
-| Frontend (`avabot.net`) | Script `scripts/build-avabot.ps1` gera o build em `builds/avabot/`, commit + push na `main` | `Version and Tag` → `Deploy Production` (automático no push) |
-| WPP Connect / infra | Disparo manual | `Deploy Infrastructure` (`deploy-infra.yml`, só `workflow_dispatch`) |
-
-A API (.NET) **não** faz parte deste fluxo.
+Desde 2026-11-26 a API e o frontend de `avabot.net` rodam no cluster DOKS `do-nyc2-emagine-k8s`,
+namespace `avabot`, atrás do Cloudflare Tunnel `emagine-k8s` e do ingress-nginx compartilhado.
+O `emagine-deploy` e o servidor Docker antigo **não** publicam mais o AvaBot. Detalhes de
+arquitetura, bootstrap e troca na Cloudflare: `deploy/k8s/README.md`. Padrões do cluster: skill
+`k8s-deploy`.
 
 Toda mensagem ao usuário em português, com acentos.
 
----
+| Item | Valor |
+|---|---|
+| Pipeline | `.github/workflows/deploy-prod.yml` (**Deploy Production**), environment `production` |
+| Disparo | automático em push/merge na `main`; manual com `ref` e `skip_tests` |
+| Imagens | `ghcr.io/emaginebr/avabot-api` e `ghcr.io/emaginebr/avabot-web`, tag `sha-<commit7>` |
+| Manifestos | `deploy/k8s/avabot` (Kustomize) |
+| Banco | PostgreSQL gerenciado (fora do cluster); migrações aplicadas pela API na subida |
+| Base de conhecimento | tabela `avabot_knowledge_chunks` no PostgreSQL (sem Elasticsearch) |
+| WhatsApp | **desligado**: o WPP Connect não roda no cluster (ver `deploy/k8s/README.md`, seção WhatsApp) |
 
-## A. Frontend
-
-### 1. Pré-checagens (AvaBot)
-
-O `build-avabot.ps1` roda `git pull` em `C:\repos\AvaBot\frontend` **no branch atual** e compila o que estiver no disco. Então:
+## 1. Pré-checagens
 
 ```bash
-git -C /c/repos/AvaBot branch --show-current      # tem que ser main
-git -C /c/repos/AvaBot status --short frontend/   # alterações locais entram no build
+git -C /c/repos/AvaBot fetch -q && git -C /c/repos/AvaBot log --oneline -1 origin/main
+gh run list --workflow deploy-prod.yml -L 3
 ```
 
-- Se não estiver na `main`, pergunte antes de trocar (pode haver trabalho em andamento). O código a publicar precisa estar mergeado na `main`.
-- Se houver alterações não commitadas em `frontend/`, avise: elas iriam para produção sem estar no git. Pergunte se segue.
-- O build usa `frontend/.env.production` (`VITE_API_URL=https://avabot.net/api`, `VITE_WS_URL=wss://avabot.net/api`).
+O que vai para produção é o que está na `main` (ou na `ref` informada), não o disco local.
+Código ainda não mergeado: peça o merge ou confirme o disparo a partir do branch.
 
-### 2. Pré-checagens (emagine-deploy)
+## 2. Deploy
+
+- Normal: merge na `main` (dispara sozinho).
+- Manual (confirmar antes, é produção):
+
+  ```bash
+  gh workflow run deploy-prod.yml --ref main -f ref=main
+  gh workflow run deploy-prod.yml --ref <branch> -f ref=<branch>   # branch não mergeado
+  ```
+
+Acompanhar:
 
 ```bash
-cd /c/repos/emagine-deploy
-git checkout main && git pull --ff-only
-git status --short
+gh run list --workflow deploy-prod.yml -L 1
+gh run watch <id> --exit-status
+gh run view <id> --log-failed      # se falhar
 ```
 
-Arquivos já modificados ou não rastreados (ex.: `.qwen/`) **não** entram no commit: use `git add builds/avabot` apenas.
+Jobs: `test` → `manifests` → `images` → `deploy` (Secrets do cluster, `kubectl apply -k`,
+rollout da API e do frontend). O rollout não derruba o site (`maxUnavailable: 0`).
 
-### 3. Build
-
-```bash
-cd /c/repos/emagine-deploy && pwsh -NoProfile -File ./scripts/build-avabot.ps1
-```
-
-Faz clean de `builds/avabot`, `git pull`, `npm install`, `npm run build` e copia `dist/` para `builds/avabot/`. Se falhar, pare e mostre o erro.
-
-### 4. Commit e push (dispara o deploy)
-
-Padrão de mensagem do repositório: `chore: atualiza build do avabot`. Commit direto na `main` (sem PR, como os demais builds).
+## 3. Verificação
 
 ```bash
-cd /c/repos/emagine-deploy
-git add builds/avabot
-git diff --cached --stat
-git commit -m "chore: atualiza build do avabot"
-git push origin main
-```
-
-Se `git diff --cached` vier vazio, o build não mudou: avise e não faça commit.
-
-### 5. Acompanhar e verificar
-
-```bash
-gh run list -R emaginebr/emagine-deploy -L 4
-gh run watch <id-do-Deploy-Production> -R emaginebr/emagine-deploy --exit-status
 curl -s -o /dev/null -w "%{http_code}\n" https://avabot.net/
+curl -s https://avabot.net/api/health
 ```
 
-O `Deploy Production` só começa depois do `Version and Tag` terminar. Ele faz `docker compose down` + `up --build` do Nginx que serve **todos** os sites da Emagine: há alguns segundos de indisponibilidade geral.
+Para ver se a requisição chegou ao cluster, confira o log do ingress (abaixo). A resposta
+`server: cloudflare` sozinha não prova nada.
 
----
-
-## B. WPP Connect / infraestrutura
-
-O workflow `Deploy Infrastructure` sincroniza `/opt/emagine-deploy` com `origin/main`, regrava o `.env` com os secrets (`RABBITMQ_*`, `WPP_SECRET_KEY`) e recria, em sequência: **RabbitMQ → Elasticsearch → WPP Connect** (`--force-recreate`), depois verifica os containers.
-
-Arquivos envolvidos em `emagine-deploy`: `docker-compose-infra.yml`, `wppconnect.Dockerfile` (base `wppconnect/server-cli:latest` + `@wppconnect-team/wppconnect` fixado), `wppconnect.config.js`.
-
-### 1. Se houver mudança de configuração
-
-Qualquer alteração nesses arquivos precisa estar na `main` do `emagine-deploy` **antes** do disparo (o servidor faz `git reset --hard origin/main`). Commit e push; lembre que o push na `main` também dispara o `Deploy Production` (reinício do Nginx).
-
-### 2. Confirmar com o usuário antes de disparar
-
-Avise o impacto e peça confirmação:
-- RabbitMQ e Elasticsearch também são recriados (não há job só do WPP Connect). Todos os projetos que usam essa infra ficam indisponíveis por até ~2 min; a base de conhecimento do AvaBot (Elasticsearch) fica fora nesse intervalo.
-- Os volumes persistem (`wpp_tokens`, `es_data`, `rabbitmq_data`), então a sessão pareada do WhatsApp normalmente sobrevive. Se não sobreviver, é preciso parear de novo pelo painel (start-session + QR code).
-
-### 3. Disparar e acompanhar
+## 4. Operação (kubeconfig de admin, só local)
 
 ```bash
-gh workflow run deploy-infra.yml -R emaginebr/emagine-deploy --ref main
-gh run list -R emaginebr/emagine-deploy --workflow deploy-infra.yml -L 1
-gh run watch <id> -R emaginebr/emagine-deploy --exit-status
+export KUBECONFIG="$HOME/.kube/do-nyc2-emagine-k8s.kubeconfig"
+export PATH="$PATH:$LOCALAPPDATA/Microsoft/WinGet/Links"   # Git Bash no Windows
 ```
 
-Depois, confira no painel do AvaBot (WhatsApp > status) se a sessão continua conectada.
+| Ação | Comando |
+|---|---|
+| Status | `kubectl -n avabot get deploy,pods,ingress -o wide` |
+| Logs da API | `kubectl -n avabot logs deploy/avabot-api --tail=200` |
+| Backfill da base | `kubectl -n avabot logs deploy/avabot-api \| grep '\[Backfill\]'` |
+| Tráfego no ingress | `kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --since=5m \| grep '\[avabot-'` |
+| Reiniciar a API | `kubectl -n avabot rollout restart deployment/avabot-api` (confirmar antes) |
+| Rollback rápido | Deploy Production com a tag/ref anterior e `skip_tests=true` |
+| Rollback de emergência | `kubectl -n avabot rollout undo deployment/avabot-api` (ou `avabot-web`) |
 
----
+Regras:
+- O kubeconfig de admin **nunca** vai para o repositório, secrets, logs ou respostas (nada de
+  `cat` ou `kubectl config view --raw`). A pipeline usa só o kubeconfig da SA `avabot-deployer`.
+- Leituras (`get`, `logs`, `describe`) podem ser feitas direto. Qualquer ação que altere o cluster
+  precisa do ok do usuário.
+- Secrets da API (`avabot-api-secrets`) são recriados pela pipeline a partir dos secrets do
+  environment `production`; não edite à mão. Configuração não secreta: `deploy/k8s/avabot/api-configmap.yaml`.
 
 ## Relatório final
 
-Diga o que foi publicado (frontend, infra ou ambos), o commit no `emagine-deploy`, o resultado dos workflows (com link do run) e a verificação feita. Se algo falhou, mostre a etapa e o log (`gh run view <id> --log-failed -R emaginebr/emagine-deploy`).
+Diga o que foi publicado (commit/ref), o resultado do workflow (com o link do run) e a verificação
+feita. Se algo falhou, mostre o job e o trecho do log.

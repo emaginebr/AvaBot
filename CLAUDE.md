@@ -53,12 +53,13 @@ frontend/                    # Frontend React/Vite
 specs/                       # Specs compartilhadas (backend 001-004, frontend 005-010)
 ```
 
-## Deploy do frontend, do WPP Connect e da infra
+## Deploy de produção
 
-**Sempre** que o usuário pedir para subir/publicar/fazer deploy do frontend, do wppconnect ou da infra (RabbitMQ, Elasticsearch, WPP Connect), use a skill `avabot-deploy`. O deploy é feito pelo repositório irmão `C:\repos\emagine-deploy`, não por este:
+**Sempre** que o usuário pedir para subir/publicar/fazer deploy, rollback, reiniciar ou ver logs do AvaBot em produção, use a skill `avabot-deploy`. API e frontend rodam no cluster Kubernetes `do-nyc2-emagine-k8s` (namespace `avabot`), publicados pela pipeline `.github/workflows/deploy-prod.yml` a cada merge na `main`. Detalhes em `deploy/k8s/README.md`.
 
-- Frontend: `scripts/build-avabot.ps1` → commit `chore: atualiza build do avabot` em `builds/avabot` na `main` → workflow `Deploy Production`.
-- WPP Connect / infra: `gh workflow run deploy-infra.yml -R emaginebr/emagine-deploy` (recria RabbitMQ, Elasticsearch e WPP Connect; confirmar antes).
+- O `emagine-deploy` não publica mais o AvaBot (o build do frontend e o vhost de `avabot.net` saíram de lá).
+- Não há Elasticsearch: a base de conhecimento fica no PostgreSQL (feature 021).
+- WhatsApp desligado: o WPP Connect não roda no cluster.
 
 ## Commands
 
