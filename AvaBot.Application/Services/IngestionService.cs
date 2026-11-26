@@ -25,7 +25,12 @@ public class IngestionService
         _logger = logger;
     }
 
-    public async Task ProcessFileAsync(long fileId)
+    /// <param name="allowMissingEmbeddings">
+    /// Backfill (feature 021): se o agente nao tem chave OpenAI, grava os trechos sem embedding em vez
+    /// de falhar. A busca e so textual e nao usa o vetor. No upload normal continua falhando, para o
+    /// administrador saber que falta a chave.
+    /// </param>
+    public async Task ProcessFileAsync(long fileId, bool allowMissingEmbeddings = false)
     {
         var file = await _fileRepository.GetByIdAsync(fileId);
         if (file == null)
@@ -64,13 +69,33 @@ public class IngestionService
 
             // Generate embeddings and index
             var chunkDataList = new List<ChunkData>();
+            var withoutEmbeddings = false;
             for (int i = 0; i < chunks.Count; i++)
             {
+                if (withoutEmbeddings)
+                {
+                    chunkDataList.Add(new ChunkData { Content = chunks[i], Embedding = Array.Empty<float>(), ChunkIndex = i });
+                    continue;
+                }
+
                 _logger.LogInformation(
                     "[Ingestion] Gerando embedding para chunk [{Index}/{Total}]...",
                     i + 1, chunks.Count);
 
-                var embedding = await _openAIService.GenerateEmbeddingAsync(file.AgentId!.Value, chunks[i]);
+                float[] embedding;
+                try
+                {
+                    embedding = await _openAIService.GenerateEmbeddingAsync(file.AgentId!.Value, chunks[i]);
+                }
+                catch (MissingOpenAIKeyException) when (allowMissingEmbeddings)
+                {
+                    _logger.LogWarning(
+                        "[Ingestion] Agente {AgentId} sem chave OpenAI: arquivo ID={FileId} indexado sem embeddings",
+                        file.AgentId, fileId);
+                    withoutEmbeddings = true;
+                    chunkDataList.Add(new ChunkData { Content = chunks[i], Embedding = Array.Empty<float>(), ChunkIndex = i });
+                    continue;
+                }
 
                 _logger.LogInformation(
                     "[Ingestion] Embedding gerado para chunk [{Index}/{Total}] - {Dimensions} dimensoes",

@@ -44,7 +44,7 @@ public class OpenAIService : IOpenAIService
             ?? throw new InvalidOperationException("Agente nao encontrado para usar os recursos de IA.");
 
         if (string.IsNullOrEmpty(agent.OpenAIApiKeyEncrypted))
-            throw new InvalidOperationException("Este agente ainda nao possui uma chave OpenAI configurada.");
+            throw new MissingOpenAIKeyException();
 
         var apiKey = _secretProtector.Unprotect(agent.OpenAIApiKeyEncrypted);
         return new OpenAIClient(apiKey);
