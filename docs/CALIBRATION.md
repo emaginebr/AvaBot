@@ -2,7 +2,7 @@
 
 `AvaBot.Calibration` é um programa de console que roda uma pergunta, ou um conjunto de conversas, com a configuração de um agente e gera um relatório em markdown com **todo o fluxo** de cada mensagem. Serve para entender por que o agente respondeu mal e o que ajustar: prompt, descrições do schema, base de conhecimento ou regras do Power BI. O relatório foi pensado para ser lido por uma IA.
 
-O programa **não usa a API, o banco nem o Elasticsearch**:
+O programa **não usa a API nem o banco**:
 - **Fluxo:** é o mesmo do teste de agente (`ChatService.TestMessageAsync`), com o mesmo prompt de sistema, as mesmas regras do Power BI e o mesmo loop de ferramentas, executado no próprio processo.
 - **Conexões externas:** só a **OpenAI** e o **Power BI**.
 - **Base de conhecimento:** lida de uma **pasta local**. Os documentos são divididos nos mesmos trechos da ingestão e buscados com o mesmo critério do índice (match textual).

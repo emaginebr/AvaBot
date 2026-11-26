@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -17,7 +18,7 @@ namespace AvaBot.Infra.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.20")
+                .HasAnnotation("ProductVersion", "9.0.23")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -330,6 +331,70 @@ namespace AvaBot.Infra.Migrations
                         .HasDatabaseName("ix_avabot_chat_sessions_resume_token");
 
                     b.ToTable("avabot_chat_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.KnowledgeChunk", b =>
+                {
+                    b.Property<long>("KnowledgeChunkId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("knowledge_chunk_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("KnowledgeChunkId"));
+
+                    b.Property<long>("AgentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("agent_id");
+
+                    b.Property<int>("ChunkIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("chunk_index");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.PrimitiveCollection<float[]>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("real[]")
+                        .HasColumnName("embedding");
+
+                    b.Property<long>("KnowledgeFileId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("knowledge_file_id");
+
+                    b.Property<string>("SearchContent")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("search_content");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("to_tsvector('portuguese'::regconfig, search_content)", true);
+
+                    b.HasKey("KnowledgeChunkId")
+                        .HasName("avabot_knowledge_chunks_pkey");
+
+                    b.HasIndex("AgentId")
+                        .HasDatabaseName("ix_avabot_knowledge_chunks_agent_id");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("ix_avabot_knowledge_chunks_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
+
+                    b.HasIndex("KnowledgeFileId", "ChunkIndex")
+                        .IsUnique()
+                        .HasDatabaseName("ix_avabot_knowledge_chunks_file_chunk");
+
+                    b.ToTable("avabot_knowledge_chunks", (string)null);
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.KnowledgeFile", b =>
@@ -932,6 +997,23 @@ namespace AvaBot.Infra.Migrations
                         .HasConstraintName("avabot_fk_agents_chat_sessions");
 
                     b.Navigation("Agent");
+                });
+
+            modelBuilder.Entity("AvaBot.Domain.Models.KnowledgeChunk", b =>
+                {
+                    b.HasOne("AvaBot.Domain.Models.Agent", null)
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_agents_knowledge_chunks");
+
+                    b.HasOne("AvaBot.Domain.Models.KnowledgeFile", null)
+                        .WithMany()
+                        .HasForeignKey("KnowledgeFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("avabot_fk_knowledge_files_knowledge_chunks");
                 });
 
             modelBuilder.Entity("AvaBot.Domain.Models.KnowledgeFile", b =>

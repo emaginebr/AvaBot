@@ -38,7 +38,7 @@ public class PowerBIToolsTest
         var protectorMock = new Mock<ISecretProtector>();
         protectorMock.Setup(p => p.Unprotect(It.IsAny<string>())).Returns("plain-secret");
 
-        var agentService = new AgentService(_agentRepoMock.Object, new Mock<IElasticsearchService>().Object, protectorMock.Object, mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, new Mock<IKnowledgeChunkRepository>().Object, protectorMock.Object, mapper);
         var powerBIService = new PowerBIService(_agentRepoMock.Object, _configRepoMock.Object, _datasetRepoMock.Object,
             new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>().Object, _clientMock.Object, protectorMock.Object,
             new PowerBISchemaBuilder(_clientMock.Object), NullLogger<PowerBIService>.Instance);

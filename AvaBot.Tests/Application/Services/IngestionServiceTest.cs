@@ -12,16 +12,16 @@ namespace AvaBot.Tests.Application.Services;
 public class IngestionServiceTest
 {
     private readonly Mock<IKnowledgeFileRepository<KnowledgeFile>> _fileRepoMock;
-    private readonly Mock<IElasticsearchService> _esServiceMock;
+    private readonly Mock<IKnowledgeChunkRepository> _chunkRepositoryMock;
     private readonly Mock<IOpenAIService> _openAIServiceMock;
     private readonly IngestionService _sut;
 
     public IngestionServiceTest()
     {
         _fileRepoMock = new Mock<IKnowledgeFileRepository<KnowledgeFile>>();
-        _esServiceMock = new Mock<IElasticsearchService>();
+        _chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         _openAIServiceMock = new Mock<IOpenAIService>();
-        _sut = new IngestionService(_fileRepoMock.Object, _esServiceMock.Object, _openAIServiceMock.Object, NullLogger<IngestionService>.Instance);
+        _sut = new IngestionService(_fileRepoMock.Object, _chunkRepositoryMock.Object, _openAIServiceMock.Object, NullLogger<IngestionService>.Instance);
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class IngestionServiceTest
         await _sut.ProcessFileAsync(999);
 
         // Assert
-        _esServiceMock.Verify(s => s.DeleteChunksByFileIdAsync(It.IsAny<long>()), Times.Never);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(It.IsAny<long>()), Times.Never);
     }
 
     [Fact]
@@ -57,8 +57,8 @@ public class IngestionServiceTest
 
         // Assert
         Assert.Equal(ProcessingStatus.Ready, file.ProcessingStatus);
-        _esServiceMock.Verify(s => s.DeleteChunksByFileIdAsync(1), Times.Once);
-        _esServiceMock.Verify(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(1), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()), Times.Once);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _esServiceMock.Setup(s => s.DeleteChunksByFileIdAsync(1)).ThrowsAsync(new Exception("ES error"));
+        _chunkRepositoryMock.Setup(s => s.DeleteChunksByFileIdAsync(1)).ThrowsAsync(new Exception("ES error"));
 
         // Act
         await _sut.ProcessFileAsync(1);
@@ -84,10 +84,10 @@ public class IngestionServiceTest
         Assert.Equal("ES error", file.ErrorMessage);
     }
 
-    // --- Upload: chunks are sent to Elasticsearch ---
+    // --- Upload: chunks are sent to the chunk repository ---
 
     [Fact]
-    public async Task ProcessFileAsync_ShouldSendCorrectNumberOfChunks_ToElasticsearch()
+    public async Task ProcessFileAsync_ShouldSendCorrectNumberOfChunks_ToChunkRepository()
     {
         var content = "Paragrafo 1 com conteudo.\n\nParagrafo 2 com conteudo.\n\nParagrafo 3 com conteudo.";
         var file = new KnowledgeFile
@@ -103,7 +103,7 @@ public class IngestionServiceTest
 
         var expectedChunks = IngestionService.ChunkText(content, 2000, 200);
 
-        _esServiceMock.Verify(s => s.IndexChunksAsync(
+        _chunkRepositoryMock.Verify(s => s.IndexChunksAsync(
             10, 5,
             It.Is<List<ChunkData>>(list => list.Count == expectedChunks.Count)),
             Times.Once);
@@ -123,7 +123,7 @@ public class IngestionServiceTest
         _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.5f });
 
         List<ChunkData>? capturedChunks = null;
-        _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
+        _chunkRepositoryMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .Callback<long, long, List<ChunkData>>((_, _, chunks) => capturedChunks = chunks);
 
         await _sut.ProcessFileAsync(1);
@@ -147,7 +147,7 @@ public class IngestionServiceTest
         _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(embedding);
 
         List<ChunkData>? capturedChunks = null;
-        _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
+        _chunkRepositoryMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .Callback<long, long, List<ChunkData>>((_, _, chunks) => capturedChunks = chunks);
 
         await _sut.ProcessFileAsync(1);
@@ -170,7 +170,7 @@ public class IngestionServiceTest
         _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
         List<ChunkData>? capturedChunks = null;
-        _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
+        _chunkRepositoryMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .Callback<long, long, List<ChunkData>>((_, _, chunks) => capturedChunks = chunks);
 
         await _sut.ProcessFileAsync(1);
@@ -214,9 +214,9 @@ public class IngestionServiceTest
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
         _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
 
-        _esServiceMock.Setup(s => s.DeleteChunksByFileIdAsync(1))
+        _chunkRepositoryMock.Setup(s => s.DeleteChunksByFileIdAsync(1))
             .Callback(() => callOrder.Add("delete"));
-        _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
+        _chunkRepositoryMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .Callback(() => callOrder.Add("index"));
 
         await _sut.ProcessFileAsync(1);
@@ -240,14 +240,14 @@ public class IngestionServiceTest
 
         await _sut.ProcessFileAsync(42);
 
-        _esServiceMock.Verify(s => s.DeleteChunksByFileIdAsync(42), Times.Once);
-        _esServiceMock.Verify(s => s.IndexChunksAsync(99, 42, It.IsAny<List<ChunkData>>()), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(42), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.IndexChunksAsync(99, 42, It.IsAny<List<ChunkData>>()), Times.Once);
     }
 
-    // --- Delete: chunks are removed from Elasticsearch ---
+    // --- Delete: old chunks are removed ---
 
     [Fact]
-    public async Task ProcessFileAsync_ShouldDeleteChunksFromElasticsearch_WhenReprocessing()
+    public async Task ProcessFileAsync_ShouldDeleteOldChunks_WhenReprocessing()
     {
         var file = new KnowledgeFile
         {
@@ -260,7 +260,7 @@ public class IngestionServiceTest
 
         await _sut.ProcessFileAsync(7);
 
-        _esServiceMock.Verify(s => s.DeleteChunksByFileIdAsync(7), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(7), Times.Once);
     }
 
     [Fact]
@@ -273,11 +273,11 @@ public class IngestionServiceTest
         };
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
-        _esServiceMock.Setup(s => s.DeleteChunksByFileIdAsync(1)).ThrowsAsync(new Exception("ES delete error"));
+        _chunkRepositoryMock.Setup(s => s.DeleteChunksByFileIdAsync(1)).ThrowsAsync(new Exception("ES delete error"));
 
         await _sut.ProcessFileAsync(1);
 
-        _esServiceMock.Verify(s => s.IndexChunksAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<List<ChunkData>>()), Times.Never);
+        _chunkRepositoryMock.Verify(s => s.IndexChunksAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<List<ChunkData>>()), Times.Never);
         Assert.Equal(ProcessingStatus.Error, file.ProcessingStatus);
     }
 
@@ -292,7 +292,7 @@ public class IngestionServiceTest
         _fileRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(file);
         _fileRepoMock.Setup(r => r.UpdateAsync(It.IsAny<KnowledgeFile>())).ReturnsAsync((KnowledgeFile f) => f);
         _openAIServiceMock.Setup(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>())).ReturnsAsync(new float[] { 0.1f });
-        _esServiceMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
+        _chunkRepositoryMock.Setup(s => s.IndexChunksAsync(10, 1, It.IsAny<List<ChunkData>>()))
             .ThrowsAsync(new Exception("Index failed"));
 
         await _sut.ProcessFileAsync(1);
@@ -318,7 +318,7 @@ public class IngestionServiceTest
 
         await _sut.ProcessFileAsync(1);
 
-        _esServiceMock.Verify(s => s.IndexChunksAsync(10, 1,
+        _chunkRepositoryMock.Verify(s => s.IndexChunksAsync(10, 1,
             It.Is<List<ChunkData>>(list => list.Count == expectedChunks.Count)), Times.Once);
         _openAIServiceMock.Verify(s => s.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()), Times.Exactly(expectedChunks.Count));
         Assert.Equal(ProcessingStatus.Ready, file.ProcessingStatus);

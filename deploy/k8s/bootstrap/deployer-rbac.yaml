@@ -18,7 +18,7 @@ metadata:
     app.kubernetes.io/part-of: avabot
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets", "statefulsets"]
+    resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["services", "configmaps", "secrets", "pods", "events"]
@@ -26,10 +26,6 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  # Elasticsearch: o controller do StatefulSet cria o PVC; a pipeline só lê (diagnóstico).
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get", "list"]

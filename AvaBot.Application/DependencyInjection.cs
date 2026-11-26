@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IWhatsappContactRepository<WhatsappContact>, WhatsappContactRepository>();
         services.AddScoped<IWhatsappAccessRequestRepository<WhatsappAccessRequest>, WhatsappAccessRequestRepository>();
         services.AddScoped<IWhatsappSenderStateRepository<WhatsappSenderState>, WhatsappSenderStateRepository>();
+        services.AddScoped<IKnowledgeChunkRepository, KnowledgeChunkRepository>();
 
         // Domain Services
         services.AddScoped<UserService>();
@@ -86,6 +87,8 @@ public static class DependencyInjection
         services.AddSingleton<IPowerBIClient, PowerBIClient>();
 
         services.AddHostedService<PowerBIQueryLogCleanupService>();
+        // Feature 021: reprocessa na subida os arquivos prontos que ainda nao tem trechos no banco.
+        services.AddHostedService<KnowledgeChunkBackfillService>();
 
         // AutoMapper
         services.AddSingleton<AutoMapper.IMapper>(sp =>
@@ -98,7 +101,6 @@ public static class DependencyInjection
         });
 
         // App Services
-        services.AddSingleton<IElasticsearchService, ElasticsearchService>();
         // Scoped: resolve a credencial do agente via repositorio (DbContext scoped),
         // entao nao pode ser singleton capturando uma dependencia de escopo menor.
         services.AddScoped<IOpenAIService, OpenAIService>();

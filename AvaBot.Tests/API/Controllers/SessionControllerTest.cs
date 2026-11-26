@@ -36,11 +36,11 @@ public class SessionControllerTest
         expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
-        var agentService = new AgentService(_agentRepoMock.Object, new Mock<IElasticsearchService>().Object, new Mock<ISecretProtector>().Object, _mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, new Mock<IKnowledgeChunkRepository>().Object, new Mock<ISecretProtector>().Object, _mapper);
 
-        var esServiceMock = new Mock<IElasticsearchService>();
+        var chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         var openAIMock = new Mock<IOpenAIService>();
-        var searchService = new SearchService(esServiceMock.Object);
+        var searchService = new SearchService(chunkRepositoryMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var powerBIToolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,

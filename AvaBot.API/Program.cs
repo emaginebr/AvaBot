@@ -1,3 +1,4 @@
+using AvaBot.Infra.Interfaces.Repository;
 using System.Text;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -134,9 +135,6 @@ var app = builder.Build();
 // uma vez; sem ele a API nao sobe e o erro explica. Desliga-se com Database:MigrateOnStartup=false.
 await StartupMigrator.MigrateAsync(app.Services, app.Configuration);
 
-// Elasticsearch - create index on startup
-var esService = app.Services.GetRequiredService<IElasticsearchService>();
-await esService.CreateIndexAsync();
 
 // Contas de usuario (feature 016): cria a conta do administrador na primeira subida e
 // atribui os agentes existentes. Lanca (e a API nao sobe) se restar agente sem dono.

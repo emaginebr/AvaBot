@@ -15,14 +15,14 @@ public class KnowledgeFileServiceTest
     private const long AgentId = 10;
     private readonly Mock<IAgentRepository<Agent>> _agentRepoMock = new();
     private readonly Mock<IKnowledgeFileRepository<KnowledgeFile>> _fileRepoMock = new();
-    private readonly Mock<IElasticsearchService> _esMock = new();
+    private readonly Mock<IKnowledgeChunkRepository> _chunkRepositoryMock = new();
     private readonly KnowledgeFileService _sut;
 
     public KnowledgeFileServiceTest()
     {
         // O escopo de ingestao e um mock: o Task.Run em segundo plano falha em silencio no teste.
         var scopeFactory = new Mock<IServiceScopeFactory>();
-        _sut = new KnowledgeFileService(_agentRepoMock.Object, _fileRepoMock.Object, _esMock.Object, scopeFactory.Object);
+        _sut = new KnowledgeFileService(_agentRepoMock.Object, _fileRepoMock.Object, _chunkRepositoryMock.Object, scopeFactory.Object);
 
         _agentRepoMock.Setup(r => r.GetByIdAsync(AgentId, OwnerId)).ReturnsAsync(new Agent { AgentId = AgentId, OwnerUserId = OwnerId });
         _agentRepoMock.Setup(r => r.GetByIdAsync(99, OwnerId)).ReturnsAsync((Agent?)null);
@@ -94,7 +94,7 @@ public class KnowledgeFileServiceTest
 
         await _sut.DeleteAsync(AgentId, OwnerId, 5);
 
-        _esMock.Verify(s => s.DeleteChunksByFileIdAsync(5), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(5), Times.Once);
         _fileRepoMock.Verify(r => r.DeleteAsync(5), Times.Once);
     }
 

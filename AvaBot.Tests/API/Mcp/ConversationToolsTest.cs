@@ -36,19 +36,19 @@ public class ConversationToolsTest
         IMapper mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
-        var esMock = new Mock<IElasticsearchService>();
+        var chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         var protectorMock = new Mock<ISecretProtector>();
         var clientMock = new Mock<IPowerBIClient>();
         var configRepoMock = new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>();
         var datasetRepoMock = new Mock<IPowerBIDatasetRepository<PowerBIDataset>>();
 
-        var agentService = new AgentService(_agentRepoMock.Object, esMock.Object, protectorMock.Object, mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, chunkRepositoryMock.Object, protectorMock.Object, mapper);
         var sessionQuery = new SessionQueryService(_agentRepoMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object, _telegramRepoMock.Object, mapper);
         var powerBIService = new PowerBIService(_agentRepoMock.Object, configRepoMock.Object, datasetRepoMock.Object, _queryLogRepoMock.Object,
             clientMock.Object, protectorMock.Object, new PowerBISchemaBuilder(clientMock.Object), NullLogger<PowerBIService>.Instance);
         var toolProvider = new PowerBIToolProvider(configRepoMock.Object, datasetRepoMock.Object, _queryLogRepoMock.Object, clientMock.Object,
             protectorMock.Object, config, NullLogger<PowerBIToolProvider>.Instance);
-        var chatService = new ChatService(new SearchService(esMock.Object), _openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object,
+        var chatService = new ChatService(new SearchService(chunkRepositoryMock.Object), _openAIMock.Object, _sessionRepoMock.Object, _messageRepoMock.Object,
             _agentRepoMock.Object, toolProvider, config, NullLogger<ChatService>.Instance);
 
         _sut = new ConversationTools(sessionQuery, agentService, powerBIService, chatService, NullLogger<ConversationTools>.Instance);

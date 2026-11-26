@@ -4,8 +4,8 @@ Cluster DOKS `do-nyc2-emagine-k8s`, namespace `avabot`. Tráfego: **Cloudflare**
 proxy) → **Cloudflare Tunnel compartilhado** `emagine-k8s` (pods `cloudflared` no namespace
 `cloudflared`, conexão de saída, sem IP público nem Load Balancer) → **ingress-nginx compartilhado**
 (interno, Service ClusterIP, HTTP) → Services `avabot-api` (8080) e `avabot-web` (80). O
-Elasticsearch da base de conhecimento roda no próprio namespace (`avabot-elasticsearch`, volume
-persistente). O PostgreSQL é externo ao cluster.
+PostgreSQL é externo ao cluster e guarda também a base de conhecimento (tabela
+`avabot_knowledge_chunks`, busca textual nativa; feature 021). Não há Elasticsearch.
 
 **WhatsApp fora do ar**: o WPP Connect não roda no cluster (foi retirado da infra do
 `emagine-deploy`). A API sobe normalmente; as telas de WhatsApp mostram erro de conexão até o WPP
@@ -18,7 +18,7 @@ frontend no cluster.
 | Pasta | Conteúdo | Quem aplica |
 |---|---|---|
 | [`bootstrap/`](bootstrap/) | namespace `avabot` e a credencial restrita da pipeline (ServiceAccount `avabot-deployer`) | admin do cluster, uma vez |
-| [`avabot/`](avabot/) | API, frontend, Elasticsearch, Ingress e ConfigMap via Kustomize | pipeline **Deploy Production** (`kubectl apply -k`) |
+| [`avabot/`](avabot/) | API, frontend, Ingress e ConfigMap via Kustomize | pipeline **Deploy Production** (`kubectl apply -k`) |
 
 A entrada compartilhada (ingress-nginx e cloudflared) é infra do **cluster** e já existe; não é
 mantida neste repositório.
@@ -36,8 +36,7 @@ cliente → Cloudflare (HTTPS, Always Use HTTPS, Redirect Rule do www)
         → http://ingress-nginx-controller.ingress-nginx.svc.cluster.local:80
         → Ingress avabot (/api → avabot-api:8080, / → avabot-web:80)
         → Ingress avabot-stream (/api/ws WebSocket do chat, /api/mcp; sem buffer, timeout 1 h)
-avabot-api → avabot-elasticsearch:9200 (ClusterIP, só dentro do namespace)
-avabot-api → PostgreSQL externo
+avabot-api → PostgreSQL externo (dados e base de conhecimento)
 ```
 
 - Sem TLS no Ingress: o HTTPS termina na Cloudflare.
@@ -73,9 +72,9 @@ nunca vai para o GitHub nem para o repositório.
 
 1. **Pré-requisitos**:
    - liberar o cluster no firewall do PostgreSQL (Managed DB: *Trusted sources*);
-   - conferir a folga de memória: o Elasticsearch pede 640Mi e a API 256Mi
+   - conferir a folga de memória: a API pede 256Mi e o frontend 32Mi
      (`kubectl describe nodes | grep -A6 'Allocated resources'`). Sem folga, o pod fica
-     `Pending`: aumente o node pool antes;
+     `Pending`;
    - **anotar o IP do servidor atual** no registro A/AAAA de `avabot.net` (para a reversão);
    - conferir a infra compartilhada: `kubectl -n ingress-nginx get deploy` e
      `kubectl -n cloudflared get pods` (2/2 Running).
@@ -87,7 +86,7 @@ nunca vai para o GitHub nem para o repositório.
    kubectl apply -f deploy/k8s/bootstrap/deployer-rbac.yaml
    umask 077
    deploy/k8s/bootstrap/make-kubeconfig.sh > "$TMP/avabot-deployer.kubeconfig"
-   KUBECONFIG="$TMP/avabot-deployer.kubeconfig" kubectl auth can-i create statefulsets -n avabot   # yes
+   KUBECONFIG="$TMP/avabot-deployer.kubeconfig" kubectl auth can-i create deployments -n avabot    # yes
    KUBECONFIG="$TMP/avabot-deployer.kubeconfig" kubectl auth can-i get pods -n kube-system          # no
    gh secret set KUBECONFIG --env production < "$TMP/avabot-deployer.kubeconfig"
    rm -f "$TMP/avabot-deployer.kubeconfig"
@@ -100,7 +99,8 @@ nunca vai para o GitHub nem para o repositório.
 Automático a cada push/merge na `main`. À mão: Actions → **Deploy Production** → `ref` = `main`
 (ou uma tag). A pipeline roda os testes unitários e o build do frontend, publica as imagens
 `ghcr.io/emaginebr/avabot-api` e `avabot-web` com a tag `sha-<commit>`, cria os Secrets do
-cluster, aplica `deploy/k8s/avabot` e espera o rollout do Elasticsearch, da API e do frontend.
+cluster, aplica `deploy/k8s/avabot` e espera o rollout da API e do frontend. As migrações do
+banco são aplicadas pela própria API na subida.
 
 Pela linha de comando (inclusive de um branch ainda não mergeado):
 
@@ -108,31 +108,38 @@ Pela linha de comando (inclusive de um branch ainda não mergeado):
 gh workflow run deploy-prod.yml --ref <branch> -f ref=<branch>
 ```
 
-## Migração dos dados do Elasticsearch
+## Base de conhecimento (migração do Elasticsearch)
 
-O índice `knowledge_chunks` do servidor Docker precisa ser copiado para o Elasticsearch do cluster
-**antes da troca na Cloudflare**, senão os agentes respondem sem base de conhecimento. A API cria o
-índice vazio (com o mapping) na primeira subida; depois, copie os documentos com `_reindex` a
-partir do servidor antigo (o StatefulSet já permite origens remotas em `reindex.remote.whitelist`):
+Desde a feature 021, os trechos dos arquivos ficam na tabela `avabot_knowledge_chunks` do
+PostgreSQL. Na subida, a API reprocessa sozinha, a partir de `file_content`, os arquivos prontos que
+ainda não têm trechos (`KnowledgeChunkBackfillService`, um arquivo por vez; o custo dos embeddings
+na OpenAI é pequeno). Isso faz a migração do índice antigo sem acesso ao Elasticsearch e também
+cobre arquivos enviados pelo servidor antigo até a troca (entram no próximo restart). Para desligar:
+`KnowledgeBackfill__Enabled=false` no ConfigMap.
+
+Conferir **antes da troca na Cloudflare**:
 
 ```bash
-# <IP-ANTIGO>: IP pelo qual o cluster alcança a porta 9200 do servidor Docker (de preferência o IP
-# privado da VPC; libere a 9200 só para a VPC/cluster durante a migração).
-kubectl -n avabot exec avabot-elasticsearch-0 -- curl -s -X POST \
-  'http://localhost:9200/_reindex?wait_for_completion=true' -H 'Content-Type: application/json' -d '{
-    "source": { "remote": { "host": "http://<IP-ANTIGO>:9200" }, "index": "knowledge_chunks", "size": 200 },
-    "dest":   { "index": "knowledge_chunks" }
-  }'
-# conferir: as contagens devem bater
-kubectl -n avabot exec avabot-elasticsearch-0 -- curl -s 'http://localhost:9200/knowledge_chunks/_count'
-curl -s 'http://<IP-ANTIGO>:9200/knowledge_chunks/_count'
+kubectl -n avabot logs deploy/avabot-api | grep '\[Backfill\]'
+# esperado: "[Backfill] concluído: total=N, migrados=N, falhas=0, ..."
 ```
 
-Alternativa sem acesso de rede ao servidor antigo: reenviar os arquivos de conhecimento pelo
-painel (o reprocessamento gera os embeddings de novo, com custo na OpenAI).
+Arquivos com falha ficam com status **Erro** no painel (Arquivos) e podem ser reprocessados por lá.
 
-Depois da migração, feche a porta 9200 do servidor antigo: hoje ela está publicada no host sem
-autenticação.
+**Limpeza do Elasticsearch que chegou a ser criado no cluster** (admin, uma vez; `kubectl apply -k`
+não apaga o que saiu do Kustomize; o volume usa a StorageClass `retain`):
+
+```bash
+kubectl -n avabot delete statefulset avabot-elasticsearch --ignore-not-found
+kubectl -n avabot delete service avabot-elasticsearch --ignore-not-found
+PV=$(kubectl -n avabot get pvc data-avabot-elasticsearch-0 -o jsonpath='{.spec.volumeName}')
+kubectl -n avabot delete pvc data-avabot-elasticsearch-0 --ignore-not-found
+kubectl delete pv "$PV"   # depois apague o volume correspondente no painel da DigitalOcean
+kubectl apply -f deploy/k8s/bootstrap/deployer-rbac.yaml   # Role sem statefulsets/pvc
+```
+
+O Elasticsearch do servidor antigo (porta 9200 publicada sem autenticação) é desligado junto com
+o ambiente antigo.
 
 ## WhatsApp
 
@@ -174,7 +181,7 @@ O WPP Connect não roda no cluster. Para religar o WhatsApp, suba um WPP Connect
    Resposta com `server: cloudflare` não prova nada: compare com uma rota que só existe no cluster
    (`/api/health`).
 5. **Validação funcional**: login no painel, chat em `/chat/biia`, widget num site externo (CORS e
-   WebSocket), busca na base de conhecimento (dados migrados), Telegram (o webhook já é
+   WebSocket), busca na base de conhecimento (backfill concluído), Telegram (o webhook já é
    `https://avabot.net/api/telegram/...`, nada a mudar) e MCP (`https://avabot.net/api/mcp`).
 
 **Reverter a troca**: remover a rota de `avabot.net` no túnel (e o CNAME, se ficar) e recriar o
@@ -188,6 +195,8 @@ Só depois da troca validada:
 - no `emagine-deploy`: remover os blocos `server` de `avabot.net`/`www.avabot.net` do `nginx.conf`,
   o `scripts/build-avabot.ps1` e `builds/avabot/` (o frontend agora é a imagem `avabot-web`);
 - no servidor Docker: `docker rm -f avabot-api` e apagar `/opt/avabot`;
+- no `emagine-deploy`: tirar o Elasticsearch da infra compartilhada se nenhum outro projeto o usar
+  (o AvaBot não usa mais);
 - remover do GitHub os secrets do deploy antigo (`PROD_SSH_*`), se nenhum outro workflow usar;
 - atualizar a skill `.claude/skills/avabot-deploy` e o `CLAUDE.md` (o frontend deixa de ser
   publicado pelo `emagine-deploy`).
@@ -200,7 +209,7 @@ Só depois da troca validada:
 | Rollback rápido | Deploy Production com a tag anterior e `skip_tests=true` (a imagem já existe, o build é pulado) |
 | Rollback de emergência | `kubectl -n avabot rollout undo deployment/avabot-api` (e `avabot-web`) |
 | Logs | `kubectl -n avabot logs deploy/avabot-api --tail=200 -f` |
-| Elasticsearch | `kubectl -n avabot exec avabot-elasticsearch-0 -- curl -s localhost:9200/_cat/indices` |
-| Status | `kubectl -n avabot get deploy,sts,pods,pvc,ingress -o wide` |
+| Backfill da base | `kubectl -n avabot logs deploy/avabot-api \| grep '\[Backfill\]'` |
+| Status | `kubectl -n avabot get deploy,pods,ingress -o wide` |
 | Túnel | `kubectl -n cloudflared logs deploy/cloudflared --tail=50` (erro 1033 na Cloudflare = túnel sem conector) |
 | Rotacionar a credencial da pipeline | apagar o Secret `avabot-deployer-token`, reaplicar `bootstrap/deployer-rbac.yaml`, gerar outro kubeconfig e atualizar o secret `KUBECONFIG` |

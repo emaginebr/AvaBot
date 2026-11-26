@@ -28,18 +28,18 @@ public class KnowledgeFileService
 
     private readonly IAgentRepository<Agent> _agentRepository;
     private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
-    private readonly IElasticsearchService _esService;
+    private readonly IKnowledgeChunkRepository _chunkRepository;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public KnowledgeFileService(
         IAgentRepository<Agent> agentRepository,
         IKnowledgeFileRepository<KnowledgeFile> fileRepository,
-        IElasticsearchService esService,
+        IKnowledgeChunkRepository chunkRepository,
         IServiceScopeFactory scopeFactory)
     {
         _agentRepository = agentRepository;
         _fileRepository = fileRepository;
-        _esService = esService;
+        _chunkRepository = chunkRepository;
         _scopeFactory = scopeFactory;
     }
 
@@ -102,7 +102,7 @@ public class KnowledgeFileService
     {
         var file = await GetOwnedFileAsync(agentId, ownerUserId, fileId);
 
-        await _esService.DeleteChunksByFileIdAsync(file.KnowledgeFileId);
+        await _chunkRepository.DeleteChunksByFileIdAsync(file.KnowledgeFileId);
         await _fileRepository.DeleteAsync(file.KnowledgeFileId);
     }
 

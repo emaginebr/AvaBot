@@ -14,7 +14,6 @@ labels:
     includeTemplates: true
 
 resources:
-  - elasticsearch.yaml
   - api-configmap.yaml
   - api-deployment.yaml
   - api-service.yaml

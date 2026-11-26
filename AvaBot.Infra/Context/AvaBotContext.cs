@@ -1,15 +1,20 @@
 using Microsoft.EntityFrameworkCore;
 using AvaBot.Domain.Models;
 using AvaBot.Domain.Enums;
+using NpgsqlTypes;
 
 namespace AvaBot.Infra.Context;
 
 public class AvaBotContext : DbContext
 {
+    public const string SearchContentProperty = "SearchContent";
+    public const string SearchVectorProperty = "SearchVector";
+
     public AvaBotContext(DbContextOptions<AvaBotContext> options) : base(options) { }
 
     public DbSet<Agent> Agents { get; set; }
     public DbSet<KnowledgeFile> KnowledgeFiles { get; set; }
+    public DbSet<KnowledgeChunk> KnowledgeChunks { get; set; }
     public DbSet<ChatSession> ChatSessions { get; set; }
     public DbSet<ChatMessage> ChatMessages { get; set; }
     public DbSet<TelegramChat> TelegramChats { get; set; }
@@ -230,6 +235,43 @@ public class AvaBotContext : DbContext
                 .WithMany(a => a.KnowledgeFiles)
                 .HasForeignKey(e => e.AgentId)
                 .HasConstraintName("avabot_fk_agents_knowledge_files")
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // KnowledgeChunk (feature 021): trechos dos arquivos e busca textual, no lugar do Elasticsearch.
+        // search_content = content normalizado na aplicacao (minusculas, sem acento), para nao depender
+        // da extensao unaccent; search_vector e gerado pelo banco a partir dele.
+        modelBuilder.Entity<KnowledgeChunk>(entity =>
+        {
+            entity.ToTable("avabot_knowledge_chunks");
+            entity.HasKey(e => e.KnowledgeChunkId).HasName("avabot_knowledge_chunks_pkey");
+            entity.Property(e => e.KnowledgeChunkId).HasColumnName("knowledge_chunk_id").UseIdentityAlwaysColumn();
+            entity.Property(e => e.AgentId).HasColumnName("agent_id").IsRequired();
+            entity.Property(e => e.KnowledgeFileId).HasColumnName("knowledge_file_id").IsRequired();
+            entity.Property(e => e.ChunkIndex).HasColumnName("chunk_index").IsRequired();
+            entity.Property(e => e.Content).HasColumnName("content").HasColumnType("text").IsRequired();
+            entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("real[]").IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").IsRequired();
+            entity.Property<string>(SearchContentProperty).HasColumnName("search_content").HasColumnType("text").IsRequired();
+            entity.Property<NpgsqlTsVector>(SearchVectorProperty)
+                .HasColumnName("search_vector")
+                .HasColumnType("tsvector")
+                .HasComputedColumnSql("to_tsvector('portuguese'::regconfig, search_content)", stored: true);
+
+            entity.HasIndex(e => e.AgentId).HasDatabaseName("ix_avabot_knowledge_chunks_agent_id");
+            entity.HasIndex(e => new { e.KnowledgeFileId, e.ChunkIndex }).IsUnique().HasDatabaseName("ix_avabot_knowledge_chunks_file_chunk");
+            entity.HasIndex(SearchVectorProperty).HasMethod("GIN").HasDatabaseName("ix_avabot_knowledge_chunks_search_vector");
+
+            // Cascade como os demais filhos do agente: trecho orfao apareceria na busca.
+            entity.HasOne<Agent>()
+                .WithMany()
+                .HasForeignKey(e => e.AgentId)
+                .HasConstraintName("avabot_fk_agents_knowledge_chunks")
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<KnowledgeFile>()
+                .WithMany()
+                .HasForeignKey(e => e.KnowledgeFileId)
+                .HasConstraintName("avabot_fk_knowledge_files_knowledge_chunks")
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

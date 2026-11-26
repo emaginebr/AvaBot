@@ -1,3 +1,4 @@
+using AvaBot.Infra.Interfaces.Repository;
 using AutoMapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -30,7 +31,7 @@ public class WhatsappAccessToolsTest
         IMapper mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
         _ctx.Agents.Setup(r => r.GetByIdAsync(AgentId, OwnerId)).ReturnsAsync(_agent);
-        var agentService = new AgentService(_ctx.Agents.Object, new Mock<IElasticsearchService>().Object, new Mock<ISecretProtector>().Object, mapper);
+        var agentService = new AgentService(_ctx.Agents.Object, new Mock<IKnowledgeChunkRepository>().Object, new Mock<ISecretProtector>().Object, mapper);
 
         _sut = new WhatsappAccessTools(agentService, _ctx.Service, new WhatsappAccessConfigUpdateInfoValidator(),
             new WhatsappContactInsertInfoValidator(), new WhatsappAccessRequestApproveInfoValidator(), NullLogger<WhatsappAccessTools>.Instance);
