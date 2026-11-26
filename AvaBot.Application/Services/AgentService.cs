@@ -12,18 +12,18 @@ namespace AvaBot.Application.Services;
 public class AgentService
 {
     private readonly IAgentRepository<Agent> _repository;
-    private readonly IElasticsearchService _esService;
+    private readonly IKnowledgeChunkRepository _chunkRepository;
     private readonly ISecretProtector _secretProtector;
     private readonly IMapper _mapper;
 
     public AgentService(
         IAgentRepository<Agent> repository,
-        IElasticsearchService esService,
+        IKnowledgeChunkRepository chunkRepository,
         ISecretProtector secretProtector,
         IMapper mapper)
     {
         _repository = repository;
-        _esService = esService;
+        _chunkRepository = chunkRepository;
         _secretProtector = secretProtector;
         _mapper = mapper;
     }
@@ -200,7 +200,7 @@ public class AgentService
     {
         var agent = await _repository.GetByIdAsync(id, ownerUserId);
         if (agent == null) return false;
-        await _esService.DeleteChunksByAgentIdAsync(id);
+        await _chunkRepository.DeleteChunksByAgentIdAsync(id);
         await _repository.DeleteAsync(id);
         return true;
     }

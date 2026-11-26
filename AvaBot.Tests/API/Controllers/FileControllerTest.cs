@@ -18,7 +18,7 @@ namespace AvaBot.Tests.API.Controllers;
 public class FileControllerTest
 {
     private readonly Mock<IKnowledgeFileRepository<KnowledgeFile>> _fileRepoMock;
-    private readonly Mock<IElasticsearchService> _esServiceMock;
+    private readonly Mock<IKnowledgeChunkRepository> _chunkRepositoryMock;
     private readonly Mock<IAgentRepository<Agent>> _agentRepoMock;
     private const long OwnerId = 7;
     private readonly IMapper _mapper;
@@ -27,7 +27,7 @@ public class FileControllerTest
     public FileControllerTest()
     {
         _fileRepoMock = new Mock<IKnowledgeFileRepository<KnowledgeFile>>();
-        _esServiceMock = new Mock<IElasticsearchService>();
+        _chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         _agentRepoMock = new Mock<IAgentRepository<Agent>>();
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<KnowledgeFileProfile>();
@@ -35,7 +35,7 @@ public class FileControllerTest
         _mapper = new MapperConfiguration(expr, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance).CreateMapper();
 
         var scopeFactoryMock = new Mock<IServiceScopeFactory>();
-        var agentService = new AgentService(_agentRepoMock.Object, _esServiceMock.Object, new Mock<ISecretProtector>().Object, _mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, _chunkRepositoryMock.Object, new Mock<ISecretProtector>().Object, _mapper);
 
         // Por padrao os agentes 1 e 10 sao do usuario do token; o 99 nao e.
         _agentRepoMock.Setup(r => r.GetByIdAsync(1, OwnerId)).ReturnsAsync(new Agent { AgentId = 1, OwnerUserId = OwnerId });
@@ -43,7 +43,7 @@ public class FileControllerTest
         _agentRepoMock.Setup(r => r.GetByIdAsync(99, OwnerId)).ReturnsAsync((Agent?)null);
 
         // A logica de dono, limites e ingestao vive no KnowledgeFileService (feature 017); o controller so delega.
-        var fileService = new KnowledgeFileService(_agentRepoMock.Object, _fileRepoMock.Object, _esServiceMock.Object, scopeFactoryMock.Object);
+        var fileService = new KnowledgeFileService(_agentRepoMock.Object, _fileRepoMock.Object, _chunkRepositoryMock.Object, scopeFactoryMock.Object);
         _ = agentService;
 
         _sut = new FileController(fileService, _mapper).WithUser(OwnerId);
@@ -152,7 +152,7 @@ public class FileControllerTest
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        _esServiceMock.Verify(s => s.DeleteChunksByFileIdAsync(1), Times.Once);
+        _chunkRepositoryMock.Verify(s => s.DeleteChunksByFileIdAsync(1), Times.Once);
         _fileRepoMock.Verify(r => r.DeleteAsync(1), Times.Once);
     }
 

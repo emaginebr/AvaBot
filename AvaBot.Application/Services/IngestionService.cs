@@ -9,18 +9,18 @@ namespace AvaBot.Application.Services;
 public class IngestionService
 {
     private readonly IKnowledgeFileRepository<KnowledgeFile> _fileRepository;
-    private readonly IElasticsearchService _esService;
+    private readonly IKnowledgeChunkRepository _chunkRepository;
     private readonly IOpenAIService _openAIService;
     private readonly ILogger<IngestionService> _logger;
 
     public IngestionService(
         IKnowledgeFileRepository<KnowledgeFile> fileRepository,
-        IElasticsearchService esService,
+        IKnowledgeChunkRepository chunkRepository,
         IOpenAIService openAIService,
         ILogger<IngestionService> logger)
     {
         _fileRepository = fileRepository;
-        _esService = esService;
+        _chunkRepository = chunkRepository;
         _openAIService = openAIService;
         _logger = logger;
     }
@@ -45,8 +45,8 @@ public class IngestionService
             await _fileRepository.UpdateAsync(file);
 
             // Delete old chunks if reprocessing
-            _logger.LogInformation("[Ingestion] Removendo chunks antigos do arquivo ID={FileId} no Elasticsearch", fileId);
-            await _esService.DeleteChunksByFileIdAsync(fileId);
+            _logger.LogInformation("[Ingestion] Removendo chunks antigos do arquivo ID={FileId}", fileId);
+            await _chunkRepository.DeleteChunksByFileIdAsync(fileId);
 
             // Chunk the content
             var chunks = ChunkText(file.FileContent, 2000, 200);
@@ -85,10 +85,10 @@ public class IngestionService
             }
 
             _logger.LogInformation(
-                "[Ingestion] Indexando {ChunkCount} chunk(s) no Elasticsearch para AgentId={AgentId}, FileId={FileId}",
+                "[Ingestion] Indexando {ChunkCount} chunk(s) no banco para AgentId={AgentId}, FileId={FileId}",
                 chunkDataList.Count, file.AgentId, fileId);
 
-            await _esService.IndexChunksAsync(file.AgentId!.Value, fileId, chunkDataList);
+            await _chunkRepository.IndexChunksAsync(file.AgentId!.Value, fileId, chunkDataList);
 
             file.ProcessingStatus = ProcessingStatus.Ready;
             await _fileRepository.UpdateAsync(file);

@@ -30,10 +30,10 @@ public class AgentControllerTest
         var expr = new MapperConfigurationExpression();
         expr.AddProfile<AgentProfile>();
         _mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
-        var esServiceMock = new Mock<IElasticsearchService>();
+        var chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         var openAIMock = new Mock<IOpenAIService>();
-        _agentService = new AgentService(_repositoryMock.Object, esServiceMock.Object, new Mock<ISecretProtector>().Object, _mapper);
-        _searchService = new SearchService(esServiceMock.Object);
+        _agentService = new AgentService(_repositoryMock.Object, chunkRepositoryMock.Object, new Mock<ISecretProtector>().Object, _mapper);
+        _searchService = new SearchService(chunkRepositoryMock.Object);
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
         var powerBIToolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,

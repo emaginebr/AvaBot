@@ -44,16 +44,16 @@ public class WhatsappServiceTest
         expr.AddProfile<AgentProfile>();
         IMapper mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
-        var esMock = new Mock<IElasticsearchService>();
+        var chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         var protectorMock = new Mock<ISecretProtector>();
 
-        var agentService = new AgentService(_agentRepoMock.Object, esMock.Object, protectorMock.Object, mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, chunkRepositoryMock.Object, protectorMock.Object, mapper);
         var toolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,
             new Mock<IPowerBIDatasetRepository<PowerBIDataset>>().Object,
             new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>().Object, new Mock<IPowerBIClient>().Object, protectorMock.Object, config,
             NullLogger<PowerBIToolProvider>.Instance);
-        var chatService = new ChatService(new SearchService(esMock.Object), _openAIMock.Object, _sessionRepoMock.Object,
+        var chatService = new ChatService(new SearchService(chunkRepositoryMock.Object), _openAIMock.Object, _sessionRepoMock.Object,
             new Mock<IChatMessageRepository<ChatMessage>>().Object, _agentRepoMock.Object, toolProvider, config, NullLogger<ChatService>.Instance);
 
         _agentRepoMock.Setup(r => r.GetBySlugAsync(Slug)).ReturnsAsync(_agent);

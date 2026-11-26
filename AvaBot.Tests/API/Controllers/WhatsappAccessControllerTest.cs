@@ -32,7 +32,7 @@ public class WhatsappAccessControllerTest
 
         // O mesmo mock de agentes serve ao AgentService (dono) e ao WhatsappAccessService (UpdateAsync).
         _ctx.Agents.Setup(r => r.GetBySlugAsync(Slug, OwnerId)).ReturnsAsync(WhatsappAccessTestContext.RestrictedAgent());
-        var agentService = new AgentService(_ctx.Agents.Object, new Mock<IElasticsearchService>().Object, new Mock<ISecretProtector>().Object, mapper);
+        var agentService = new AgentService(_ctx.Agents.Object, new Mock<IKnowledgeChunkRepository>().Object, new Mock<ISecretProtector>().Object, mapper);
 
         _sut = new WhatsappAccessController(agentService, _ctx.Service,
             new WhatsappAccessConfigUpdateInfoValidator(), new WhatsappContactInsertInfoValidator(), new WhatsappAccessRequestApproveInfoValidator())

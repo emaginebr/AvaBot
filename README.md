@@ -2,15 +2,14 @@
 
 ![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791)
-![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.17-005571)
 ![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o-412991)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Overview
 
-**Avachat** is a platform for creating AI-powered chatbot agents with custom knowledge bases. Each agent has its own personality (system prompt), knowledge documents, and can engage in real-time conversations via WebSocket using RAG (Retrieval-Augmented Generation) with lexical (BM25) search in Elasticsearch.
+**Avachat** is a platform for creating AI-powered chatbot agents with custom knowledge bases. Each agent has its own personality (system prompt), knowledge documents, and can engage in real-time conversations via WebSocket using RAG (Retrieval-Augmented Generation) with full-text search over the knowledge chunks stored in PostgreSQL.
 
-Built with **ASP.NET Core 9**, **Entity Framework Core**, **Elasticsearch** for vector/text search, and **OpenAI** for embeddings and chat completion. Follows **Clean Architecture** with separated Domain, Application, Infrastructure, and API layers.
+Built with **ASP.NET Core 9**, **Entity Framework Core**, **PostgreSQL full-text search** for the knowledge base, and **OpenAI** for embeddings and chat completion. Follows **Clean Architecture** with separated Domain, Application, Infrastructure, and API layers.
 
 ---
 
@@ -24,7 +23,7 @@ This repository now unifies both the backend (.NET, at the repo root) and the fr
 
 - 🤖 **Multi-Agent Support** - Create unlimited agents with custom system prompts and knowledge bases
 - 📚 **RAG Pipeline** - Upload `.md` documents, auto-chunked and indexed with embeddings for retrieval
-- 🔍 **Text Search** - BM25 keyword search via Elasticsearch, with no embedding call at query time
+- 🔍 **Text Search** - PostgreSQL full-text search (Portuguese stemming, accent-insensitive), with no embedding call at query time
 - 💬 **Real-Time Chat** - WebSocket streaming with token-by-token response delivery
 - 🔄 **Auto Slug Generation** - Agent slugs generated from name with accent handling and uniqueness
 - 📋 **Session Management** - REST endpoint to start sessions with user data collection
@@ -42,7 +41,7 @@ This repository now unifies both the backend (.NET, at the repo root) and the fr
 
 ### Database & Search
 - **PostgreSQL 17** - Primary relational database
-- **Elasticsearch 8.17** - Vector and full-text search engine for knowledge chunks
+- **PostgreSQL full-text search** - `tsvector` + GIN index over the knowledge chunks (`avabot_knowledge_chunks`)
 
 ### AI
 - **OpenAI API** - `text-embedding-3-small` for embeddings, `gpt-4o` for chat completion
@@ -78,9 +77,9 @@ Avachat/
 │   └── Enums/                   # ProcessingStatus, SenderType
 ├── AvaBot.DTO/                 # Data Transfer Objects
 ├── AvaBot.Infra/               # Infrastructure implementation
-│   ├── AppServices/             # ElasticsearchService, OpenAIService
+│   ├── AppServices/             # OpenAIService, WppConnectService, PowerBIClient
 │   ├── Context/                 # AvaBotContext (EF Core DbContext)
-│   └── Repository/              # Generic repository implementations
+│   └── Repository/              # Repositories (incl. KnowledgeChunkRepository: knowledge base search)
 ├── AvaBot.Infra.Interfaces/    # Generic repository and service interfaces
 ├── AvaBot.Console/             # CLI for creating/syncing agents from files
 ├── AvaBot.Tests/               # Unit tests (xUnit + Moq)
@@ -106,7 +105,7 @@ Avachat/
 
 The platform follows a layered architecture where the API layer handles HTTP/WebSocket requests, delegates to Application services for business logic, which in turn use Infrastructure services for data access, search, and AI integration.
 
-**RAG Flow:** User message → Generate embedding (OpenAI) → Hybrid search in Elasticsearch → Build prompt with context → Stream response from GPT-4o → Save to database.
+**RAG Flow:** User message → Generate embedding (OpenAI) → Full-text search over the agent's chunks in PostgreSQL → Build prompt with context → Stream response from GPT-4o → Save to database.
 
 > 📄 **Source:** The editable Mermaid source is available at [`docs/system-design.mmd`](docs/system-design.mmd).
 
@@ -128,9 +127,6 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password_here
 POSTGRES_DB=avabot
 CONNECTION_STRING=Host=db;Database=avabot;Username=postgres;Password=your_password_here
-
-# Elasticsearch
-ELASTICSEARCH_URL=http://elasticsearch:9200
 
 # App
 APP_PORT=5000
@@ -231,7 +227,6 @@ docker compose ps
 | **API** | http://localhost:5000 |
 | **Swagger** | http://localhost:5000/swagger |
 | **WebSocket Chat** | ws://localhost:5000/ws/chat/{slug} |
-| **Elasticsearch** | http://localhost:9200 |
 | **Kibana** | http://localhost:5601 |
 | **PostgreSQL** | localhost:5432 |
 
@@ -254,7 +249,6 @@ docker compose ps
 
 - .NET 9.0 SDK
 - PostgreSQL 17
-- Elasticsearch 8.17
 - OpenAI API key
 
 ### Setup Steps
@@ -303,7 +297,7 @@ dotnet test AvaBot.Tests.API
 
 ### Question Calibration Report (console)
 
-`AvaBot.Calibration` runs a question (or a set of conversations) straight against OpenAI and Power BI — no API, database or Elasticsearch; the knowledge base is read from a local folder — and prints a markdown report with the full flow: knowledge base, Power BI schema, every model round with the DAX and its result, tokens, final prompt and answer, for an AI to analyze. Configure `AvaBot.Calibration/appsettings.json` (git-ignored; copy from `appsettings.Example.json`). See [docs/CALIBRATION.md](docs/CALIBRATION.md).
+`AvaBot.Calibration` runs a question (or a set of conversations) straight against OpenAI and Power BI — no API or database; the knowledge base is read from a local folder — and prints a markdown report with the full flow: knowledge base, Power BI schema, every model round with the DAX and its result, tokens, final prompt and answer, for an AI to analyze. Configure `AvaBot.Calibration/appsettings.json` (git-ignored; copy from `appsettings.Example.json`). See [docs/CALIBRATION.md](docs/CALIBRATION.md).
 
 ```powershell
 dotnet run --project AvaBot.Calibration -- -q "Qual foi o volume de exportação da tilápia em 2024?"
@@ -422,7 +416,7 @@ docker compose --env-file .env.prod -f docker-compose-prod.yml up -d --build
 
 Production deploy via SSH is configured in `.github/workflows/deploy-prod.yml` (manual trigger via `workflow_dispatch`).
 
-**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `ELASTICSEARCH_URL`, `POWERBI_SECRET_ENCRYPTION_KEY`
+**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `POWERBI_SECRET_ENCRYPTION_KEY`
 
 `POWERBI_SECRET_ENCRYPTION_KEY` is required: it is the AES-256 key that protects each
 agent's stored credentials (OpenAI API key and Power BI client secret). Use a fresh

@@ -29,7 +29,7 @@ public class AgentToolsTest
         expr.AddProfile<McpProfile>();
         IMapper mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
-        var agentService = new AgentService(_repoMock.Object, new Mock<IElasticsearchService>().Object, new Mock<ISecretProtector>().Object, mapper);
+        var agentService = new AgentService(_repoMock.Object, new Mock<IKnowledgeChunkRepository>().Object, new Mock<ISecretProtector>().Object, mapper);
         IValidator<AgentInsertInfo> validator = new AgentInsertInfoValidator();
 
         _sut = new AgentTools(agentService, validator, mapper, NullLogger<AgentTools>.Instance);

@@ -14,7 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 // Calibracao de perguntas: roda o mesmo fluxo do teste de agente (ChatService.TestMessageAsync)
-// direto contra a OpenAI e o Power BI, sem API, sem banco e sem Elasticsearch, e imprime o
+// direto contra a OpenAI e o Power BI, sem API e sem banco, e imprime o
 // relatorio markdown no console. Veja docs/CALIBRATION.md.
 
 const long AgentId = 1;
@@ -131,7 +131,7 @@ async Task<int> RunAsync()
     services.AddSingleton<IChatSessionRepository<ChatSession>, UnusedChatSessionRepository>();
     services.AddSingleton<IChatMessageRepository<ChatMessage>, UnusedChatMessageRepository>();
     services.AddSingleton<ISecretProtector, PlainSecretProtector>();
-    services.AddSingleton<IElasticsearchService>(knowledgeBase);
+    services.AddSingleton<IKnowledgeChunkRepository>(knowledgeBase);
 
     services.AddSingleton<IPowerBIClient, PowerBIClient>();
     services.AddSingleton<IOpenAIService, OpenAIService>();

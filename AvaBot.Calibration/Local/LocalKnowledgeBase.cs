@@ -1,3 +1,4 @@
+using AvaBot.Infra.Interfaces.Repository;
 using System.Text.RegularExpressions;
 using AvaBot.Application.Services;
 using AvaBot.Infra.Interfaces.AppServices;
@@ -5,12 +6,13 @@ using AvaBot.Infra.Interfaces.AppServices;
 namespace AvaBot.Calibration.Local;
 
 /// <summary>
-/// Base de conhecimento lida de uma pasta local no lugar do Elasticsearch.
-/// Reproduz a busca de producao: mesmos chunks da ingestao (IngestionService.ChunkText) e
-/// match textual com BM25 sobre tokens em minusculas, como o analyzer "standard" do indice
-/// (sem stemming, sem remover acento). So devolve trechos com ao menos um termo da pergunta.
+/// Base de conhecimento lida de uma pasta local no lugar dos trechos do banco (avabot_knowledge_chunks).
+/// Aproxima a busca de producao: mesmos chunks da ingestao (IngestionService.ChunkText) e match
+/// textual com BM25 sobre tokens em minusculas. Producao (feature 021) usa a busca textual do
+/// PostgreSQL (configuracao portuguese: stemming, stopwords, sem acento), entao o ranking pode
+/// diferir um pouco. So devolve trechos com ao menos um termo da pergunta.
 /// </summary>
-public class LocalKnowledgeBase : IElasticsearchService
+public class LocalKnowledgeBase : IKnowledgeChunkRepository
 {
     private const double K1 = 1.2;
     private const double B = 0.75;
@@ -89,10 +91,10 @@ public class LocalKnowledgeBase : IElasticsearchService
         TokenPattern.Matches(text).Select(m => m.Value.ToLowerInvariant());
 
     // Ingestao nao existe na calibracao: a pasta e a fonte.
-    public Task CreateIndexAsync() => Task.CompletedTask;
     public Task IndexChunksAsync(long agentId, long knowledgeFileId, List<ChunkData> chunks) => throw LocalAgentRepository.ReadOnly();
     public Task DeleteChunksByFileIdAsync(long knowledgeFileId) => throw LocalAgentRepository.ReadOnly();
     public Task DeleteChunksByAgentIdAsync(long agentId) => throw LocalAgentRepository.ReadOnly();
+    public Task<List<long>> GetFileIdsMissingChunksAsync() => Task.FromResult(new List<long>());
 
     private sealed record Chunk(string File, string Text, Dictionary<string, int> Terms, int Length);
 }

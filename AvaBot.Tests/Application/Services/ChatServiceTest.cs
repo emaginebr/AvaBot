@@ -17,7 +17,7 @@ public class ChatServiceTest
     private const long SessionId = 2;
 
     private readonly Mock<SearchService> _searchServiceMock;
-    private readonly Mock<IElasticsearchService> _esServiceMock;
+    private readonly Mock<IKnowledgeChunkRepository> _chunkRepositoryMock;
     private readonly Mock<IOpenAIService> _openAIServiceMock;
     private readonly Mock<IChatSessionRepository<ChatSession>> _sessionRepoMock;
     private readonly Mock<IChatMessageRepository<ChatMessage>> _messageRepoMock;
@@ -32,9 +32,9 @@ public class ChatServiceTest
 
     public ChatServiceTest()
     {
-        _esServiceMock = new Mock<IElasticsearchService>();
+        _chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         _openAIServiceMock = new Mock<IOpenAIService>();
-        _searchServiceMock = new Mock<SearchService>(_esServiceMock.Object);
+        _searchServiceMock = new Mock<SearchService>(_chunkRepositoryMock.Object);
         _sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         _messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
         _agentRepoMock = new Mock<IAgentRepository<Agent>>();
@@ -454,7 +454,7 @@ public class ChatServiceTest
             .ReturnsAsync(new List<ChatMessage>());
         _messageRepoMock.Setup(r => r.CreateAsync(It.IsAny<ChatMessage>()))
             .ReturnsAsync((ChatMessage m) => m);
-        _esServiceMock.Setup(e => e.TextSearchAsync(AgentId, It.IsAny<string>(), It.IsAny<int>()))
+        _chunkRepositoryMock.Setup(e => e.TextSearchAsync(AgentId, It.IsAny<string>(), It.IsAny<int>()))
             .ReturnsAsync(new List<string>());
     }
 

@@ -29,18 +29,18 @@ public class ChannelToolsTest
         IMapper mapper = new MapperConfiguration(expr, NullLoggerFactory.Instance).CreateMapper();
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>()).Build();
-        var esMock = new Mock<IElasticsearchService>();
+        var chunkRepositoryMock = new Mock<IKnowledgeChunkRepository>();
         var sessionRepoMock = new Mock<IChatSessionRepository<ChatSession>>();
         var messageRepoMock = new Mock<IChatMessageRepository<ChatMessage>>();
         var queryLogRepoMock = new Mock<IPowerBIQueryLogRepository<PowerBIQueryLog>>();
         var protectorMock = new Mock<ISecretProtector>();
 
-        var agentService = new AgentService(_agentRepoMock.Object, esMock.Object, protectorMock.Object, mapper);
+        var agentService = new AgentService(_agentRepoMock.Object, chunkRepositoryMock.Object, protectorMock.Object, mapper);
         var toolProvider = new PowerBIToolProvider(
             new Mock<IAgentPowerBIConfigRepository<AgentPowerBIConfig>>().Object,
             new Mock<IPowerBIDatasetRepository<PowerBIDataset>>().Object,
             queryLogRepoMock.Object, new Mock<IPowerBIClient>().Object, protectorMock.Object, config, NullLogger<PowerBIToolProvider>.Instance);
-        var chatService = new ChatService(new SearchService(esMock.Object), new Mock<IOpenAIService>().Object, sessionRepoMock.Object,
+        var chatService = new ChatService(new SearchService(chunkRepositoryMock.Object), new Mock<IOpenAIService>().Object, sessionRepoMock.Object,
             messageRepoMock.Object, _agentRepoMock.Object, toolProvider, config, NullLogger<ChatService>.Instance);
         var telegramService = new TelegramService(new Mock<ITelegramChatRepository<TelegramChat>>().Object, sessionRepoMock.Object,
             _agentRepoMock.Object, chatService, agentService, NullLogger<TelegramService>.Instance);
