@@ -83,7 +83,7 @@ public class KnowledgeChunkBackfillService : BackgroundService
             var fileRepository = scope.ServiceProvider.GetRequiredService<IKnowledgeFileRepository<KnowledgeFile>>();
 
             // ProcessFileAsync nao lanca: em erro grava ProcessingStatus.Error no arquivo.
-            await ingestion.ProcessFileAsync(fileId);
+            await ingestion.ProcessFileAsync(fileId, allowMissingEmbeddings: true);
 
             var file = await fileRepository.GetByIdAsync(fileId);
             if (file == null)

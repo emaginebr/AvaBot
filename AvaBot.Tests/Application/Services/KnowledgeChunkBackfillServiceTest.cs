@@ -120,4 +120,37 @@ public class KnowledgeChunkBackfillServiceTest
 
         _chunkRepositoryMock.Verify(r => r.GetFileIdsMissingChunksAsync(), Times.Never);
     }
+
+    [Fact]
+    public async Task RunAsync_ShouldIndexWithoutEmbeddings_WhenAgentHasNoOpenAIKey()
+    {
+        AddFile(1, "Primeiro parágrafo.\n\nSegundo parágrafo.");
+        _chunkRepositoryMock.Setup(r => r.GetFileIdsMissingChunksAsync()).ReturnsAsync(new List<long> { 1 });
+        _openAIMock.Setup(o => o.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()))
+            .ThrowsAsync(new MissingOpenAIKeyException());
+
+        var result = await CreateSut().RunAsync();
+
+        Assert.Equal(1, result.Migrated);
+        Assert.Equal(ProcessingStatus.Ready, _files[1].ProcessingStatus);
+        _chunkRepositoryMock.Verify(r => r.IndexChunksAsync(7, 1,
+            It.Is<List<ChunkData>>(c => c.Count > 0 && c.All(x => x.Embedding.Length == 0 && x.Content.Length > 0))), Times.Once);
+        // Sem chave, nao adianta chamar a OpenAI de novo a cada trecho.
+        _openAIMock.Verify(o => o.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessFileAsync_ShouldStillFail_WhenAgentHasNoOpenAIKey_OutsideBackfill()
+    {
+        AddFile(1, "conteudo");
+        _openAIMock.Setup(o => o.GenerateEmbeddingAsync(It.IsAny<long>(), It.IsAny<string>()))
+            .ThrowsAsync(new MissingOpenAIKeyException());
+        var ingestion = new IngestionService(_fileRepoMock.Object, _chunkRepositoryMock.Object, _openAIMock.Object,
+            NullLogger<IngestionService>.Instance);
+
+        await ingestion.ProcessFileAsync(1);
+
+        Assert.Equal(ProcessingStatus.Error, _files[1].ProcessingStatus);
+        _chunkRepositoryMock.Verify(r => r.IndexChunksAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<List<ChunkData>>()), Times.Never);
+    }
 }
