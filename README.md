@@ -401,22 +401,9 @@ The CLI will:
 
 ### Production
 
-```bash
-# 1. Configure production secrets
-cp .env.prod.example .env.prod
+Production runs on the shared DigitalOcean Kubernetes cluster (`do-nyc2-emagine-k8s`, namespace `avabot`), behind Cloudflare Tunnel and ingress-nginx. Every merge to `main` runs `.github/workflows/deploy-prod.yml`, which tests, publishes the `avabot-api` and `avabot-web` images to GHCR and applies `deploy/k8s/avabot`. Manual run: Actions → **Deploy Production** (`ref`, `skip_tests`). See [`deploy/k8s/README.md`](deploy/k8s/README.md) for architecture, bootstrap, rollback and operations.
 
-# 2. Create external network
-docker network create avabot-external
-
-# 3. Deploy
-docker compose --env-file .env.prod -f docker-compose-prod.yml up -d --build
-```
-
-### GitHub Actions
-
-Production deploy via SSH is configured in `.github/workflows/deploy-prod.yml` (manual trigger via `workflow_dispatch`).
-
-**Required GitHub Secrets:** `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_PASSWORD`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `CONNECTION_STRING`, `POWERBI_SECRET_ENCRYPTION_KEY`
+**Required secrets (environment `production`):** `KUBECONFIG` (deployer ServiceAccount, never the admin one), `AVABOT_CONNECTION_STRING`, `AVABOT_JWT_SECRET`, `POWERBI_SECRET_ENCRYPTION_KEY`, `GHCR_PULL_TOKEN` (+ variable `GHCR_PULL_USER`).
 
 `POWERBI_SECRET_ENCRYPTION_KEY` is required: it is the AES-256 key that protects each
 agent's stored credentials (OpenAI API key and Power BI client secret). Use a fresh

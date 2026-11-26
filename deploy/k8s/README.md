@@ -190,16 +190,14 @@ de pé até ser desligado.
 
 ## Desligar o ambiente antigo
 
-Só depois da troca validada:
+Troca feita em 2026-11-26 (tráfego de `avabot.net` confirmado no ingress do cluster).
 
-- no `emagine-deploy`: remover os blocos `server` de `avabot.net`/`www.avabot.net` do `nginx.conf`,
-  o `scripts/build-avabot.ps1` e `builds/avabot/` (o frontend agora é a imagem `avabot-web`);
-- no servidor Docker: `docker rm -f avabot-api` e apagar `/opt/avabot`;
-- no `emagine-deploy`: tirar o Elasticsearch da infra compartilhada se nenhum outro projeto o usar
-  (o AvaBot não usa mais);
-- remover do GitHub os secrets do deploy antigo (`PROD_SSH_*`), se nenhum outro workflow usar;
-- atualizar a skill `.claude/skills/avabot-deploy` e o `CLAUDE.md` (o frontend deixa de ser
-  publicado pelo `emagine-deploy`).
+- [x] `emagine-deploy`: blocos de `avabot.net`/`www.avabot.net` fora do `nginx.conf`, `scripts/build-avabot.ps1` e `builds/avabot/` apagados (commit `3da03d5`).
+- [x] Cluster: StatefulSet, Service, PVC e PV do Elasticsearch apagados; `bootstrap/deployer-rbac.yaml` reaplicado.
+- [ ] DigitalOcean: apagar o volume órfão do PV do Elasticsearch (StorageClass retain), em Volumes.
+- [ ] Servidor Docker: `docker rm -f avabot-api` e apagar `/opt/avabot`.
+- [ ] `emagine-deploy`: tirar o Elasticsearch da infra compartilhada se nenhum outro projeto o usar (porta 9200 publicada sem autenticação).
+- [ ] GitHub: remover os secrets do deploy antigo (`PROD_SSH_*`), se nenhum outro workflow usar.
 
 ## Operação
 
